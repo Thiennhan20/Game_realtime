@@ -256,7 +256,8 @@ export default function GameClient() {
         return;
       }
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || (isLocal ? 'http://localhost:3001/api' : 'https://server-nextjs-firm.onrender.com/api');
         const response = await fetch(`${apiBase}/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
