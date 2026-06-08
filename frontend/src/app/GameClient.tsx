@@ -256,7 +256,8 @@ export default function GameClient() {
         return;
       }
       try {
-        const response = await fetch('http://localhost:3001/api/auth/profile', {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${apiBase}/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -428,8 +429,11 @@ export default function GameClient() {
             {t('authDesc')}
           </p>
           <button
-            onClick={() => window.location.href = 'http://localhost:3000/login'}
-            className="w-full py-3 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg transition duration-200"
+            onClick={() => {
+              const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
+              window.location.href = isLocal ? 'http://localhost:3000/login' : 'https://moviesaw.vercel.app/login';
+            }}
+            className="w-full py-3 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg transition duration-200 cursor-pointer"
           >
             {t('goToLogin')}
           </button>
