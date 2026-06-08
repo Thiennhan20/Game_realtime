@@ -1,6 +1,6 @@
 # fly.toml app configuration file generated for game-realtime
 
-app = "game-realtime"
+app = "ntngame"
 primary_region = "sin"
 
 [http_service]
