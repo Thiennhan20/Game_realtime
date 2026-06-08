@@ -1,0 +1,11 @@
+{
+  "name": "game-root",
+  "version": "1.0.0",
+  "description": "Unified 2-player guessing game configuration root",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

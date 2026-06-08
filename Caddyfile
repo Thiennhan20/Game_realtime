@@ -1,0 +1,4 @@
+:8080 {
+    reverse_proxy /socket.io/* localhost:3003
+    reverse_proxy /* localhost:3002
+}
