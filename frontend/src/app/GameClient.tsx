@@ -432,7 +432,7 @@ export default function GameClient() {
           <button
             onClick={() => {
               const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
-              window.location.href = isLocal ? 'http://localhost:3000/login' : 'https://moviesaw.vercel.app/login';
+              window.location.href = isLocal ? 'http://localhost:3000/login' : 'https://www.enterntn.duckdns.org/login';
             }}
             className="w-full py-3 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg transition duration-200 cursor-pointer"
           >

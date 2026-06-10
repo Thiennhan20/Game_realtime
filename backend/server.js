@@ -20,7 +20,11 @@ const io = new Server(server, {
       "https://ntngame.fly.dev",
       "https://ntngame.fly.dev/",
       "https://moviesaw.vercel.app",
-      "https://moviesaw.vercel.app/"
+      "https://moviesaw.vercel.app/",
+      "https://www.enterntn.duckdns.org",
+      "https://www.enterntn.duckdns.org/",
+      "https://enterntn.duckdns.org",
+      "https://enterntn.duckdns.org/"
     ],
     methods: ["GET", "POST"],
     credentials: true
