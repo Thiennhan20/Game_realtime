@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Gamepad2, Users, Send, KeyRound, Dices, RefreshCw, LogOut, Copy, Check, MessageSquare
+  Gamepad2, Users, Send, KeyRound, Dices, RefreshCw, LogOut, Copy, Check, MessageSquare, ArrowLeft, ChevronDown, Search
 } from 'lucide-react';
 
 interface Player {
@@ -242,9 +242,24 @@ export default function GameClient() {
   const [opponentWantsPlayAgain, setOpponentWantsPlayAgain] = useState(false);
   const [secretReveal, setSecretReveal] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Click outside to close user dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowUserDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // --- Step 1: SSO Token Authentication ---
   useEffect(() => {
@@ -432,7 +447,12 @@ export default function GameClient() {
           <button
             onClick={() => {
               const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
-              window.location.href = isLocal ? 'http://localhost:3000/login' : 'https://www.enterntn.duckdns.org/login';
+              const targetUrl = isLocal ? 'http://localhost:3000/login' : 'https://moviesaw.vercel.app/login';
+              if (typeof window !== 'undefined' && window.top) {
+                window.top.location.href = targetUrl;
+              } else {
+                window.location.href = targetUrl;
+              }
             }}
             className="w-full py-3 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg transition duration-200 cursor-pointer"
           >
@@ -588,26 +608,49 @@ export default function GameClient() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col p-4 overflow-x-hidden max-w-full">
       {/* Header Info */}
-      <header className="max-w-7xl w-full mx-auto flex items-center justify-between py-4 border-b border-slate-800 mb-6 shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl">
-            <Gamepad2 size={24} />
+      <header className="max-w-7xl w-full mx-auto flex items-center justify-between py-3 sm:py-4 border-b border-slate-800 mb-3 sm:mb-6 shrink-0 gap-2">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+          <button
+            onClick={() => {
+              const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
+              const targetUrl = isLocal ? 'http://localhost:3000' : 'https://moviesaw.vercel.app';
+              if (typeof window !== 'undefined' && window.top) {
+                window.top.location.href = targetUrl;
+              } else {
+                window.location.href = targetUrl;
+              }
+            }}
+            className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
+            title="Quay lại trang chủ"
+          >
+            <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
+          </button>
+          <div className="hidden xs:block p-2 sm:p-2.5 bg-purple-500/10 text-purple-400 rounded-xl shrink-0">
+            <Gamepad2 size={20} className="sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <h1 className="font-extrabold text-lg sm:text-xl tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
-              {t('title')}
+          <div className="min-w-0">
+            <h1 className="font-extrabold text-sm sm:text-xl tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text flex items-center gap-1.5">
+              <span className="hidden sm:inline">
+                {locale === 'vi' ? 'Đoán Số' : 'Guess Number'}
+              </span>
+              <span className="sm:hidden flex items-center gap-1 font-bold">
+                <Search size={14} className="text-purple-400 stroke-[2.5]" />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
+                  {locale === 'vi' ? 'Số' : 'Number'}
+                </span>
+              </span>
             </h1>
-            <p className="text-xs text-slate-400">{t('subtitle')}</p>
+            <p className="hidden sm:block text-xs text-slate-400">{t('subtitle')}</p>
           </div>
         </div>
 
         {/* User Card & Language Selector */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
           {/* Language Toggle */}
           <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-[10px] font-bold">
             <button
               onClick={() => toggleLocale('en')}
-              className={`px-2 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
                 locale === 'en'
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -617,7 +660,7 @@ export default function GameClient() {
             </button>
             <button
               onClick={() => toggleLocale('vi')}
-              className={`px-2 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
                 locale === 'vi'
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -627,16 +670,57 @@ export default function GameClient() {
             </button>
           </div>
 
-          {/* User Display */}
-          <div className="flex items-center space-x-3 bg-slate-900/60 border border-slate-800/80 px-3 py-1.5 rounded-xl">
-            {user.avatar ? (
-              <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full border border-slate-700" />
-            ) : (
-              <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase">
-                {user.name.slice(0, 2)}
+          {/* User Display Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowUserDropdown(!showUserDropdown)}
+              className="flex items-center space-x-1.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-1 rounded-full sm:px-3 sm:py-1.5 sm:rounded-xl transition duration-150 cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+            >
+              {user.avatar ? (
+                <img src={user.avatar} alt={user.name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 shrink-0" />
+              ) : (
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white shrink-0">
+                  {user.name.slice(0, 2)}
+                </div>
+              )}
+              <span className="hidden sm:inline font-medium text-sm text-slate-200">{user.name}</span>
+              <ChevronDown size={14} className="hidden sm:inline text-slate-500" />
+            </button>
+
+            {showUserDropdown && (
+              <div className="absolute right-0 mt-2 w-56 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-3 px-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="flex flex-col space-y-1">
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">User Profile</span>
+                  <span className="text-sm font-bold text-slate-200 truncate">{user.name}</span>
+                  <span className="text-[10px] font-mono text-purple-400 truncate" title={user.id}>
+                    ID: {user.id}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Status: Verified Player
+                  </span>
+                </div>
+                
+                <div className="border-t border-slate-800/60 my-2.5" />
+                
+                <button
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
+                    const targetUrl = isLocal ? 'http://localhost:3000/login' : 'https://moviesaw.vercel.app/login';
+                    localStorage.removeItem('token');
+                    if (typeof window !== 'undefined' && window.top) {
+                      window.top.location.href = targetUrl;
+                    } else {
+                      window.location.href = targetUrl;
+                    }
+                  }}
+                  className="w-full py-2 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-bold rounded-lg transition duration-150 flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <LogOut size={12} />
+                  <span>{t('goToLogin')}</span>
+                </button>
               </div>
             )}
-            <span className="hidden sm:inline font-medium text-sm text-slate-200">{user.name}</span>
           </div>
         </div>
       </header>
@@ -690,25 +774,25 @@ export default function GameClient() {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col items-center justify-center py-12"
+              className="flex-1 flex flex-col items-center justify-center py-6 sm:py-12"
             >
-              <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-5 sm:p-8 rounded-2xl shadow-2xl space-y-6">
-                <div className="text-center space-y-2">
-                  <h2 className="text-2xl font-black">{t('chooseMode')}</h2>
-                  <p className="text-sm text-slate-400">{t('chooseModeDesc')}</p>
+              <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-2xl space-y-4 sm:space-y-6">
+                <div className="text-center space-y-1 sm:space-y-2">
+                  <h2 className="text-xl sm:text-2xl font-black">{t('chooseMode')}</h2>
+                  <p className="text-xs sm:text-sm text-slate-400">{t('chooseModeDesc')}</p>
                 </div>
 
                 <button
                   onClick={handleCreateRoom}
-                  className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-base cursor-pointer"
+                  className="w-full py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer"
                 >
-                  <Gamepad2 size={20} />
+                  <Gamepad2 size={18} className="sm:w-5 sm:h-5" />
                   <span>{t('createRoom')}</span>
                 </button>
 
                 <div className="relative flex items-center justify-center">
                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
-                  <span className="relative px-3 bg-slate-950 text-slate-500 text-xs font-bold uppercase">{t('orJoin')}</span>
+                  <span className="relative px-3 bg-slate-950 text-slate-500 text-[10px] font-bold uppercase">{t('orJoin')}</span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -717,41 +801,41 @@ export default function GameClient() {
                     placeholder={t('enterRoomId')}
                     value={joinedRoomId}
                     onChange={(e) => setJoinedRoomId(e.target.value)}
-                    className="flex-1 w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-4 py-3 rounded-xl text-center text-lg font-mono font-bold placeholder-slate-700 uppercase min-w-0"
+                    className="flex-1 w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-4 py-2.5 rounded-xl text-center text-base sm:text-lg font-mono font-bold placeholder-slate-700 uppercase min-w-0"
                   />
                   <button
                     onClick={() => handleJoinRoom(joinedRoomId)}
-                    className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition duration-200 cursor-pointer shrink-0"
+                    className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-xl transition duration-200 cursor-pointer shrink-0"
                   >
                     {t('join')}
                   </button>
                 </div>
 
                 {/* Available Lobby Rooms */}
-                <div className="space-y-3 pt-2">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
-                    <Users size={14} />
+                <div className="space-y-2.5 pt-1 sm:pt-2">
+                  <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
+                    <Users size={12} className="sm:w-3.5 sm:h-3.5" />
                     <span>{t('lobbyRooms')}</span>
                   </h3>
                   
                   {lobbyRooms.length === 0 ? (
-                    <div className="text-center py-6 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-sm">
+                    <div className="text-center py-5 sm:py-6 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
                       {t('noRooms')}
                     </div>
                   ) : (
-                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                    <div className="max-h-40 sm:max-h-48 overflow-y-auto space-y-1.5 pr-1">
                       {lobbyRooms.map((r) => (
                         <div 
                           key={r.roomId}
-                          className="flex items-center justify-between p-3.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/60 rounded-xl"
+                          className="flex items-center justify-between p-2.5 sm:p-3.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/60 rounded-xl"
                         >
                           <div className="min-w-0">
-                            <p className="font-mono text-sm font-bold text-purple-400">{r.roomId}</p>
-                            <p className="text-xs text-slate-400 truncate">Host: {r.hostName}</p>
+                            <p className="font-mono text-xs sm:text-sm font-bold text-purple-400">{r.roomId}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-400 truncate">Host: {r.hostName}</p>
                           </div>
                           <button
                             onClick={() => handleJoinRoom(r.roomId)}
-                            className="px-3.5 py-1.5 bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-xs font-bold rounded-lg transition duration-200 cursor-pointer"
+                            className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 cursor-pointer"
                           >
                             {t('joinArena')}
                           </button>
@@ -769,70 +853,70 @@ export default function GameClient() {
             <div className="flex-1 flex flex-col space-y-4">
               
               {/* Active Room Header bar */}
-              <div className="flex items-center justify-between p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl shadow-lg shrink-0">
+              <div className="flex items-center justify-between p-3 sm:p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
                 <div>
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('roomArena')}</span>
-                  <div className="flex items-center space-x-2">
-                    <h2 className="font-mono text-lg font-extrabold text-purple-400">{room.roomId}</h2>
+                  <span className="hidden xs:block text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('roomArena')}</span>
+                  <div className="flex items-center space-x-1.5">
+                    <h2 className="font-mono text-base sm:text-lg font-extrabold text-purple-400">{room.roomId}</h2>
                     <button 
                       onClick={copyRoomId}
                       className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition cursor-pointer"
                       title={t('copyRoomId')}
                     >
-                      {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
                     </button>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-2.5 sm:space-x-6">
                   {/* Player Avatars display */}
-                  <div className="flex items-center space-x-2.5">
+                  <div className="flex items-center space-x-1.5 sm:space-x-2.5">
                     {/* Me */}
-                    <div className="text-right">
+                    <div className="hidden sm:block text-right">
                       <p className="text-xs font-bold max-w-[80px] truncate text-slate-200">{me?.username}</p>
                       <p className="text-[10px] text-purple-400 font-semibold uppercase">{t('you')}</p>
                     </div>
                     {me?.avatar ? (
-                      <img src={me.avatar} className="w-8 h-8 rounded-full border border-purple-500" />
+                      <img src={me.avatar} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-purple-500 shrink-0" />
                     ) : (
-                      <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0">
                         {me?.username.slice(0, 2)}
                       </div>
                     )}
 
-                    <span className="text-slate-700 font-bold">VS</span>
+                    <span className="text-slate-700 font-bold text-xs sm:text-sm">VS</span>
 
                     {/* Opponent */}
                     {opponent ? (
                       <>
                         {opponent.avatar ? (
-                          <img src={opponent.avatar} className="w-8 h-8 rounded-full border border-pink-500" />
+                          <img src={opponent.avatar} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-pink-500 shrink-0" />
                         ) : (
-                          <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center font-bold text-xs uppercase">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-pink-600 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0">
                             {opponent.username.slice(0, 2)}
                           </div>
                         )}
-                        <div className="text-left">
+                        <div className="hidden sm:block text-left">
                           <p className="text-xs font-bold max-w-[80px] truncate text-slate-200">{opponent.username}</p>
                           <p className="text-[10px] text-pink-400 font-semibold uppercase">{t('enemy')}</p>
                         </div>
                       </>
                     ) : (
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-slate-800 border border-slate-700 border-dashed rounded-full flex items-center justify-center text-slate-500 animate-pulse">
+                      <div className="flex items-center space-x-1.5">
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800 border border-slate-700 border-dashed rounded-full flex items-center justify-center text-slate-500 animate-pulse shrink-0">
                           ?
                         </div>
-                        <p className="text-xs text-slate-500 font-medium animate-pulse">{t('you') === 'Bạn' ? 'Đang chờ...' : 'Waiting...'}</p>
+                        <p className="hidden sm:block text-xs text-slate-500 font-medium animate-pulse">{t('you') === 'Bạn' ? 'Đang chờ...' : 'Waiting...'}</p>
                       </div>
                     )}
                   </div>
 
                   <button
                     onClick={handleLeaveRoom}
-                    className="p-2 bg-slate-800/80 hover:bg-red-950/60 border border-slate-700/60 hover:border-red-800/80 rounded-xl text-slate-400 hover:text-red-300 transition cursor-pointer"
+                    className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-red-950/60 border border-slate-700/60 hover:border-red-800/80 rounded-lg sm:rounded-xl text-slate-400 hover:text-red-300 transition cursor-pointer"
                     title={t('backToLobby')}
                   >
-                    <LogOut size={16} />
+                    <LogOut size={14} className="sm:w-[16px] sm:h-[16px]" />
                   </button>
                 </div>
               </div>
@@ -949,43 +1033,49 @@ export default function GameClient() {
 
               {/* STATE: PLAYING (The Game Arena) */}
               {room.state === 'PLAYING' && me && opponent && (
-                <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0">
+                <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0">
                   {/* Left sub-panel: Your guesses against opponent */}
-                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-2xl overflow-hidden min-h-[300px]">
-                    <div className="p-3 bg-purple-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-purple-400">●</span>
-                        <h4 className="text-xs font-extrabold uppercase tracking-wider">{t('yourOffense')}</h4>
+                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden min-h-[140px] md:min-h-[280px] h-[190px] md:h-auto">
+                    <div className="p-2.5 sm:p-3 bg-purple-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <span className="text-purple-400 shrink-0">●</span>
+                        <h4 className="text-xs font-extrabold uppercase tracking-wider truncate">{t('yourOffense')}</h4>
                       </div>
-                      <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full shrink-0">
                         {t('guessesCount').replace('{count}', String(room.guesses.filter(g => g.playerIndex === myPlayerIndex).length))}
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 space-y-1.5 min-h-0">
+                    <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5 min-h-0">
                       {room.guesses.filter(g => g.playerIndex === myPlayerIndex).map((g, i) => (
                         <div 
                           key={i} 
-                          className="flex items-center justify-between p-2.5 bg-slate-950/50 border border-slate-900 rounded-xl text-sm"
+                          className="flex items-center justify-between p-2 sm:p-2.5 bg-slate-950/50 border border-slate-900 rounded-lg sm:rounded-xl text-sm"
                         >
-                          <div className="flex items-center space-x-2.5">
-                            <span className="text-slate-500 text-xs font-mono font-bold">#{i+1}</span>
-                            <span className="font-mono font-extrabold text-base tracking-wider text-purple-300">{g.guess}</span>
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <span className="text-slate-500 text-xs font-mono font-bold shrink-0">#{i+1}</span>
+                            <span className="font-mono font-extrabold text-sm sm:text-base tracking-wider text-purple-300">{g.guess}</span>
                           </div>
-                          <div className="flex items-center space-x-3 text-xs">
-                            <div className="flex items-center space-x-1" title="Correct digits total">
+                          <div className="flex items-center space-x-2 sm:space-x-3 text-xs shrink-0">
+                            <div className="flex items-center space-x-0.5 sm:space-x-1" title="Correct digits total">
                               <span className="text-yellow-500">🟢</span>
-                              <span className="font-extrabold">{t('correctDigits').replace('{count}', String(g.correctNumbers))}</span>
+                              <span className="font-extrabold text-[10px] sm:text-xs">
+                                <span className="hidden xs:inline">{t('correctDigits').replace('{count}', String(g.correctNumbers))}</span>
+                                <span className="xs:hidden">{g.correctNumbers}</span>
+                              </span>
                             </div>
-                            <div className="flex items-center space-x-1" title="Correct position">
+                            <div className="flex items-center space-x-0.5 sm:space-x-1" title="Correct position">
                               <span className="text-green-500">🎯</span>
-                              <span className="font-extrabold">{t('correctPosition').replace('{count}', String(g.correctPosition))}</span>
+                              <span className="font-extrabold text-[10px] sm:text-xs">
+                                <span className="hidden xs:inline">{t('correctPosition').replace('{count}', String(g.correctPosition))}</span>
+                                <span className="xs:hidden">{g.correctPosition}</span>
+                              </span>
                             </div>
                           </div>
                         </div>
                       ))}
                       {room.guesses.filter(g => g.playerIndex === myPlayerIndex).length === 0 && (
-                        <div className="h-full flex items-center justify-center text-slate-600 text-sm py-12">
+                        <div className="h-full flex items-center justify-center text-slate-600 text-xs sm:text-sm py-8">
                           {t('noGuessesYet')}
                         </div>
                       )}
@@ -993,41 +1083,47 @@ export default function GameClient() {
                   </div>
 
                   {/* Right sub-panel: Opponent's guesses against you */}
-                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-2xl overflow-hidden min-h-[300px]">
-                    <div className="p-3 bg-pink-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-pink-400">●</span>
-                        <h4 className="text-xs font-extrabold uppercase tracking-wider">{t('opponentOffense').replace('{username}', opponent.username)}</h4>
+                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden min-h-[140px] md:min-h-[280px] h-[190px] md:h-auto">
+                    <div className="p-2.5 sm:p-3 bg-pink-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <span className="text-pink-400 shrink-0">●</span>
+                        <h4 className="text-xs font-extrabold uppercase tracking-wider truncate">{t('opponentOffense').replace('{username}', opponent.username)}</h4>
                       </div>
-                      <span className="text-[10px] font-bold text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-bold text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-full shrink-0">
                         {t('guessesCount').replace('{count}', String(room.guesses.filter(g => g.playerIndex === opponentPlayerIndex).length))}
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 space-y-1.5 min-h-0">
+                    <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5 min-h-0">
                       {room.guesses.filter(g => g.playerIndex === opponentPlayerIndex).map((g, i) => (
                         <div 
                           key={i} 
-                          className="flex items-center justify-between p-2.5 bg-slate-950/50 border border-slate-900 rounded-xl text-sm"
+                          className="flex items-center justify-between p-2 sm:p-2.5 bg-slate-950/50 border border-slate-900 rounded-lg sm:rounded-xl text-sm"
                         >
-                          <div className="flex items-center space-x-2.5">
-                            <span className="text-slate-500 text-xs font-mono font-bold">#{i+1}</span>
-                            <span className="font-mono font-extrabold text-base tracking-wider text-pink-300">{g.guess}</span>
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <span className="text-slate-500 text-xs font-mono font-bold shrink-0">#{i+1}</span>
+                            <span className="font-mono font-extrabold text-sm sm:text-base tracking-wider text-pink-300">{g.guess}</span>
                           </div>
-                          <div className="flex items-center space-x-3 text-xs">
-                            <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-2 sm:space-x-3 text-xs shrink-0">
+                            <div className="flex items-center space-x-0.5 sm:space-x-1" title="Correct digits total">
                               <span className="text-yellow-500">🟢</span>
-                              <span className="font-extrabold">{t('correctDigits').replace('{count}', String(g.correctNumbers))}</span>
+                              <span className="font-extrabold text-[10px] sm:text-xs">
+                                <span className="hidden xs:inline">{t('correctDigits').replace('{count}', String(g.correctNumbers))}</span>
+                                <span className="xs:hidden">{g.correctNumbers}</span>
+                              </span>
                             </div>
-                            <div className="flex items-center space-x-1">
+                            <div className="flex items-center space-x-0.5 sm:space-x-1" title="Correct position">
                               <span className="text-green-500">🎯</span>
-                              <span className="font-extrabold">{t('correctPosition').replace('{count}', String(g.correctPosition))}</span>
+                              <span className="font-extrabold text-[10px] sm:text-xs">
+                                <span className="hidden xs:inline">{t('correctPosition').replace('{count}', String(g.correctPosition))}</span>
+                                <span className="xs:hidden">{g.correctPosition}</span>
+                              </span>
                             </div>
                           </div>
                         </div>
                       ))}
                       {room.guesses.filter(g => g.playerIndex === opponentPlayerIndex).length === 0 && (
-                        <div className="h-full flex items-center justify-center text-slate-600 text-sm py-12">
+                        <div className="h-full flex items-center justify-center text-slate-600 text-xs sm:text-sm py-8">
                           {t('enemyNotGuessedYet')}
                         </div>
                       )}
@@ -1038,11 +1134,11 @@ export default function GameClient() {
 
               {/* INPUT GUESS SECTION (Tied to PLAYING state footer) */}
               {room.state === 'PLAYING' && me && (
-                <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl shadow-lg shrink-0">
+                <div className="p-3 sm:p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
                   {room.activeTurnIndex === myPlayerIndex ? (
-                    <form onSubmit={handleSendGuess} className="flex flex-col sm:flex-row gap-3">
+                    <form onSubmit={handleSendGuess} className="flex gap-2">
                       <div className="flex-1 min-w-0">
-                        <label className="block text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1.5">
+                        <label className="block text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1">
                           {t('yourTurn')}
                         </label>
                         <input
@@ -1051,21 +1147,21 @@ export default function GameClient() {
                           placeholder={t('enter4digits')}
                           value={guessInput}
                           onChange={(e) => setGuessInput(e.target.value.replace(/\D/g, ''))}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-4 py-3 rounded-xl font-mono text-lg font-bold tracking-[0.4em] placeholder-slate-700"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2.5 rounded-xl font-mono text-base font-bold tracking-[0.3em] sm:tracking-[0.4em] placeholder-slate-700"
                         />
                       </div>
                       <button
                         type="submit"
                         disabled={guessInput.length !== 4}
-                        className="sm:w-36 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 text-white font-extrabold rounded-xl shadow-lg transition duration-200 self-end cursor-pointer"
+                        className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 text-white text-sm font-extrabold rounded-xl shadow-lg transition duration-200 self-end cursor-pointer"
                       >
                         {t('fireGuess')}
                       </button>
                     </form>
                   ) : (
-                    <div className="py-4 text-center text-sm font-semibold text-slate-400 flex items-center justify-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
-                      <span>{t('waitingOpponentGuess').replace('{username}', opponent?.username || '')}</span>
+                    <div className="py-3 text-center text-xs sm:text-sm font-semibold text-slate-400 flex items-center justify-center space-x-2">
+                      <div className="w-3.5 h-3.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="truncate max-w-[240px]">{t('waitingOpponentGuess').replace('{username}', opponent?.username || '')}</span>
                     </div>
                   )}
                 </div>
