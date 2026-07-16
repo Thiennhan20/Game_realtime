@@ -1,0 +1,22 @@
+========================================================================
+ VIỆC CẦN LÀM - GAME EN WEBSITE (Data Storage)
+========================================================================
+
+1. [✅] Dùng Upstash Redis để lưu phòng game đang chơi (dữ liệu tạm thời)
+   - Hiện tại phòng game đang lưu trong RAM (biến Map() trong server.js)
+   - Khi restart server là mất hết toàn bộ phòng
+   - Chuyển sang lưu trên Upstash Redis để:
+     + Dữ liệu không bị mất khi server restart
+     + Tốc độ đọc/ghi cực nhanh (~1-5ms, phù hợp game realtime)
+     + Dùng TTL để tự động xóa phòng bỏ hoang (ví dụ: 30 phút không hoạt động thì tự xóa)
+   - Dùng database Upstash Redis riêng cho game (generous-grouse-165014)
+   - Đặt prefix key: game:room:xxx
+
+2. [✅] Dùng MongoDB Atlas để lưu lịch sử ván đấu & bảng xếp hạng (dữ liệu lâu dài)
+   - Dùng lại MongoDB Atlas từ server phim (cùng database Server_Firm)
+   - Tạo model GameHistory để lưu kết quả ván đấu
+   - Chỉ lưu khi bảng kết thúc trận đấu hiển thị (MATCH_RESULT_VIEWED)
+   - Thoát phòng chủ động (nút) → ko lưu
+   - Mất kết nối quá 60 giây → ko lưu, hủy ván
+   - Mất mạng tạm thời (dưới 60s) → chờ reconnect, game tiếp tục
+   - Giao diện bảng kết thúc trận đấu: Modal popup overlay với thống kê chi tiết

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Gamepad2, Users, Send, KeyRound, Dices, RefreshCw, LogOut, Copy, Check, MessageSquare, ArrowLeft, ChevronDown, Search
+  Gamepad2, Users, Send, KeyRound, Dices, RefreshCw, LogOut, Copy, Check, MessageSquare, ArrowLeft, ChevronDown, ChevronUp, Search,
+  Trophy, Clock, Target, Swords, Wifi, WifiOff, X
 } from 'lucide-react';
 
 interface Player {
@@ -16,6 +17,7 @@ interface Player {
   secretNumber: string | null;
   rpsChoice: string | null;
   ready: boolean;
+  disconnectedAt?: number | null;
 }
 
 interface Guess {
@@ -24,6 +26,18 @@ interface Guess {
   correctNumbers: number;
   correctPosition: number;
   timestamp: string;
+}
+
+interface MatchStats {
+  duration: number;
+  totalGuesses: number;
+  winnerGuessCount: number;
+  loserGuessCount: number;
+  rpsWinnerIndex: number;
+  winnerSecret: string;
+  loserSecret: string;
+  startedAt: string;
+  finishedAt: string;
 }
 
 interface Room {
@@ -111,7 +125,18 @@ const translations = {
     activeTabChat: "Chat Room",
     rock: "Rock",
     paper: "Paper",
-    scissors: "Scissors"
+    scissors: "Scissors",
+    matchSummary: "Match Summary",
+    matchDuration: "Duration",
+    yourGuesses: "Your Guesses",
+    opponentGuessesCount: "Opponent's Guesses",
+    firstMove: "First Move",
+    yourSecret: "Your Secret",
+    matchSaved: "Match result saved!",
+    reconnecting: "Reconnecting...",
+    opponentReconnecting: "{username} lost connection. Waiting 60s...",
+    opponentReconnected: "{username} reconnected!",
+    playerLeft: "{username} left the room."
   },
   vi: {
     title: "ĐẤU TRƯỜNG ĐOÁN SỐ",
@@ -181,7 +206,18 @@ const translations = {
     activeTabChat: "Trò chuyện",
     rock: "Búa",
     paper: "Bao",
-    scissors: "Kéo"
+    scissors: "Kéo",
+    matchSummary: "Kết quả trận đấu",
+    matchDuration: "Thời gian",
+    yourGuesses: "Số lượt đoán của bạn",
+    opponentGuessesCount: "Số lượt đoán của đối thủ",
+    firstMove: "Đi trước",
+    yourSecret: "Mật mã của bạn",
+    matchSaved: "Đã lưu kết quả trận đấu!",
+    reconnecting: "Đang kết nối lại...",
+    opponentReconnecting: "{username} mất kết nối. Chờ 60 giây...",
+    opponentReconnected: "{username} đã kết nối lại!",
+    playerLeft: "{username} đã rời khỏi phòng."
   }
 };
 
@@ -243,7 +279,21 @@ export default function GameClient() {
   const [secretReveal, setSecretReveal] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [matchStats, setMatchStats] = useState<MatchStats | null>(null);
+  const [matchResultSent, setMatchResultSent] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [opponentTempDisconnected, setOpponentTempDisconnected] = useState<string | null>(null);
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [gameHistory, setGameHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [showMobileInstructions, setShowMobileInstructions] = useState(false);
+  const [showStartCountdown, setShowStartCountdown] = useState(false);
+  const [countdownVal, setCountdownVal] = useState(3);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const myGuessesScrollRef = useRef<HTMLDivElement | null>(null);
+  const opponentGuessesScrollRef = useRef<HTMLDivElement | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -260,6 +310,41 @@ export default function GameClient() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // --- Countdown Transition effect ---
+  const prevRoomStateRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (room) {
+      if (room.state === 'PLAYING' && prevRoomStateRef.current === 'RPS_DECISION') {
+        setShowStartCountdown(true);
+        setCountdownVal(3);
+        const interval = setInterval(() => {
+          setCountdownVal(prev => {
+            if (prev <= 1) {
+              clearInterval(interval);
+              setShowStartCountdown(false);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
+      prevRoomStateRef.current = room.state;
+    } else {
+      prevRoomStateRef.current = null;
+    }
+  }, [room?.state]);
+
+  // --- Auto-scroll guesses to bottom ---
+  useEffect(() => {
+    if (myGuessesScrollRef.current) {
+      myGuessesScrollRef.current.scrollTop = myGuessesScrollRef.current.scrollHeight;
+    }
+    if (opponentGuessesScrollRef.current) {
+      opponentGuessesScrollRef.current.scrollTop = opponentGuessesScrollRef.current.scrollHeight;
+    }
+  }, [room?.guesses?.length]);
 
   // --- Step 1: SSO Token Authentication ---
   useEffect(() => {
@@ -342,10 +427,23 @@ export default function GameClient() {
       setSecretInput('');
       setGuessInput('');
       setSecretReveal(null);
+      setMatchStats(null);
+      setMatchResultSent(false);
+      setShowMatchModal(false);
+      setOpponentTempDisconnected(null);
     });
 
     socket.on('SECRET_ACCEPTED', () => {
       setErrorMsg(null);
+      setRoom(prev => {
+        if (!prev) return null;
+        const nextPlayers = [...prev.players];
+        const idx = nextPlayers.findIndex(p => p.userId === user?.id);
+        if (idx !== -1 && nextPlayers[idx]) {
+          nextPlayers[idx] = { ...nextPlayers[idx], ready: true };
+        }
+        return { ...prev, players: nextPlayers };
+      });
     });
 
     socket.on('OPPONENT_SECRET_SET', () => {
@@ -379,9 +477,11 @@ export default function GameClient() {
       setErrorMsg(null);
     });
 
-    socket.on('GAME_OVER', (data: { roomState: Room; opponentSecret: string }) => {
+    socket.on('GAME_OVER', (data: { roomState: Room; opponentSecret: string; matchStats: MatchStats }) => {
       setRoom(data.roomState);
       setSecretReveal(data.opponentSecret);
+      setMatchStats(data.matchStats);
+      setShowMatchModal(true);
       setErrorMsg(null);
     });
 
@@ -394,7 +494,46 @@ export default function GameClient() {
       setErrorMsg(t('opponentLeft').replace('{username}', data.username));
       setSecretReveal(null);
       setOpponentWantsPlayAgain(false);
+      setOpponentTempDisconnected(null);
+      setShowMatchModal(false);
       setTimeout(() => setErrorMsg(null), 5000);
+    });
+
+    socket.on('PLAYER_LEFT', (data: { username: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      setErrorMsg(t('playerLeft').replace('{username}', data.username));
+      setSecretReveal(null);
+      setOpponentWantsPlayAgain(false);
+      setOpponentTempDisconnected(null);
+      setShowMatchModal(false);
+      setTimeout(() => setErrorMsg(null), 5000);
+    });
+
+    socket.on('PLAYER_TEMPORARILY_DISCONNECTED', (data: { username: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      setOpponentTempDisconnected(data.username);
+    });
+
+    socket.on('OPPONENT_RECONNECTED', (data: { username: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      setOpponentTempDisconnected(null);
+      setErrorMsg(t('opponentReconnected').replace('{username}', data.username));
+      setTimeout(() => setErrorMsg(null), 3000);
+    });
+
+    socket.on('RECONNECTED_TO_ROOM', (roomState: Room) => {
+      setRoom(roomState);
+      setIsReconnecting(false);
+      setErrorMsg(null);
+    });
+
+    // Socket.IO built-in reconnection events
+    socket.on('disconnect', () => {
+      setIsReconnecting(true);
+    });
+
+    socket.on('connect', () => {
+      setIsReconnecting(false);
     });
 
     socket.on('CHAT_MESSAGE', (msg: { username: string; content: string; timestamp: string }) => {
@@ -415,6 +554,15 @@ export default function GameClient() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, room, activeMobileTab]);
+
+  // --- Auto-emit MATCH_RESULT_VIEWED when game finishes ---
+  useEffect(() => {
+    if (room?.state === 'FINISHED' && showMatchModal && !matchResultSent && socketRef.current) {
+      socketRef.current.emit('MATCH_RESULT_VIEWED', room.roomId);
+      setMatchResultSent(true);
+      console.log('[Game] MATCH_RESULT_VIEWED emitted for room', room.roomId);
+    }
+  }, [room?.state, showMatchModal, matchResultSent]);
 
   if (loadingUser) {
     return (
@@ -481,12 +629,22 @@ export default function GameClient() {
       setErrorMsg(t('invalidCode'));
       return;
     }
+    localStorage.setItem(`secret:${room.roomId}`, secretInput);
     socketRef.current?.emit('SET_SECRET', { roomId: room.roomId, secret: secretInput });
   };
 
   const handleRpsChoice = (choice: 'rock' | 'paper' | 'scissors') => {
     if (!room) return;
     socketRef.current?.emit('SUBMIT_RPS', { roomId: room.roomId, choice });
+    setRoom(prev => {
+      if (!prev) return null;
+      const nextPlayers = [...prev.players];
+      const idx = nextPlayers.findIndex(p => p.userId === user?.id);
+      if (idx !== -1 && nextPlayers[idx]) {
+        nextPlayers[idx] = { ...nextPlayers[idx], rpsChoice: choice, ready: true };
+      }
+      return { ...prev, players: nextPlayers };
+    });
   };
 
   const handleSendGuess = (e: React.FormEvent) => {
@@ -508,6 +666,10 @@ export default function GameClient() {
     socketRef.current?.emit('LEAVE_ROOM');
     setRoom(null);
     setChatMessages([]);
+    setMatchStats(null);
+    setMatchResultSent(false);
+    setShowMatchModal(false);
+    setOpponentTempDisconnected(null);
   };
 
   const handleSendChat = (e: React.FormEvent) => {
@@ -529,6 +691,44 @@ export default function GameClient() {
   const opponentPlayerIndex = myPlayerIndex !== -1 ? (myPlayerIndex === 0 ? 1 : 0) : -1;
   const me = room && myPlayerIndex !== -1 ? room.players[myPlayerIndex] : null;
   const opponent = room && opponentPlayerIndex !== -1 && room.players[opponentPlayerIndex] ? room.players[opponentPlayerIndex] : null;
+
+  // --- Fetch match history from backend ---
+  const fetchGameHistory = async () => {
+    setLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
+        (typeof window !== 'undefined' 
+          ? (window.location.port === '3002' ? 'http://localhost:8080' : window.location.origin) 
+          : 'http://localhost:8080');
+          
+      const response = await fetch(`${socketUrl}/api/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch history');
+      }
+      const data = await response.json();
+      setGameHistory(data.history || []);
+    } catch (err: any) {
+      console.error('Failed to load match history:', err.message);
+      setHistoryError(locale === 'vi' ? 'Không thể tải lịch sử đấu.' : 'Failed to load match history.');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+
+
+  // --- Helper: format duration ---
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // --- Custom Confetti Particle Canvas ---
   const ConfettiCanvas = () => {
@@ -606,7 +806,7 @@ export default function GameClient() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col p-4 overflow-x-hidden max-w-full">
+    <div className="h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col p-3 sm:p-4 overflow-hidden max-w-full">
       {/* Header Info */}
       <header className="max-w-7xl w-full mx-auto flex items-center justify-between py-3 sm:py-4 border-b border-slate-800 mb-3 sm:mb-6 shrink-0 gap-2">
         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
@@ -629,15 +829,9 @@ export default function GameClient() {
             <Gamepad2 size={20} className="sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-extrabold text-sm sm:text-xl tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text flex items-center gap-1.5">
-              <span className="hidden sm:inline">
+            <h1 className="font-extrabold text-sm sm:text-xl tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text flex items-center">
+              <span>
                 {locale === 'vi' ? 'Đoán Số' : 'Guess Number'}
-              </span>
-              <span className="sm:hidden flex items-center gap-1 font-bold">
-                <Search size={14} className="text-purple-400 stroke-[2.5]" />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
-                  {locale === 'vi' ? 'Số' : 'Number'}
-                </span>
               </span>
             </h1>
             <p className="hidden sm:block text-xs text-slate-400">{t('subtitle')}</p>
@@ -688,36 +882,33 @@ export default function GameClient() {
             </button>
 
             {showUserDropdown && (
-              <div className="absolute right-0 mt-2 w-56 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-3 px-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="flex flex-col space-y-1">
-                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">User Profile</span>
-                  <span className="text-sm font-bold text-slate-200 truncate">{user.name}</span>
-                  <span className="text-[10px] font-mono text-purple-400 truncate" title={user.id}>
-                    ID: {user.id}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    Status: Verified Player
-                  </span>
-                </div>
-                
-                <div className="border-t border-slate-800/60 my-2.5" />
-                
+              <div className="absolute right-0 mt-2 w-48 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 <button
                   onClick={() => {
                     setShowUserDropdown(false);
                     const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
-                    const targetUrl = isLocal ? 'http://localhost:3000/login' : 'https://moviesaw.vercel.app/login';
-                    localStorage.removeItem('token');
+                    const targetUrl = isLocal ? 'http://localhost:3000/profile' : 'https://moviesaw.vercel.app/profile';
                     if (typeof window !== 'undefined' && window.top) {
                       window.top.location.href = targetUrl;
                     } else {
                       window.location.href = targetUrl;
                     }
                   }}
-                  className="w-full py-2 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-bold rounded-lg transition duration-150 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                 >
-                  <LogOut size={12} />
-                  <span>{t('goToLogin')}</span>
+                  <Users size={16} className="text-purple-400" />
+                  <span>{locale === 'vi' ? 'Hồ sơ cá nhân' : 'User Profile'}</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    window.location.href = `/history?locale=${locale}`;
+                  }}
+                  className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                >
+                  <Clock size={16} className="text-purple-400" />
+                  <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
                 </button>
               </div>
             )}
@@ -725,19 +916,67 @@ export default function GameClient() {
         </div>
       </header>
 
-      {/* Global Error Banner */}
-      <AnimatePresence>
-        {errorMsg && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="max-w-7xl w-full mx-auto mb-4 bg-red-950/40 border border-red-500/50 p-3.5 rounded-xl text-center text-sm font-semibold text-red-200 shadow-lg"
-          >
-            ⚠️ {errorMsg}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* FLOATING TOAST NOTIFICATIONS - Top Right */}
+      <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[200] flex flex-col gap-2.5 max-w-xs sm:max-w-sm w-full pointer-events-none">
+        <AnimatePresence>
+          {errorMsg && (
+            <motion.div 
+              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="bg-red-950/90 backdrop-blur-md border border-red-500/50 p-3 rounded-xl text-xs sm:text-sm font-semibold text-red-200 shadow-2xl flex items-center gap-3 pointer-events-auto"
+            >
+              <span className="shrink-0">⚠️</span>
+              <span className="flex-1 leading-snug">{errorMsg}</span>
+              <button 
+                onClick={() => setErrorMsg(null)}
+                className="p-1 text-white bg-slate-950/25 hover:bg-white hover:text-slate-950 border border-white/70 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
+                title={locale === 'vi' ? 'Đóng' : 'Close'}
+              >
+                <X size={13} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isReconnecting && (
+            <motion.div 
+              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="bg-yellow-950/90 backdrop-blur-md border border-yellow-500/50 p-3 rounded-xl text-xs sm:text-sm font-semibold text-yellow-200 shadow-2xl flex items-center gap-2.5 pointer-events-auto"
+            >
+              <WifiOff size={15} className="animate-pulse shrink-0" />
+              <span className="flex-1 leading-snug">{t('reconnecting')}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {opponentTempDisconnected && (
+            <motion.div 
+              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="bg-orange-950/90 backdrop-blur-md border border-orange-500/50 p-3 rounded-xl text-xs sm:text-sm font-semibold text-orange-200 shadow-2xl flex items-center gap-3 pointer-events-auto"
+            >
+              <WifiOff size={15} className="animate-pulse shrink-0" />
+              <span className="flex-1 leading-snug">{t('opponentReconnecting').replace('{username}', opponentTempDisconnected)}</span>
+              <button 
+                onClick={() => setOpponentTempDisconnected(null)}
+                className="p-1 text-white bg-slate-950/25 hover:bg-white hover:text-slate-950 border border-white/70 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
+                title={locale === 'vi' ? 'Đóng' : 'Close'}
+              >
+                <X size={13} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Mobile Tab Selector - visible only on lg:hidden when inside a room */}
       {room && (
@@ -765,92 +1004,245 @@ export default function GameClient() {
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row gap-6 mb-4">
+      <main className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row gap-6 mb-4 min-h-0 overflow-hidden">
         {/* LEFT COLUMN: MAIN GAME BOARD */}
-        <div className={`flex-1 flex flex-col min-w-0 ${room && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'}`}>
+        <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${room && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'}`}>
           
           {/* LOBBY STATE */}
           {!room && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col items-center justify-center py-6 sm:py-12"
-            >
-              <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-2xl space-y-4 sm:space-y-6">
-                <div className="text-center space-y-1 sm:space-y-2">
-                  <h2 className="text-xl sm:text-2xl font-black">{t('chooseMode')}</h2>
-                  <p className="text-xs sm:text-sm text-slate-400">{t('chooseModeDesc')}</p>
-                </div>
-
-                <button
-                  onClick={handleCreateRoom}
-                  className="w-full py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer"
-                >
-                  <Gamepad2 size={18} className="sm:w-5 sm:h-5" />
-                  <span>{t('createRoom')}</span>
-                </button>
-
-                <div className="relative flex items-center justify-center">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
-                  <span className="relative px-3 bg-slate-950 text-slate-500 text-[10px] font-bold uppercase">{t('orJoin')}</span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    placeholder={t('enterRoomId')}
-                    value={joinedRoomId}
-                    onChange={(e) => setJoinedRoomId(e.target.value)}
-                    className="flex-1 w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-4 py-2.5 rounded-xl text-center text-base sm:text-lg font-mono font-bold placeholder-slate-700 uppercase min-w-0"
-                  />
-                  <button
-                    onClick={() => handleJoinRoom(joinedRoomId)}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-xl transition duration-200 cursor-pointer shrink-0"
-                  >
-                    {t('join')}
-                  </button>
-                </div>
-
-                {/* Available Lobby Rooms */}
-                <div className="space-y-2.5 pt-1 sm:pt-2">
-                  <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
-                    <Users size={12} className="sm:w-3.5 sm:h-3.5" />
-                    <span>{t('lobbyRooms')}</span>
+            <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-6 py-6 sm:py-12 max-w-6xl mx-auto w-full">
+              
+              {/* DESKTOP LEFT SIDEBAR: GUIDE PART 1 */}
+              <div className="hidden lg:flex flex-col flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl shadow-xl justify-between">
+                <div className="space-y-5">
+                  <h3 className="text-sm font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
+                    {locale === 'vi' ? '📖 Hướng Dẫn: Khởi Động' : '📖 Guide: Setup'}
                   </h3>
                   
-                  {lobbyRooms.length === 0 ? (
-                    <div className="text-center py-5 sm:py-6 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
-                      {t('noRooms')}
+                  {/* Step 1 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">1</div>
+                      <h4 className="font-bold text-sm text-slate-200">
+                        {locale === 'vi' ? 'Tạo hoặc Vào phòng' : 'Create or Join Room'}
+                      </h4>
                     </div>
-                  ) : (
-                    <div className="max-h-40 sm:max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                      {lobbyRooms.map((r) => (
-                        <div 
-                          key={r.roomId}
-                          className="flex items-center justify-between p-2.5 sm:p-3.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/60 rounded-xl"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-mono text-xs sm:text-sm font-bold text-purple-400">{r.roomId}</p>
-                            <p className="text-[10px] sm:text-xs text-slate-400 truncate">Host: {r.hostName}</p>
-                          </div>
-                          <button
-                            onClick={() => handleJoinRoom(r.roomId)}
-                            className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 cursor-pointer"
-                          >
-                            {t('joinArena')}
-                          </button>
-                        </div>
-                      ))}
+                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
+                      {locale === 'vi' 
+                        ? 'Nhấp "Tạo phòng riêng" để nhận mã phòng và mời bạn bè, hoặc chọn phòng đang chờ ở danh sách "Lobby Rooms" bên dưới.'
+                        : 'Click "Create Private Room" to get a Room ID and invite friends, or select a waiting room in the "Lobby Rooms" list below.'}
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">2</div>
+                      <h4 className="font-bold text-sm text-slate-200">
+                        {locale === 'vi' ? 'Thiết lập mật mã' : 'Lock Secret Code'}
+                      </h4>
                     </div>
-                  )}
+                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
+                      {locale === 'vi' 
+                        ? 'Mỗi người chọn mật mã 4 số khác nhau (ví dụ: 1357). Hệ thống mã hoá AES-256 đầu cuối để bảo vệ mật mã của bạn khỏi đối thủ.'
+                        : 'Choose a unique 4-digit secret code (e.g. 1357). The server uses AES-256 E2E encryption to protect your code.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-805 pt-4 mt-6 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  {locale === 'vi' ? 'Đấu trường đoán số 4 chữ số' : '4-Digit Numbers Duel'}
                 </div>
               </div>
-            </motion.div>
+
+              {/* MAIN CHOOSE MODE CARD */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-md w-full flex flex-col justify-center"
+              >
+                
+                {/* MOBILE/TABLET HIGHLIGHTED INSTRUCTIONS BANNER */}
+                <div className="lg:hidden bg-slate-900/50 border border-purple-500/30 p-4 rounded-xl shadow-lg mb-4">
+                  <button 
+                    onClick={() => setShowMobileInstructions(!showMobileInstructions)}
+                    className="w-full flex items-center justify-between font-bold text-xs sm:text-sm text-purple-400 focus:outline-none"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Gamepad2 size={16} />
+                      {locale === 'vi' ? '📖 HƯỚNG DẪN CÁCH CHƠI' : '📖 HOW TO PLAY'}
+                    </span>
+                    {showMobileInstructions ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  
+                  <AnimatePresence>
+                    {showMobileInstructions && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="mt-3 space-y-3.5 text-xs text-slate-300 border-t border-slate-850 pt-3 overflow-hidden text-left"
+                      >
+                        <div>
+                          <span className="font-extrabold text-purple-400 block mb-0.5">1. {locale === 'vi' ? 'Tạo/Vào phòng' : 'Create/Join Room'}</span>
+                          <span className="text-slate-400 text-[11px] leading-relaxed">{locale === 'vi' ? 'Tạo phòng lấy ID gửi bạn bè hoặc chọn phòng ở mục Lobby Rooms.' : 'Create room, copy ID to share, or join from Lobby Rooms list.'}</span>
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-purple-400 block mb-0.5">2. {locale === 'vi' ? 'Cài mật mã' : 'Lock Secret'}</span>
+                          <span className="text-slate-400 text-[11px] leading-relaxed">{locale === 'vi' ? 'Chọn 4 chữ số khác nhau làm mật mã của bạn (giữ bí mật!).' : 'Choose 4 unique digits as your secret (keep it hidden!).'}</span>
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-purple-400 block mb-0.5">3. {locale === 'vi' ? 'Oẳn tù tì' : 'RPS Duel'}</span>
+                          <span className="text-slate-400 text-[11px] leading-relaxed">{locale === 'vi' ? 'Kéo - Búa - Bao để phân định người được quyền đoán trước.' : 'Play Rock-Paper-Scissors to decide who gets first turn.'}</span>
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-purple-400 block mb-0.5">4. {locale === 'vi' ? 'Đoán số & gợi ý' : 'Guess & Clues'}</span>
+                          <span className="text-slate-400 text-[11px] leading-relaxed">{locale === 'vi' ? 'Lần lượt đoán số. Gợi ý: 🟢 (đúng số) và 🎯 (đúng số và đúng vị trí).' : 'Take turns guessing. Hints: 🟢 (correct digit) and 🎯 (correct digit & spot).'}</span>
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-purple-400 block mb-0.5">5. {locale === 'vi' ? 'Kết thúc & Lưu' : 'Finish & Save'}</span>
+                          <span className="text-slate-400 text-[11px] leading-relaxed">{locale === 'vi' ? 'Đạt 4 🎯 trước sẽ thắng.' : 'First to 4 🎯 wins.'}</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-2xl space-y-4 sm:space-y-6">
+                  <div className="text-center space-y-1 sm:space-y-2">
+                    <h2 className="text-xl sm:text-2xl font-black">{t('chooseMode')}</h2>
+                    <p className="text-xs sm:text-sm text-slate-400">{t('chooseModeDesc')}</p>
+                  </div>
+
+                  <button
+                    onClick={handleCreateRoom}
+                    className="w-full py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer"
+                  >
+                    <Gamepad2 size={18} className="sm:w-5 sm:h-5" />
+                    <span>{t('createRoom')}</span>
+                  </button>
+
+                  <div className="relative flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+                    <span className="relative px-3 bg-slate-950 text-slate-500 text-[10px] font-bold uppercase">{t('orJoin')}</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder={t('enterRoomId')}
+                      value={joinedRoomId}
+                      onChange={(e) => setJoinedRoomId(e.target.value)}
+                      className="flex-1 w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-4 py-2.5 rounded-xl text-center text-base sm:text-lg font-mono font-bold placeholder-slate-700 uppercase min-w-0"
+                    />
+                    <button
+                      onClick={() => handleJoinRoom(joinedRoomId)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-xl transition duration-200 cursor-pointer shrink-0"
+                    >
+                      {t('join')}
+                    </button>
+                  </div>
+
+                  {/* Available Lobby Rooms */}
+                  <div className="space-y-2.5 pt-1 sm:pt-2">
+                    <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
+                      <Users size={12} className="sm:w-3.5 sm:h-3.5" />
+                      <span>{t('lobbyRooms')}</span>
+                    </h3>
+                    
+                    {lobbyRooms.length === 0 ? (
+                      <div className="text-center py-5 sm:py-6 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
+                        {t('noRooms')}
+                      </div>
+                    ) : (
+                      <div className="max-h-40 sm:max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                        {lobbyRooms.map((r) => (
+                          <div 
+                            key={r.roomId}
+                            className="flex items-center justify-between p-2.5 sm:p-3.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/60 rounded-xl"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-mono text-xs sm:text-sm font-bold text-purple-400">{r.roomId}</p>
+                              <p className="text-[10px] sm:text-xs text-slate-400 truncate">Host: {r.hostName}</p>
+                            </div>
+                            <button
+                              onClick={() => handleJoinRoom(r.roomId)}
+                              className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 cursor-pointer"
+                            >
+                              {t('joinArena')}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* DESKTOP RIGHT SIDEBAR: GUIDE PART 2 */}
+              <div className="hidden lg:flex flex-col flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl shadow-xl justify-between">
+                <div className="space-y-5">
+                  <h3 className="text-sm font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
+                    {locale === 'vi' ? '📖 Hướng Dẫn: Đối Chiến' : '📖 Guide: Battle'}
+                  </h3>
+                  
+                  {/* Step 3 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">3</div>
+                      <h4 className="font-bold text-sm text-slate-200">
+                        {locale === 'vi' ? 'Oẳn tù tì giành quyền đi trước' : 'RPS Initiative Duel'}
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
+                      {locale === 'vi' 
+                        ? 'Oẳn tù tì (Kéo - Búa - Bao) để chọn người đi trước. Người đoán trước có lợi thế đi trước cực kỳ lớn!'
+                        : 'Play Rock-Paper-Scissors to decide who goes first. The first turn provides a massive initiative advantage!'}
+                    </p>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">4</div>
+                      <h4 className="font-bold text-sm text-slate-200">
+                        {locale === 'vi' ? 'Đoán số & Đọc gợi ý' : 'Guess & Read Hints'}
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
+                      {locale === 'vi' 
+                        ? 'Đoán 4 chữ số. Nhận manh mối: 🟢 (Chữ số đúng nhưng sai vị trí) và 🎯 (Chữ số đúng và đúng vị trí).'
+                        : 'Guess 4 digits. Get hints: 🟢 (Correct digits, wrong spot) and 🎯 (Correct digits in the right spot).'}
+                    </p>
+                  </div>
+
+                  {/* Step 5 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">5</div>
+                      <h4 className="font-bold text-sm text-slate-200">
+                        {locale === 'vi' ? 'Kết thúc & Lưu lịch sử' : 'Finish & Save History'}
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
+                      {locale === 'vi' 
+                        ? 'Ai đạt 4 🎯 trước sẽ thắng. Bấm "Rời phòng" hoặc offline quá 60s sẽ hủy ván.'
+                        : 'First to 4 🎯 wins. Leaving or offline >60s cancels save.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-805 pt-4 mt-6 text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-right">
+                  {locale === 'vi' ? 'Chế độ chơi thời gian thực' : 'Realtime Game Arena'}
+                </div>
+              </div>
+
+            </div>
           )}
 
           {/* ROOM ACTIVE STATES */}
           {room && (
-            <div className="flex-1 flex flex-col space-y-4">
+            <div className="flex-1 flex flex-col space-y-4 pb-24 sm:pb-0 min-h-0">
               
               {/* Active Room Header bar */}
               <div className="flex items-center justify-between p-3 sm:p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
@@ -866,6 +1258,16 @@ export default function GameClient() {
                       {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
                     </button>
                   </div>
+                  {/* User's own locked secret code display */}
+                  {room.state === 'PLAYING' && (
+                    <div className="mt-1 flex items-center space-x-1 text-[10px] sm:text-xs text-slate-400">
+                      <KeyRound size={11} className="text-purple-400 shrink-0" />
+                      <span>{locale === 'vi' ? 'Mã của bạn:' : 'Your Secret:'}</span>
+                      <span className="font-mono font-black text-purple-300 tracking-wider bg-purple-500/10 px-1.5 py-0.5 rounded">
+                        {localStorage.getItem(`secret:${room.roomId}`) || secretInput || '----'}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2.5 sm:space-x-6">
@@ -1000,31 +1402,43 @@ export default function GameClient() {
                       </p>
                     </div>
 
-                    {me?.rpsChoice ? (
-                      <div className="text-center py-8 space-y-4">
-                        <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                        <p className="text-sm text-purple-400 font-semibold">
+                    <div className="grid grid-cols-3 gap-3">
+                      {(['rock', 'paper', 'scissors'] as const).map((choice) => {
+                        const icon = choice === 'rock' ? '✊' : choice === 'paper' ? '✋' : '✌️';
+                        const isSelected = me?.rpsChoice === choice;
+                        const hasChosen = !!me?.rpsChoice;
+                        
+                        return (
+                          <button
+                            key={choice}
+                            onClick={() => !hasChosen && handleRpsChoice(choice)}
+                            disabled={hasChosen && !isSelected}
+                            className={`aspect-square rounded-2xl text-4xl flex flex-col items-center justify-center gap-2 transition duration-200 cursor-pointer border ${
+                              isSelected 
+                                ? 'bg-purple-600/35 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)] scale-105 text-white animate-pulse' 
+                                : hasChosen
+                                  ? 'bg-slate-950/20 border-slate-900/60 opacity-30 cursor-not-allowed'
+                                  : 'bg-slate-950/60 hover:bg-purple-950/20 border-slate-800 hover:border-purple-500/50 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            <span className={`${isSelected ? 'scale-110' : ''}`}>{icon}</span>
+                            <span className={`text-[10px] uppercase font-black tracking-wider ${isSelected ? 'text-purple-300' : 'text-slate-500'}`}>{t(choice)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {me?.rpsChoice && (
+                      <div className="text-center pt-3 border-t border-slate-800/60 space-y-2">
+                        <div className="flex items-center justify-center space-x-2">
+                          <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                          <p className="text-xs text-purple-400 font-bold">
+                            {opponentRpsSubmitted ? t('resolvingClash') : t('waitingOpponentRps')}
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-slate-500 italic">
                           {t('submittedChoice').replace('{choice}', t(me.rpsChoice as 'rock' | 'paper' | 'scissors'))}
                         </p>
-                        <p className="text-xs text-slate-500">
-                          {opponentRpsSubmitted ? t('resolvingClash') : t('waitingOpponentRps')}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['rock', 'paper', 'scissors'] as const).map((choice) => {
-                          const icon = choice === 'rock' ? '✊' : choice === 'paper' ? '✋' : '✌️';
-                          return (
-                            <button
-                              key={choice}
-                              onClick={() => handleRpsChoice(choice)}
-                              className="aspect-square bg-slate-950/60 hover:bg-purple-950/20 border border-slate-800 hover:border-purple-500/50 rounded-2xl text-4xl flex flex-col items-center justify-center gap-2 transition duration-200 cursor-pointer"
-                            >
-                              <span>{icon}</span>
-                              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">{t(choice)}</span>
-                            </button>
-                          );
-                        })}
                       </div>
                     )}
                   </div>
@@ -1035,7 +1449,7 @@ export default function GameClient() {
               {room.state === 'PLAYING' && me && opponent && (
                 <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0">
                   {/* Left sub-panel: Your guesses against opponent */}
-                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden min-h-[140px] md:min-h-[280px] h-[190px] md:h-auto">
+                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden h-[218px] md:h-[366px]">
                     <div className="p-2.5 sm:p-3 bg-purple-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
                       <div className="flex items-center space-x-2 min-w-0">
                         <span className="text-purple-400 shrink-0">●</span>
@@ -1046,7 +1460,7 @@ export default function GameClient() {
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5 min-h-0">
+                    <div ref={myGuessesScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-2.5 sm:p-3 space-y-1.5 min-h-0 h-[182px] md:h-[318px]">
                       {room.guesses.filter(g => g.playerIndex === myPlayerIndex).map((g, i) => (
                         <div 
                           key={i} 
@@ -1083,7 +1497,7 @@ export default function GameClient() {
                   </div>
 
                   {/* Right sub-panel: Opponent's guesses against you */}
-                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden min-h-[140px] md:min-h-[280px] h-[190px] md:h-auto">
+                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden h-[218px] md:h-[366px]">
                     <div className="p-2.5 sm:p-3 bg-pink-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
                       <div className="flex items-center space-x-2 min-w-0">
                         <span className="text-pink-400 shrink-0">●</span>
@@ -1094,7 +1508,7 @@ export default function GameClient() {
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5 min-h-0">
+                    <div ref={opponentGuessesScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-2.5 sm:p-3 space-y-1.5 min-h-0 h-[182px] md:h-[318px]">
                       {room.guesses.filter(g => g.playerIndex === opponentPlayerIndex).map((g, i) => (
                         <div 
                           key={i} 
@@ -1134,7 +1548,7 @@ export default function GameClient() {
 
               {/* INPUT GUESS SECTION (Tied to PLAYING state footer) */}
               {room.state === 'PLAYING' && me && (
-                <div className="p-3 sm:p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
+                <div className="fixed bottom-0 left-0 right-0 z-45 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/85 p-3 sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-0 sm:bg-slate-900/40 sm:border-t-0 sm:p-4 sm:rounded-xl sm:rounded-2xl sm:shadow-lg shrink-0">
                   {room.activeTurnIndex === myPlayerIndex ? (
                     <form onSubmit={handleSendGuess} className="flex gap-2">
                       <div className="flex-1 min-w-0">
@@ -1167,42 +1581,22 @@ export default function GameClient() {
                 </div>
               )}
 
-              {/* STATE: FINISHED (Victory / Defeat screen) */}
+              {/* STATE: FINISHED (Victory / Defeat screen - simplified) */}
               {room.state === 'FINISHED' && (
                 <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
                   {room.winnerIndex === myPlayerIndex && <ConfettiCanvas />}
-                  
-                  <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-5 sm:p-8 rounded-2xl shadow-2xl space-y-6">
-                    <div className="space-y-2">
-                      {room.winnerIndex === myPlayerIndex ? (
-                        <>
-                          <div className="text-6xl mb-2">🏆</div>
-                          <h3 className="text-3xl font-black bg-gradient-to-r from-yellow-400 to-amber-500 text-transparent bg-clip-text">{t('victory')}</h3>
-                          <p className="text-xs text-slate-400">{t('victoryDesc')}</p>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-6xl mb-2">💀</div>
-                          <h3 className="text-3xl font-black bg-gradient-to-r from-red-500 to-pink-500 text-transparent bg-clip-text">{t('defeat')}</h3>
-                          <p className="text-xs text-slate-400">{t('defeatDesc').replace('{username}', opponent?.username || '')}</p>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Code Reveal */}
-                    <div className="grid grid-cols-2 gap-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-left">
-                      <div>
-                        <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('enemySecret')}</span>
-                        <span className="font-mono text-xl font-extrabold tracking-widest text-purple-400">{secretReveal || '????'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuesses')}</span>
-                        <span className="font-bold text-slate-300">{t('turnsCount').replace('{count}', String(room.guesses.length))}</span>
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex flex-col sm:flex-row gap-2.5">
+                  <div className="space-y-4">
+                    <div className="text-6xl">{room.winnerIndex === myPlayerIndex ? '🏆' : '💀'}</div>
+                    <h3 className={`text-3xl font-black bg-gradient-to-r ${room.winnerIndex === myPlayerIndex ? 'from-yellow-400 to-amber-500' : 'from-red-500 to-pink-500'} text-transparent bg-clip-text`}>
+                      {room.winnerIndex === myPlayerIndex ? t('victory') : t('defeat')}
+                    </h3>
+                    <button
+                      onClick={() => setShowMatchModal(true)}
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 cursor-pointer"
+                    >
+                      {t('matchSummary')}
+                    </button>
+                    <div className="flex flex-col sm:flex-row gap-2.5 mt-4">
                       <button
                         onClick={handlePlayAgain}
                         className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 cursor-pointer"
@@ -1210,7 +1604,6 @@ export default function GameClient() {
                         <RefreshCw size={18} />
                         <span>{t('playAgain')}</span>
                       </button>
-                      
                       <button
                         onClick={handleLeaveRoom}
                         className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition duration-200 cursor-pointer"
@@ -1218,7 +1611,6 @@ export default function GameClient() {
                         {t('backToLobby')}
                       </button>
                     </div>
-
                     {opponentWantsPlayAgain && (
                       <p className="text-xs text-green-400 font-semibold animate-pulse">
                         {t('rematchRequest').replace('{username}', opponent?.username || t('enemy'))}
@@ -1228,21 +1620,381 @@ export default function GameClient() {
                 </div>
               )}
 
+              {/* MATCH SUMMARY MODAL OVERLAY */}
+              <AnimatePresence>
+                {showMatchModal && room?.state === 'FINISHED' && matchStats && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowMatchModal(false); }}
+                  >
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    
+                    {/* Modal */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                      className="relative w-full max-w-lg bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden"
+                    >
+                      {/* Close button */}
+                      <button
+                        onClick={() => setShowMatchModal(false)}
+                        className="absolute top-4 right-4 p-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition z-10 cursor-pointer"
+                      >
+                        <X size={16} />
+                      </button>
+
+                      {/* Header */}
+                      <div className={`p-6 pb-4 text-center ${room.winnerIndex === myPlayerIndex ? 'bg-gradient-to-b from-yellow-500/10 to-transparent' : 'bg-gradient-to-b from-red-500/10 to-transparent'}`}>
+                        <div className="text-5xl mb-3">{room.winnerIndex === myPlayerIndex ? '🏆' : '💀'}</div>
+                        <h3 className={`text-2xl font-black bg-gradient-to-r ${room.winnerIndex === myPlayerIndex ? 'from-yellow-400 to-amber-500' : 'from-red-500 to-pink-500'} text-transparent bg-clip-text`}>
+                          {room.winnerIndex === myPlayerIndex ? t('victory') : t('defeat')}
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {room.winnerIndex === myPlayerIndex 
+                            ? t('victoryDesc') 
+                            : t('defeatDesc').replace('{username}', opponent?.username || '')}
+                        </p>
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="px-6 pb-4 space-y-3">
+                        {/* Duration */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/10 rounded-lg">
+                              <Clock size={18} className="text-blue-400" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('matchDuration')}</span>
+                              <span className="font-mono text-lg font-extrabold text-white">{formatDuration(matchStats.duration)}</span>
+                            </div>
+                          </div>
+                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                            <div className="p-2 bg-purple-500/10 rounded-lg">
+                              <Target size={18} className="text-purple-400" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuesses')}</span>
+                              <span className="font-mono text-lg font-extrabold text-white">{matchStats.totalGuesses} {locale === 'vi' ? 'lượt' : 'total'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Player Stats Comparison */}
+                        <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              {me?.avatar ? (
+                                <img src={me.avatar} alt={me.username} className="w-8 h-8 rounded-full border border-slate-600" />
+                              ) : (
+                                <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">{user.name.slice(0, 2)}</div>
+                              )}
+                              <div className="text-sm">
+                                <span className="font-bold text-slate-200">{t('you')}</span>
+                                {room.winnerIndex === myPlayerIndex && <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">👑 Winner</span>}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('yourGuesses')}</span>
+                              <span className="font-mono text-lg font-extrabold text-white">
+                                {room.winnerIndex === myPlayerIndex ? matchStats.winnerGuessCount : matchStats.loserGuessCount}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="border-t border-slate-700/40 my-2" />
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {opponent?.avatar ? (
+                                <img src={opponent.avatar} alt={opponent.username} className="w-8 h-8 rounded-full border border-slate-600" />
+                              ) : (
+                                <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">{(opponent?.username || '??').slice(0, 2)}</div>
+                              )}
+                              <div className="text-sm">
+                                <span className="font-bold text-slate-200">{opponent?.username || t('enemy')}</span>
+                                {room.winnerIndex !== myPlayerIndex && <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">👑 Winner</span>}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuessesCount')}</span>
+                              <span className="font-mono text-lg font-extrabold text-white">
+                                {room.winnerIndex === myPlayerIndex ? matchStats.loserGuessCount : matchStats.winnerGuessCount}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Secret Codes Reveal */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('yourSecret')}</span>
+                            <span className="font-mono text-xl font-extrabold tracking-widest text-emerald-400">
+                              {room.winnerIndex === myPlayerIndex ? matchStats.winnerSecret : matchStats.loserSecret}
+                            </span>
+                          </div>
+                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('enemySecret')}</span>
+                            <span className="font-mono text-xl font-extrabold tracking-widest text-purple-400">
+                              {secretReveal || '????'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* First Move Info */}
+                        <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                          <div className="p-2 bg-amber-500/10 rounded-lg">
+                            <Swords size={18} className="text-amber-400" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('firstMove')}</span>
+                            <span className="text-sm font-bold text-slate-200">
+                              {matchStats.rpsWinnerIndex === myPlayerIndex 
+                                ? `${t('you')} (${locale === 'vi' ? 'thắng oẳn tù tì' : 'won RPS'})` 
+                                : `${opponent?.username || t('enemy')} (${locale === 'vi' ? 'thắng oẳn tù tì' : 'won RPS'})`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="px-6 pb-6 flex flex-col sm:flex-row gap-2.5">
+                        <button
+                          onClick={() => { setShowMatchModal(false); handlePlayAgain(); }}
+                          className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 cursor-pointer"
+                        >
+                          <RefreshCw size={18} />
+                          <span>{t('playAgain')}</span>
+                        </button>
+                        <button
+                          onClick={() => { setShowMatchModal(false); handleLeaveRoom(); }}
+                          className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition duration-200 cursor-pointer"
+                        >
+                          {t('backToLobby')}
+                        </button>
+                      </div>
+
+                      {opponentWantsPlayAgain && (
+                        <div className="px-6 pb-4">
+                          <p className="text-xs text-green-400 font-semibold animate-pulse text-center">
+                            {t('rematchRequest').replace('{username}', opponent?.username || t('enemy'))}
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* COUNTDOWN OVERLAY AT GAME START */}
+              <AnimatePresence>
+                {showStartCountdown && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-md"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      className="text-center space-y-6 max-w-sm w-full px-6"
+                    >
+                      <div className="text-xs font-black tracking-[0.2em] text-purple-400 uppercase">
+                        {locale === 'vi' ? '⚔️ ĐẤU TRƯỜNG ĐỐI CHIẾN' : '⚔️ BATTLE ARENA'}
+                      </div>
+                      
+                      <div className="text-sm font-bold text-slate-300">
+                        {room && room.activeTurnIndex === myPlayerIndex ? (
+                          <span className="text-emerald-400 font-extrabold block text-base mb-1">
+                            {locale === 'vi' ? '🎉 Bạn Thắng Oẳn Tù Tì!' : '🎉 You Won RPS!'}
+                          </span>
+                        ) : (
+                          <span className="text-pink-400 font-extrabold block text-base mb-1">
+                            {locale === 'vi' ? `😢 ${opponent?.username || 'Đối thủ'} Thắng Oẳn Tù Tì!` : `😢 ${opponent?.username || 'Opponent'} Won RPS!`}
+                          </span>
+                        )}
+                        <span>
+                          {room && room.activeTurnIndex === myPlayerIndex 
+                            ? (locale === 'vi' ? 'Bạn được quyền đoán trước!' : 'You get to guess first!')
+                            : (locale === 'vi' ? 'Đối thủ được quyền đoán trước!' : 'Opponent gets to guess first!')}
+                        </span>
+                      </div>
+
+                      {/* Giant Number Countdown */}
+                      <motion.div 
+                        key={countdownVal}
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 1.5, opacity: 0 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className="text-7xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-yellow-500 select-none py-4"
+                      >
+                        {countdownVal > 0 ? countdownVal : (locale === 'vi' ? 'CHIẾN!' : 'BATTLE!')}
+                      </motion.div>
+
+                      <div className="text-xs text-slate-500 animate-pulse uppercase tracking-wider">
+                        {locale === 'vi' ? 'Trực chiến chuẩn bị bắt đầu...' : 'Battle starting in...'}
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* GAME HISTORY MODAL OVERLAY */}
+              <AnimatePresence>
+                {showHistoryModal && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowHistoryModal(false); }}
+                  >
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+                    
+                    {/* Modal Container */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                      className="relative w-full max-w-lg bg-slate-900 border border-slate-800/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+                    >
+                      {/* Close button */}
+                      <button
+                        onClick={() => setShowHistoryModal(false)}
+                        className="absolute top-4 right-4 p-1.5 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition z-10 cursor-pointer"
+                      >
+                        <X size={16} />
+                      </button>
+
+                      {/* Header */}
+                      <div className="p-6 border-b border-slate-800 flex items-center space-x-3 shrink-0">
+                        <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl">
+                          <Trophy size={20} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-black text-white">
+                            {locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}
+                          </h3>
+                          <p className="text-xs text-slate-400">
+                            {locale === 'vi' ? '15 trận đấu gần nhất của bạn' : 'Your 15 most recent matches'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Content (Scrollable list) */}
+                      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 min-h-0 bg-slate-950/20">
+                        {loadingHistory ? (
+                          <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                              className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full"
+                            />
+                            <p className="text-xs text-slate-400">
+                              {locale === 'vi' ? 'Đang tải lịch sử đấu...' : 'Loading match history...'}
+                            </p>
+                          </div>
+                        ) : historyError ? (
+                          <div className="text-center py-16 text-xs text-red-400 font-semibold">
+                            ⚠️ {historyError}
+                          </div>
+                        ) : gameHistory.length === 0 ? (
+                          <div className="text-center py-16 text-slate-500 text-xs sm:text-sm">
+                            {locale === 'vi' ? 'Bạn chưa chơi trận đấu nào.' : 'No matches played yet.'}
+                          </div>
+                        ) : (
+                          gameHistory.map((match: any, index: number) => {
+                            const isWinner = match.winnerId === user.id;
+                            const matchOpponent = match.players.find((p: any) => p.userId !== user.id);
+                            const matchDate = new Date(match.finishedAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+
+                            return (
+                              <div 
+                                key={match._id || index}
+                                className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between transition hover:border-slate-700/60 hover:bg-slate-900"
+                              >
+                                {/* Left part: Opponent info and date */}
+                                <div className="flex items-center gap-3 min-w-0">
+                                  {matchOpponent?.avatar ? (
+                                    <img src={matchOpponent.avatar} alt={matchOpponent.username} className="w-10 h-10 rounded-full border border-slate-700 shrink-0" />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center font-bold text-xs uppercase text-slate-300 shrink-0">
+                                      {(matchOpponent?.username || '??').slice(0, 2)}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <h4 className="font-bold text-sm text-slate-200 truncate pr-2">
+                                      {matchOpponent?.username || (locale === 'vi' ? 'Đối thủ ẩn danh' : 'Unknown Opponent')}
+                                    </h4>
+                                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                                      {matchDate}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Right part: Result & stats */}
+                                <div className="flex items-center gap-4 shrink-0">
+                                  <div className="text-right">
+                                    <span className={`text-xs font-black uppercase tracking-wider block ${isWinner ? 'text-emerald-400' : 'text-rose-500'}`}>
+                                      {isWinner ? (locale === 'vi' ? 'Thắng' : 'Win') : (locale === 'vi' ? 'Thua' : 'Loss')}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                                      {match.totalGuesses} {locale === 'vi' ? 'lượt đoán' : 'guesses'}
+                                    </span>
+                                  </div>
+                                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${isWinner ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-500'}`}>
+                                    {isWinner ? 'W' : 'L'}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="p-4 border-t border-slate-800 text-center shrink-0">
+                        <button
+                          onClick={() => setShowHistoryModal(false)}
+                          className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+                        >
+                          {locale === 'vi' ? 'Đóng' : 'Close'}
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
-
         </div>
 
         {/* RIGHT COLUMN: REALTIME CHAT (Inside active room only) */}
         {room && (
-          <div className={`w-full lg:w-80 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col h-[400px] lg:h-auto overflow-hidden ${activeMobileTab !== 'chat' ? 'hidden lg:flex' : 'flex'}`}>
+          <div className={`w-full lg:w-80 lg:flex-none bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col flex-1 min-h-[450px] lg:h-auto overflow-hidden ${activeMobileTab !== 'chat' ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-4 border-b border-slate-800 flex items-center space-x-2 shrink-0 bg-slate-950/20">
               <MessageSquare size={16} className="text-purple-400" />
               <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">{t('roomChat')}</h3>
             </div>
 
             {/* Chat message logs */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-slate-950/10">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 min-h-0 bg-slate-950/10">
               {chatMessages.map((m, i) => {
                 const isMe = m.username === user.name;
                 return (

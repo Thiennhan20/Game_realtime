@@ -5,7 +5,10 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const axios = require('axios');
+const mongoose = require('mongoose');
 require('dotenv').config();
+const { Redis } = require('@upstash/redis');
+const GameHistory = require('./models/GameHistory');
 
 const app = express();
 app.use(cors());
@@ -96,9 +99,70 @@ function isValidSecret(num) {
   return set.size === 4;
 }
 
-// --- Game Rooms State ---
-// roomId -> RoomObject
+// --- Upstash Redis Client ---
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
+const REDIS_KEY_PREFIX = 'game:room:';
+const ROOM_TTL_SECONDS = 30 * 60; // 30 minutes
+
+// --- Game Rooms State (Hybrid: RAM + Redis) ---
+// roomId -> RoomObject (in-memory for speed)
 const rooms = new Map();
+
+// Sync room data to Redis (background, non-blocking)
+function syncRoomToRedis(roomId, room) {
+  redis.set(`${REDIS_KEY_PREFIX}${roomId}`, JSON.stringify(room), { ex: ROOM_TTL_SECONDS })
+    .then(() => console.log(`[Redis] Synced room ${roomId}`))
+    .catch(err => console.error(`[Redis] Failed to sync room ${roomId}:`, err.message));
+}
+
+// Delete room from Redis
+function deleteRoomFromRedis(roomId) {
+  redis.del(`${REDIS_KEY_PREFIX}${roomId}`)
+    .then(() => console.log(`[Redis] Deleted room ${roomId}`))
+    .catch(err => console.error(`[Redis] Failed to delete room ${roomId}:`, err.message));
+}
+
+// Refresh TTL for active rooms (reset 30-min timer)
+function refreshRoomTTL(roomId) {
+  redis.expire(`${REDIS_KEY_PREFIX}${roomId}`, ROOM_TTL_SECONDS)
+    .catch(err => console.error(`[Redis] Failed to refresh TTL for ${roomId}:`, err.message));
+}
+
+// Load all rooms from Redis into RAM on server startup
+async function loadRoomsFromRedis() {
+  try {
+    // Scan for all game room keys
+    let cursor = '0';
+    let allKeys = [];
+    do {
+      const result = await redis.scan(cursor, { match: `${REDIS_KEY_PREFIX}*`, count: 100 });
+      cursor = String(result[0]);
+      allKeys = allKeys.concat(result[1]);
+    } while (cursor !== '0');
+
+    if (allKeys.length === 0) {
+      console.log('[Redis] No rooms to restore.');
+      return;
+    }
+
+    let restored = 0;
+    for (const key of allKeys) {
+      const data = await redis.get(key);
+      if (data) {
+        const room = typeof data === 'string' ? JSON.parse(data) : data;
+        rooms.set(room.roomId, room);
+        restored++;
+      }
+    }
+    console.log(`[Redis] Restored ${restored} room(s) from Redis.`);
+  } catch (err) {
+    console.error('[Redis] Failed to load rooms from Redis:', err.message);
+  }
+}
 
 // Generate random 6-digit room ID
 function generateRoomId() {
@@ -139,8 +203,37 @@ io.use(async (socket, next) => {
   }
 });
 
+// --- Disconnect grace period timers ---
+const disconnectTimers = new Map(); // odisconnectTimers: odisconnectKey -> timerId
+
 io.on('connection', (socket) => {
   console.log(`[Game] User connected: ${socket.username} (${socket.userId})`);
+  
+  // --- RECONNECT DETECTION ---
+  // Check if this user was temporarily disconnected from any room
+  rooms.forEach((room, roomId) => {
+    const player = room.players.find(p => p.userId === socket.userId);
+    if (player && player.disconnectedAt) {
+      // Cancel the disconnect timer
+      const timerKey = `${roomId}:${socket.userId}`;
+      const timerId = disconnectTimers.get(timerKey);
+      if (timerId) {
+        clearTimeout(timerId);
+        disconnectTimers.delete(timerKey);
+      }
+      
+      // Restore player connection
+      player.disconnectedAt = null;
+      player.socketId = socket.id;
+      socket.join(roomId);
+      
+      // Sync and notify
+      syncRoomToRedis(roomId, room);
+      socket.emit('RECONNECTED_TO_ROOM', room);
+      socket.to(roomId).emit('OPPONENT_RECONNECTED', { username: socket.username, roomState: room });
+      console.log(`[Game] User ${socket.username} reconnected to room ${roomId}`);
+    }
+  });
   
   // Send list of joinable rooms
   socket.emit('LOBBY_ROOMS', getJoinableRooms());
@@ -165,9 +258,12 @@ io.on('connection', (socket) => {
       guesses: [],
       rpsWinnerIndex: -1,
       activeTurnIndex: -1,
-      winnerIndex: -1
+      winnerIndex: -1,
+      startedAt: null,
+      saved: false
     };
     rooms.set(roomId, room);
+    syncRoomToRedis(roomId, room);
     socket.join(roomId);
     
     socket.emit('ROOM_CREATED', room);
@@ -204,6 +300,9 @@ io.on('connection', (socket) => {
     
     socket.join(roomId);
     room.state = 'SETTING_SECRET'; // Advance to setting secret state
+    room.startedAt = new Date().toISOString(); // Record game start time
+    room.saved = false;
+    syncRoomToRedis(roomId, room);
     
     io.to(roomId).emit('GAME_START', room);
     io.emit('LOBBY_ROOMS', getJoinableRooms());
@@ -235,9 +334,11 @@ io.on('connection', (socket) => {
       // Clear ready statuses for RPS phase
       room.players.forEach(p => p.ready = false);
       room.state = 'RPS_DECISION';
+      syncRoomToRedis(roomId, room);
       io.to(roomId).emit('RPS_PHASE', room);
       console.log(`[Game] Both secrets set in ${roomId}. Moving to RPS_DECISION.`);
     } else {
+      syncRoomToRedis(roomId, room);
       socket.emit('SECRET_ACCEPTED');
       socket.to(roomId).emit('OPPONENT_SECRET_SET');
     }
@@ -285,6 +386,7 @@ io.on('connection', (socket) => {
           p.rpsChoice = null;
           p.ready = false;
         });
+        syncRoomToRedis(roomId, room);
         io.to(roomId).emit('RPS_TIE', {
           p1Choice: p1.rpsChoice,
           p2Choice: p2.rpsChoice,
@@ -296,6 +398,7 @@ io.on('connection', (socket) => {
         room.rpsWinnerIndex = winnerIdx;
         room.activeTurnIndex = winnerIdx; // Winner plays first
         room.state = 'PLAYING';
+        syncRoomToRedis(roomId, room);
         
         io.to(roomId).emit('RPS_RESULT', {
           winnerIndex: winnerIdx,
@@ -306,6 +409,7 @@ io.on('connection', (socket) => {
         console.log(`[Game] RPS winner in ${roomId}: Player ${winnerIdx} (${room.players[winnerIdx].username}).`);
       }
     } else {
+      syncRoomToRedis(roomId, room);
       socket.emit('RPS_ACCEPTED');
       socket.to(roomId).emit('OPPONENT_RPS_SUBMITTED');
     }
@@ -355,16 +459,40 @@ io.on('connection', (socket) => {
     if (correctPosition === 4) {
       room.state = 'FINISHED';
       room.winnerIndex = playerIdx;
+      room.finishedAt = new Date().toISOString();
+      syncRoomToRedis(roomId, room);
+      
+      // Calculate match statistics
+      const winnerGuesses = room.guesses.filter(g => g.playerIndex === playerIdx);
+      const loserGuesses = room.guesses.filter(g => g.playerIndex === opponentIdx);
+      const durationMs = room.startedAt ? (new Date(room.finishedAt) - new Date(room.startedAt)) : 0;
+      const durationSec = Math.floor(durationMs / 1000);
+      
+      // Decrypt winner's secret for reveal
+      const winnerSecret = decryptSecret(room.players[playerIdx].secretNumber);
+      
       io.to(roomId).emit('GAME_OVER', {
         winnerIndex: playerIdx,
         winningGuess: guessRecord,
         roomState: room,
-        opponentSecret: decryptedSecret // Reveal code to opponent
+        opponentSecret: decryptedSecret, // Reveal loser's code to winner
+        matchStats: {
+          duration: durationSec,
+          totalGuesses: room.guesses.length,
+          winnerGuessCount: winnerGuesses.length,
+          loserGuessCount: loserGuesses.length,
+          rpsWinnerIndex: room.rpsWinnerIndex,
+          winnerSecret: winnerSecret,
+          loserSecret: decryptedSecret,
+          startedAt: room.startedAt,
+          finishedAt: room.finishedAt
+        }
       });
       console.log(`[Game] Room ${roomId} finished. Winner: ${room.players[playerIdx].username}.`);
     } else {
       // Toggle active turn
       room.activeTurnIndex = opponentIdx;
+      syncRoomToRedis(roomId, room);
       io.to(roomId).emit('GUESS_RESULT', {
         lastGuess: guessRecord,
         roomState: room
@@ -398,11 +526,57 @@ io.on('connection', (socket) => {
       room.rpsWinnerIndex = -1;
       room.activeTurnIndex = -1;
       room.winnerIndex = -1;
+      room.startedAt = new Date().toISOString();
+      room.saved = false;
+      syncRoomToRedis(roomId, room);
 
       io.to(roomId).emit('GAME_START', room);
       console.log(`[Game] Room ${roomId} play again started.`);
     } else {
+      syncRoomToRedis(roomId, room);
       socket.to(roomId).emit('OPPONENT_WANTS_PLAY_AGAIN');
+    }
+  });
+
+  // --- MATCH RESULT VIEWED (Client confirms they saw the end screen) ---
+  socket.on('MATCH_RESULT_VIEWED', async (roomId) => {
+    const room = rooms.get(roomId);
+    if (!room || room.state !== 'FINISHED' || room.saved) return;
+    
+    // Mark as saved to prevent duplicate saves
+    room.saved = true;
+    syncRoomToRedis(roomId, room);
+    
+    try {
+      const winnerIdx = room.winnerIndex;
+      const loserIdx = winnerIdx === 0 ? 1 : 0;
+      const winnerGuesses = room.guesses.filter(g => g.playerIndex === winnerIdx);
+      const loserGuesses = room.guesses.filter(g => g.playerIndex === loserIdx);
+      const durationMs = room.startedAt && room.finishedAt 
+        ? (new Date(room.finishedAt) - new Date(room.startedAt)) 
+        : 0;
+      
+      const history = new GameHistory({
+        roomId: room.roomId,
+        players: room.players.map(p => ({
+          userId: p.userId,
+          username: p.username,
+          avatar: p.avatar || ''
+        })),
+        winnerId: room.players[winnerIdx].userId,
+        winnerIndex: winnerIdx,
+        totalGuesses: room.guesses.length,
+        winnerGuessCount: winnerGuesses.length,
+        loserGuessCount: loserGuesses.length,
+        rpsWinnerIndex: room.rpsWinnerIndex,
+        duration: Math.floor(durationMs / 1000),
+        finishedAt: room.finishedAt || new Date()
+      });
+      
+      await history.save();
+      console.log(`[MongoDB] Game history saved for room ${room.roomId}`);
+    } catch (err) {
+      console.error(`[MongoDB] Failed to save game history for room ${room.roomId}:`, err.message);
     }
   });
 
@@ -417,22 +591,31 @@ io.on('connection', (socket) => {
     });
   });
 
-  // --- DISCONNECT / LEAVE ROOM ---
-  const handleLeaveOrDisconnect = (socket) => {
+  // --- LEAVE ROOM (Intentional - button click) ---
+  // Immediate removal, no grace period, no save
+  const handleIntentionalLeave = (socket) => {
     rooms.forEach((room, roomId) => {
       const pIdx = room.players.findIndex(p => p.userId === socket.userId);
       if (pIdx !== -1) {
-        console.log(`[Game] User ${socket.username} left/disconnected from room ${roomId}`);
+        console.log(`[Game] User ${socket.username} intentionally left room ${roomId}`);
         
-        // Remove player from room
+        // Cancel any pending disconnect timer for this user
+        const timerKey = `${roomId}:${socket.userId}`;
+        const timerId = disconnectTimers.get(timerKey);
+        if (timerId) {
+          clearTimeout(timerId);
+          disconnectTimers.delete(timerKey);
+        }
+        
+        // Remove player from room immediately
         room.players.splice(pIdx, 1);
+        socket.leave(roomId);
         
         if (room.players.length === 0) {
-          // Close room if empty
           rooms.delete(roomId);
+          deleteRoomFromRedis(roomId);
           console.log(`[Game] Room ${roomId} deleted as it became empty.`);
         } else {
-          // Notify the remaining player
           room.state = 'WAITING_FOR_PLAYERS';
           room.guesses = [];
           room.players.forEach(p => {
@@ -440,7 +623,8 @@ io.on('connection', (socket) => {
             p.rpsChoice = null;
             p.ready = false;
           });
-          io.to(roomId).emit('PLAYER_DISCONNECTED', {
+          syncRoomToRedis(roomId, room);
+          io.to(roomId).emit('PLAYER_LEFT', {
             username: socket.username,
             roomState: room
           });
@@ -452,12 +636,70 @@ io.on('connection', (socket) => {
   };
 
   socket.on('LEAVE_ROOM', () => {
-    handleLeaveOrDisconnect(socket);
+    handleIntentionalLeave(socket);
   });
 
+  // --- DISCONNECT (Unintentional - lost connection, closed tab) ---
+  // 60-second grace period for reconnection
   socket.on('disconnect', () => {
-    handleLeaveOrDisconnect(socket);
-    console.log(`[Game] User disconnected: ${socket.username}`);
+    console.log(`[Game] User disconnected: ${socket.username} (${socket.userId})`);
+    
+    rooms.forEach((room, roomId) => {
+      const player = room.players.find(p => p.userId === socket.userId);
+      if (player) {
+        // Mark player as temporarily disconnected
+        player.disconnectedAt = Date.now();
+        syncRoomToRedis(roomId, room);
+        
+        // Notify opponent
+        io.to(roomId).emit('PLAYER_TEMPORARILY_DISCONNECTED', {
+          username: socket.username,
+          roomState: room
+        });
+        console.log(`[Game] User ${socket.username} temporarily disconnected from room ${roomId}. 60s grace period started.`);
+        
+        // Set 60-second timer
+        const timerKey = `${roomId}:${socket.userId}`;
+        const timerId = setTimeout(() => {
+          disconnectTimers.delete(timerKey);
+          
+          // Check if player is still disconnected
+          const currentRoom = rooms.get(roomId);
+          if (!currentRoom) return;
+          const currentPlayer = currentRoom.players.find(p => p.userId === socket.userId);
+          if (!currentPlayer || !currentPlayer.disconnectedAt) return;
+          
+          console.log(`[Game] User ${socket.username} did not reconnect within 60s. Removing from room ${roomId}.`);
+          
+          // Remove player permanently
+          const idx = currentRoom.players.findIndex(p => p.userId === socket.userId);
+          if (idx !== -1) currentRoom.players.splice(idx, 1);
+          
+          if (currentRoom.players.length === 0) {
+            rooms.delete(roomId);
+            deleteRoomFromRedis(roomId);
+            console.log(`[Game] Room ${roomId} deleted (disconnect timeout, empty).`);
+          } else {
+            currentRoom.state = 'WAITING_FOR_PLAYERS';
+            currentRoom.guesses = [];
+            currentRoom.players.forEach(p => {
+              p.secretNumber = null;
+              p.rpsChoice = null;
+              p.ready = false;
+            });
+            syncRoomToRedis(roomId, currentRoom);
+            io.to(roomId).emit('PLAYER_DISCONNECTED', {
+              username: socket.username,
+              roomState: currentRoom
+            });
+          }
+          
+          io.emit('LOBBY_ROOMS', getJoinableRooms());
+        }, 60 * 1000); // 60 seconds
+        
+        disconnectTimers.set(timerKey, timerId);
+      }
+    });
   });
 });
 
@@ -476,10 +718,48 @@ function getJoinableRooms() {
   return list;
 }
 
+app.get('/api/history', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.userId;
+    
+    // Find histories where players contains the user ID
+    const history = await GameHistory.find({ 'players.userId': userId })
+      .sort({ finishedAt: -1 })
+      .limit(15);
+      
+    res.json({ history });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('Game Backend is running.');
 });
 
-server.listen(PORT, () => {
-  console.log(`[Game Backend] Server running on port ${PORT}`);
-});
+// Connect to MongoDB and load rooms from Redis before starting the server
+async function startServer() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000
+    });
+    console.log('[MongoDB] Connected to MongoDB Atlas successfully.');
+  } catch (err) {
+    console.error('[MongoDB] Failed to connect to MongoDB Atlas:', err.message);
+    console.warn('[MongoDB] Server will start without MongoDB. Game history will NOT be saved.');
+  }
+  
+  await loadRoomsFromRedis();
+  
+  server.listen(PORT, () => {
+    console.log(`[Game Backend] Server running on port ${PORT}`);
+  });
+}
+
+startServer();
