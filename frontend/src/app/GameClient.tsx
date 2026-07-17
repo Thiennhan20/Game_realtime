@@ -221,38 +221,48 @@ const translations = {
   }
 };
 
+const translateBackendError = (msg: string, locale: 'en' | 'vi') => {
+  if (locale !== 'vi') return msg;
+  const errors: Record<string, string> = {
+    'Room not found.': 'Không tìm thấy phòng.',
+    'Room is already full or in play.': 'Phòng đã đầy hoặc trận đấu đang diễn ra.',
+    'You have already joined this room.': 'Bạn đã tham gia phòng này rồi.',
+    'Invalid action or room state.': 'Thao tác hoặc trạng thái phòng không hợp lệ.',
+    'Secret must be 4 unique digits.': 'Mật mã phải gồm đúng 4 chữ số khác nhau.',
+    'Invalid Rock-Paper-Scissors choice.': 'Lựa chọn Oẳn tù tì không hợp lệ.',
+    'It is not your turn.': 'Chưa tới lượt đoán của bạn.',
+    'Guess must be 4 unique digits.': 'Số đoán phải gồm đúng 4 chữ số khác nhau.',
+    'Security validation error. Failed to retrieve code.': 'Lỗi bảo mật xác thực. Không thể truy xuất mã.',
+    'Invalid action.': 'Thao tác không hợp lệ.'
+  };
+  return errors[msg] || msg;
+};
+
 export default function GameClient() {
   const searchParams = useSearchParams();
   const [user, setUser] = useState<{ id: string; name: string; avatar: string } | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  const [mounted, setMounted] = useState(false);
   const [locale, setLocale] = useState<'en' | 'vi'>('en');
   const [activeMobileTab, setActiveMobileTab] = useState<'arena' | 'chat'>('arena');
 
-  // Detect locale on mount
+  // Detect locale on mount and mark client as mounted
   useEffect(() => {
     const queryLocale = searchParams.get('locale');
     if (queryLocale === 'vi' || queryLocale === 'en') {
       setLocale(queryLocale);
       localStorage.setItem('game_locale', queryLocale);
-      return;
-    }
-
-    const storedLocale = localStorage.getItem('game_locale');
-    if (storedLocale === 'vi' || storedLocale === 'en') {
-      setLocale(storedLocale);
-      return;
-    }
-
-    if (typeof navigator !== 'undefined') {
-      const browserLang = navigator.language.split('-')[0];
-      if (browserLang === 'vi') {
+    } else {
+      const storedLocale = localStorage.getItem('game_locale');
+      if (storedLocale === 'vi' || storedLocale === 'en') {
+        setLocale(storedLocale);
+      } else if (navigator.language.toLowerCase().includes('vi')) {
         setLocale('vi');
-        return;
       }
     }
-    setLocale('en');
+    setMounted(true);
   }, [searchParams]);
 
   const toggleLocale = (selectedLocale: 'en' | 'vi') => {
@@ -291,6 +301,8 @@ export default function GameClient() {
   const [showMobileInstructions, setShowMobileInstructions] = useState(false);
   const [showStartCountdown, setShowStartCountdown] = useState(false);
   const [countdownVal, setCountdownVal] = useState(3);
+  const [showNumPad, setShowNumPad] = useState(false);
+  const [activeHistoryTab, setActiveHistoryTab] = useState<'mine' | 'opponent'>('mine');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const myGuessesScrollRef = useRef<HTMLDivElement | null>(null);
   const opponentGuessesScrollRef = useRef<HTMLDivElement | null>(null);
@@ -345,6 +357,20 @@ export default function GameClient() {
       opponentGuessesScrollRef.current.scrollTop = opponentGuessesScrollRef.current.scrollHeight;
     }
   }, [room?.guesses?.length]);
+
+  // --- Auto-open Number Pad on Turn ---
+  useEffect(() => {
+    if (room && room.state === 'PLAYING' && user) {
+      const pIdx = room.players.findIndex(p => p.userId === user.id);
+      if (pIdx !== -1 && room.activeTurnIndex === pIdx) {
+        setShowNumPad(true);
+      } else {
+        setShowNumPad(false);
+      }
+    } else {
+      setShowNumPad(false);
+    }
+  }, [room?.activeTurnIndex, room?.state, room?.players, user?.id]);
 
   // --- Step 1: SSO Token Authentication ---
   useEffect(() => {
@@ -541,7 +567,8 @@ export default function GameClient() {
     });
 
     socket.on('GAME_ERROR', (msg: string) => {
-      setErrorMsg(msg);
+      const translatedMsg = translateBackendError(msg, locale);
+      setErrorMsg(translatedMsg);
       setTimeout(() => setErrorMsg(null), 4000);
     });
 
@@ -563,6 +590,14 @@ export default function GameClient() {
       console.log('[Game] MATCH_RESULT_VIEWED emitted for room', room.roomId);
     }
   }, [room?.state, showMatchModal, matchResultSent]);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (loadingUser) {
     return (
@@ -821,7 +856,7 @@ export default function GameClient() {
               }
             }}
             className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
-            title="Quay lại trang chủ"
+            title={locale === 'vi' ? "Quay lại trang chủ" : "Back to main site"}
           >
             <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
           </button>
@@ -1447,9 +1482,34 @@ export default function GameClient() {
 
               {/* STATE: PLAYING (The Game Arena) */}
               {room.state === 'PLAYING' && me && opponent && (
-                <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0">
-                  {/* Left sub-panel: Your guesses against opponent */}
-                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden h-[218px] md:h-[366px]">
+                <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-h-0">
+                  {/* Guess History Tab Switcher - Mobile Only */}
+                  <div className="flex md:hidden border border-slate-800/80 bg-slate-950/40 p-1 rounded-xl shrink-0 gap-1">
+                    <button
+                      onClick={() => setActiveHistoryTab('mine')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition duration-200 ${
+                        activeHistoryTab === 'mine'
+                          ? 'bg-purple-500/15 border border-purple-500/30 text-purple-300'
+                          : 'text-slate-500 hover:text-slate-400'
+                      }`}
+                    >
+                      {t('yourGuesses')} ({room.guesses.filter(g => g.playerIndex === myPlayerIndex).length})
+                    </button>
+                    <button
+                      onClick={() => setActiveHistoryTab('opponent')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition duration-200 ${
+                        activeHistoryTab === 'opponent'
+                          ? 'bg-pink-500/15 border border-pink-500/30 text-pink-300'
+                          : 'text-slate-500 hover:text-slate-400'
+                      }`}
+                    >
+                      {locale === 'vi' ? 'Đối thủ đoán' : 'Opponent Guesses'} ({room.guesses.filter(g => g.playerIndex === opponentPlayerIndex).length})
+                    </button>
+                  </div>
+
+                  <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0">
+                    {/* Left sub-panel: Your guesses against opponent */}
+                    <div className={`flex-1 flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden h-[218px] md:h-[366px] ${activeHistoryTab === 'mine' ? 'flex' : 'hidden md:flex'}`}>
                     <div className="p-2.5 sm:p-3 bg-purple-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
                       <div className="flex items-center space-x-2 min-w-0">
                         <span className="text-purple-400 shrink-0">●</span>
@@ -1497,7 +1557,7 @@ export default function GameClient() {
                   </div>
 
                   {/* Right sub-panel: Opponent's guesses against you */}
-                  <div className="flex-1 flex flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden h-[218px] md:h-[366px]">
+                  <div className={`flex-1 flex-col bg-slate-900/20 border border-slate-800/80 rounded-xl sm:rounded-2xl overflow-hidden h-[218px] md:h-[366px] ${activeHistoryTab === 'opponent' ? 'flex' : 'hidden md:flex'}`}>
                     <div className="p-2.5 sm:p-3 bg-pink-950/10 border-b border-slate-800 flex items-center justify-between shrink-0">
                       <div className="flex items-center space-x-2 min-w-0">
                         <span className="text-pink-400 shrink-0">●</span>
@@ -1544,34 +1604,47 @@ export default function GameClient() {
                     </div>
                   </div>
                 </div>
+              </div>
               )}
 
               {/* INPUT GUESS SECTION (Tied to PLAYING state footer) */}
               {room.state === 'PLAYING' && me && (
-                <div className="fixed bottom-0 left-0 right-0 z-45 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/85 p-3 sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-0 sm:bg-slate-900/40 sm:border-t-0 sm:p-4 sm:rounded-xl sm:rounded-2xl sm:shadow-lg shrink-0">
+                <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
                   {room.activeTurnIndex === myPlayerIndex ? (
-                    <form onSubmit={handleSendGuess} className="flex gap-2">
-                      <div className="flex-1 min-w-0">
-                        <label className="block text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1">
-                          {t('yourTurn')}
-                        </label>
-                        <input
-                          type="text"
-                          maxLength={4}
-                          placeholder={t('enter4digits')}
-                          value={guessInput}
-                          onChange={(e) => setGuessInput(e.target.value.replace(/\D/g, ''))}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2.5 rounded-xl font-mono text-base font-bold tracking-[0.3em] sm:tracking-[0.4em] placeholder-slate-700"
-                        />
+                    <div className="flex items-center justify-between gap-3 py-1">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 uppercase tracking-wider animate-pulse min-w-0">
+                        <span className="shrink-0">🔥</span>
+                        <span className="truncate">{locale === 'vi' ? 'Lượt đoán của bạn!' : 'Your turn to guess!'}</span>
                       </div>
-                      <button
-                        type="submit"
-                        disabled={guessInput.length !== 4}
-                        className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 text-white text-sm font-extrabold rounded-xl shadow-lg transition duration-200 self-end cursor-pointer"
-                      >
-                        {t('fireGuess')}
-                      </button>
-                    </form>
+                      
+                      {!showNumPad ? (
+                        <div className="relative">
+                          {/* Animated helper tooltip pointing to the button */}
+                          <div className="absolute bottom-full right-0 mb-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-lg whitespace-nowrap shadow-md pointer-events-none animate-bounce z-20">
+                            {locale === 'vi' ? 'Bấm vào để chọn số đoán' : 'Click to select guess'}
+                            <div className="absolute top-full right-8 border-4 border-transparent border-t-pink-500" />
+                          </div>
+
+                          <button
+                            onClick={() => setShowNumPad(true)}
+                            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-lg shadow-purple-500/10 hover:shadow-purple-500/25 transition duration-200 cursor-pointer shrink-0"
+                          >
+                            {locale === 'vi' ? 'Đoán số' : 'Guess'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-purple-400 font-semibold shrink-0">
+                          <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-ping" />
+                          <span>{locale === 'vi' ? 'Đang mở' : 'Active'}</span>
+                          <button 
+                            onClick={() => setShowNumPad(false)}
+                            className="underline text-slate-400 hover:text-white transition ml-1"
+                          >
+                            {locale === 'vi' ? 'Đóng' : 'Close'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="py-3 text-center text-xs sm:text-sm font-semibold text-slate-400 flex items-center justify-center space-x-2">
                       <div className="w-3.5 h-3.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
@@ -1633,162 +1706,162 @@ export default function GameClient() {
                     {/* Backdrop */}
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
                     
-                    {/* Modal */}
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                      className="relative w-full max-w-lg bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden"
-                    >
-                      {/* Close button */}
-                      <button
-                        onClick={() => setShowMatchModal(false)}
-                        className="absolute top-4 right-4 p-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition z-10 cursor-pointer"
-                      >
-                        <X size={16} />
-                      </button>
-
-                      {/* Header */}
-                      <div className={`p-6 pb-4 text-center ${room.winnerIndex === myPlayerIndex ? 'bg-gradient-to-b from-yellow-500/10 to-transparent' : 'bg-gradient-to-b from-red-500/10 to-transparent'}`}>
-                        <div className="text-5xl mb-3">{room.winnerIndex === myPlayerIndex ? '🏆' : '💀'}</div>
-                        <h3 className={`text-2xl font-black bg-gradient-to-r ${room.winnerIndex === myPlayerIndex ? 'from-yellow-400 to-amber-500' : 'from-red-500 to-pink-500'} text-transparent bg-clip-text`}>
-                          {room.winnerIndex === myPlayerIndex ? t('victory') : t('defeat')}
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {room.winnerIndex === myPlayerIndex 
-                            ? t('victoryDesc') 
-                            : t('defeatDesc').replace('{username}', opponent?.username || '')}
-                        </p>
-                      </div>
-
-                      {/* Stats Grid */}
-                      <div className="px-6 pb-4 space-y-3">
-                        {/* Duration */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
-                            <div className="p-2 bg-blue-500/10 rounded-lg">
-                              <Clock size={18} className="text-blue-400" />
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('matchDuration')}</span>
-                              <span className="font-mono text-lg font-extrabold text-white">{formatDuration(matchStats.duration)}</span>
-                            </div>
-                          </div>
-                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
-                            <div className="p-2 bg-purple-500/10 rounded-lg">
-                              <Target size={18} className="text-purple-400" />
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuesses')}</span>
-                              <span className="font-mono text-lg font-extrabold text-white">{matchStats.totalGuesses} {locale === 'vi' ? 'lượt' : 'total'}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Player Stats Comparison */}
-                        <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              {me?.avatar ? (
-                                <img src={me.avatar} alt={me.username} className="w-8 h-8 rounded-full border border-slate-600" />
-                              ) : (
-                                <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">{user.name.slice(0, 2)}</div>
-                              )}
-                              <div className="text-sm">
-                                <span className="font-bold text-slate-200">{t('you')}</span>
-                                {room.winnerIndex === myPlayerIndex && <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">👑 Winner</span>}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('yourGuesses')}</span>
-                              <span className="font-mono text-lg font-extrabold text-white">
-                                {room.winnerIndex === myPlayerIndex ? matchStats.winnerGuessCount : matchStats.loserGuessCount}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="border-t border-slate-700/40 my-2" />
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {opponent?.avatar ? (
-                                <img src={opponent.avatar} alt={opponent.username} className="w-8 h-8 rounded-full border border-slate-600" />
-                              ) : (
-                                <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">{(opponent?.username || '??').slice(0, 2)}</div>
-                              )}
-                              <div className="text-sm">
-                                <span className="font-bold text-slate-200">{opponent?.username || t('enemy')}</span>
-                                {room.winnerIndex !== myPlayerIndex && <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">👑 Winner</span>}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuessesCount')}</span>
-                              <span className="font-mono text-lg font-extrabold text-white">
-                                {room.winnerIndex === myPlayerIndex ? matchStats.loserGuessCount : matchStats.winnerGuessCount}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Secret Codes Reveal */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('yourSecret')}</span>
-                            <span className="font-mono text-xl font-extrabold tracking-widest text-emerald-400">
-                              {room.winnerIndex === myPlayerIndex ? matchStats.winnerSecret : matchStats.loserSecret}
-                            </span>
-                          </div>
-                          <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('enemySecret')}</span>
-                            <span className="font-mono text-xl font-extrabold tracking-widest text-purple-400">
-                              {secretReveal || '????'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* First Move Info */}
-                        <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
-                          <div className="p-2 bg-amber-500/10 rounded-lg">
-                            <Swords size={18} className="text-amber-400" />
-                          </div>
-                          <div>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('firstMove')}</span>
-                            <span className="text-sm font-bold text-slate-200">
-                              {matchStats.rpsWinnerIndex === myPlayerIndex 
-                                ? `${t('you')} (${locale === 'vi' ? 'thắng oẳn tù tì' : 'won RPS'})` 
-                                : `${opponent?.username || t('enemy')} (${locale === 'vi' ? 'thắng oẳn tù tì' : 'won RPS'})`}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="px-6 pb-6 flex flex-col sm:flex-row gap-2.5">
-                        <button
-                          onClick={() => { setShowMatchModal(false); handlePlayAgain(); }}
-                          className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 cursor-pointer"
-                        >
-                          <RefreshCw size={18} />
-                          <span>{t('playAgain')}</span>
-                        </button>
-                        <button
-                          onClick={() => { setShowMatchModal(false); handleLeaveRoom(); }}
-                          className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition duration-200 cursor-pointer"
-                        >
-                          {t('backToLobby')}
-                        </button>
-                      </div>
-
-                      {opponentWantsPlayAgain && (
-                        <div className="px-6 pb-4">
-                          <p className="text-xs text-green-400 font-semibold animate-pulse text-center">
-                            {t('rematchRequest').replace('{username}', opponent?.username || t('enemy'))}
-                          </p>
-                        </div>
-                      )}
-                    </motion.div>
-                  </motion.div>
+                     {/* Modal */}
+                     <motion.div
+                       initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                       animate={{ opacity: 1, scale: 1, y: 0 }}
+                       exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                       className="relative w-full max-w-lg max-h-[90dvh] bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+                     >
+                       {/* Close button */}
+                       <button
+                         onClick={() => setShowMatchModal(false)}
+                         className="absolute top-4 right-4 p-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition z-10 cursor-pointer"
+                       >
+                         <X size={16} />
+                       </button>
+ 
+                       {/* Header (Fixed) */}
+                       <div className={`p-6 pb-4 text-center shrink-0 ${room.winnerIndex === myPlayerIndex ? 'bg-gradient-to-b from-yellow-500/10 to-transparent' : 'bg-gradient-to-b from-red-500/10 to-transparent'}`}>
+                         <div className="text-5xl mb-3">{room.winnerIndex === myPlayerIndex ? '🏆' : '💀'}</div>
+                         <h3 className={`text-2xl font-black bg-gradient-to-r ${room.winnerIndex === myPlayerIndex ? 'from-yellow-400 to-amber-500' : 'from-red-500 to-pink-500'} text-transparent bg-clip-text`}>
+                           {room.winnerIndex === myPlayerIndex ? t('victory') : t('defeat')}
+                         </h3>
+                         <p className="text-xs text-slate-400 mt-1">
+                           {room.winnerIndex === myPlayerIndex 
+                             ? t('victoryDesc') 
+                             : t('defeatDesc').replace('{username}', opponent?.username || '')}
+                         </p>
+                       </div>
+ 
+                       {/* Scrollable Stats Area */}
+                       <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-2 space-y-3.5 min-h-0">
+                         {/* Duration */}
+                         <div className="grid grid-cols-2 gap-3">
+                           <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                             <div className="p-2 bg-blue-500/10 rounded-lg">
+                               <Clock size={18} className="text-blue-400" />
+                             </div>
+                             <div>
+                               <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('matchDuration')}</span>
+                               <span className="font-mono text-lg font-extrabold text-white">{formatDuration(matchStats.duration)}</span>
+                             </div>
+                           </div>
+                           <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                             <div className="p-2 bg-purple-500/10 rounded-lg">
+                               <Target size={18} className="text-purple-400" />
+                             </div>
+                             <div>
+                               <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuesses')}</span>
+                               <span className="font-mono text-lg font-extrabold text-white">{matchStats.totalGuesses} {locale === 'vi' ? 'lượt' : 'total'}</span>
+                             </div>
+                           </div>
+                         </div>
+ 
+                         {/* Player Stats Comparison */}
+                         <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
+                           <div className="flex items-center justify-between mb-3">
+                             <div className="flex items-center gap-2">
+                               {me?.avatar ? (
+                                 <img src={me.avatar} alt={me.username} className="w-8 h-8 rounded-full border border-slate-600" />
+                               ) : (
+                                 <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">{user.name.slice(0, 2)}</div>
+                               )}
+                               <div className="text-sm">
+                                 <span className="font-bold text-slate-200">{t('you')}</span>
+                                 {room.winnerIndex === myPlayerIndex && <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">👑 Winner</span>}
+                               </div>
+                             </div>
+                             <div className="text-right">
+                               <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('yourGuesses')}</span>
+                               <span className="font-mono text-lg font-extrabold text-white">
+                                 {room.winnerIndex === myPlayerIndex ? matchStats.winnerGuessCount : matchStats.loserGuessCount}
+                               </span>
+                             </div>
+                           </div>
+                           
+                           <div className="border-t border-slate-700/40 my-2" />
+                           
+                           <div className="flex items-center justify-between">
+                             <div className="flex items-center gap-2">
+                               {opponent?.avatar ? (
+                                 <img src={opponent.avatar} alt={opponent.username} className="w-8 h-8 rounded-full border border-slate-600" />
+                               ) : (
+                                 <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">{(opponent?.username || '??').slice(0, 2)}</div>
+                               )}
+                               <div className="text-sm">
+                                 <span className="font-bold text-slate-200">{opponent?.username || t('enemy')}</span>
+                                 {room.winnerIndex !== myPlayerIndex && <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">👑 Winner</span>}
+                               </div>
+                             </div>
+                             <div className="text-right">
+                               <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('opponentGuessesCount')}</span>
+                               <span className="font-mono text-lg font-extrabold text-white">
+                                 {room.winnerIndex === myPlayerIndex ? matchStats.loserGuessCount : matchStats.winnerGuessCount}
+                               </span>
+                             </div>
+                           </div>
+                         </div>
+ 
+                         {/* Secret Codes Reveal */}
+                         <div className="grid grid-cols-2 gap-3">
+                           <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                             <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('yourSecret')}</span>
+                             <span className="font-mono text-xl font-extrabold tracking-widest text-emerald-400">
+                               {room.winnerIndex === myPlayerIndex ? matchStats.winnerSecret : matchStats.loserSecret}
+                             </span>
+                           </div>
+                           <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                             <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('enemySecret')}</span>
+                             <span className="font-mono text-xl font-extrabold tracking-widest text-purple-400">
+                               {secretReveal || '????'}
+                             </span>
+                           </div>
+                         </div>
+ 
+                         {/* First Move Info */}
+                         <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                           <div className="p-2 bg-amber-500/10 rounded-lg">
+                             <Swords size={18} className="text-amber-400" />
+                           </div>
+                           <div>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('firstMove')}</span>
+                             <span className="text-sm font-bold text-slate-200">
+                               {matchStats.rpsWinnerIndex === myPlayerIndex 
+                                 ? `${t('you')} (${locale === 'vi' ? 'thắng oẳn tù tì' : 'won RPS'})` 
+                                 : `${opponent?.username || t('enemy')} (${locale === 'vi' ? 'thắng oẳn tù tì' : 'won RPS'})`}
+                             </span>
+                           </div>
+                         </div>
+                       </div>
+ 
+                       {/* Action buttons (Fixed Footer) */}
+                       <div className="px-6 py-4 bg-slate-950/30 border-t border-slate-850 shrink-0 flex flex-col gap-2.5">
+                         <div className="flex flex-col sm:flex-row gap-2.5">
+                           <button
+                             onClick={() => { setShowMatchModal(false); handlePlayAgain(); }}
+                             className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 cursor-pointer"
+                           >
+                             <RefreshCw size={16} />
+                             <span>{t('playAgain')}</span>
+                           </button>
+                           <button
+                             onClick={() => { setShowMatchModal(false); handleLeaveRoom(); }}
+                             className="flex-1 py-2.5 bg-slate-850 hover:bg-slate-800 text-white font-bold rounded-xl transition duration-200 cursor-pointer"
+                           >
+                             {t('backToLobby')}
+                           </button>
+                         </div>
+ 
+                         {opponentWantsPlayAgain && (
+                           <p className="text-[11px] text-green-400 font-bold animate-pulse text-center mt-1">
+                             💡 {t('rematchRequest').replace('{username}', opponent?.username || t('enemy'))}
+                           </p>
+                         )}
+                       </div>
+                     </motion.div>
+                   </motion.div>
                 )}
               </AnimatePresence>
 
@@ -1843,6 +1916,143 @@ export default function GameClient() {
                       <div className="text-xs text-slate-500 animate-pulse uppercase tracking-wider">
                         {locale === 'vi' ? 'Trực chiến chuẩn bị bắt đầu...' : 'Battle starting in...'}
                       </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* VIRTUAL NUMBER PAD OVERLAY */}
+              <AnimatePresence>
+                {showNumPad && room && room.state === 'PLAYING' && room.activeTurnIndex === myPlayerIndex && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowNumPad(false); }}
+                  >
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+                    
+                    {/* Keyboard Panel */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+                      className="relative w-full max-w-sm sm:max-w-md bg-slate-900/95 border border-purple-500/35 rounded-[2.5rem] shadow-2xl p-6 sm:p-8 flex flex-col space-y-6 overflow-hidden z-10"
+                    >
+                      {/* Ambient background glow */}
+                      <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+                      <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                      {/* Header */}
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3 z-10">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">🔥</span>
+                          <div>
+                            <h3 className="text-sm font-black uppercase text-purple-400 tracking-wider">
+                              {locale === 'vi' ? 'LƯỢT ĐOÁN CỦA BẠN' : 'YOUR GUESS TURN'}
+                            </h3>
+                            <p className="text-[10px] text-slate-500">
+                              {locale === 'vi' ? 'Chọn 4 chữ số khác nhau' : 'Select 4 unique digits'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setShowNumPad(false)}
+                          className="p-2 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-800 hover:border-slate-700 text-slate-400 rounded-full transition cursor-pointer flex items-center justify-center shadow-lg"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+
+                      {/* Code Display (4 Digit Slots) */}
+                      <div className="flex justify-center items-center gap-3 py-2 z-10">
+                        {[0, 1, 2, 3].map((index) => {
+                          const digit = guessInput[index];
+                          const isActive = guessInput.length === index;
+                          return (
+                            <div
+                              key={index}
+                              className={`w-12 h-14 sm:w-14 sm:h-16 rounded-2xl border flex items-center justify-center font-mono text-2xl sm:text-3xl font-black shadow-inner transition-all duration-150 ${
+                                digit
+                                  ? 'bg-purple-500/10 border-purple-500/60 text-purple-300'
+                                  : isActive
+                                  ? 'bg-slate-950 border-pink-500/60 text-white animate-pulse shadow-pink-500/10'
+                                  : 'bg-slate-950 border-slate-800 text-slate-800'
+                              }`}
+                            >
+                              {digit || (isActive ? '|' : '·')}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Virtual Numpad Grid */}
+                      <div className="grid grid-cols-3 gap-3 z-10">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
+                          const strNum = String(num);
+                          const isUsed = guessInput.includes(strNum);
+                          return (
+                            <button
+                              key={num}
+                              disabled={isUsed || guessInput.length >= 4}
+                              onClick={() => setGuessInput(prev => prev + strNum)}
+                              className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer ${
+                                isUsed
+                                  ? 'bg-slate-950/20 border-slate-900 text-slate-800 opacity-20 pointer-events-none'
+                                  : 'bg-slate-800/50 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-200'
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          );
+                        })}
+
+                        {/* Special Actions Row */}
+                        <button
+                          onClick={() => setGuessInput('')}
+                          disabled={guessInput.length === 0}
+                          className="py-3.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center bg-slate-950/40 border border-slate-900 hover:bg-red-500/15 hover:border-red-500/35 hover:text-red-400 text-slate-500 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-20 disabled:pointer-events-none"
+                        >
+                          {locale === 'vi' ? 'XÓA HẾT' : 'CLEAR'}
+                        </button>
+
+                        <button
+                          disabled={guessInput.includes('0') || guessInput.length >= 4}
+                          onClick={() => setGuessInput(prev => prev + '0')}
+                          className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer ${
+                            guessInput.includes('0')
+                              ? 'bg-slate-950/20 border-slate-900 text-slate-800 opacity-20 pointer-events-none'
+                              : 'bg-slate-800/50 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-200'
+                          }`}
+                        >
+                          0
+                        </button>
+
+                        <button
+                          onClick={() => setGuessInput(prev => prev.slice(0, -1))}
+                          disabled={guessInput.length === 0}
+                          className="py-3.5 rounded-2xl text-base sm:text-lg font-bold flex items-center justify-center bg-slate-950/40 border border-slate-900 hover:bg-amber-500/15 hover:border-amber-500/35 hover:text-amber-400 text-slate-500 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-20 disabled:pointer-events-none"
+                          title="Backspace"
+                        >
+                          ⌫
+                        </button>
+                      </div>
+
+                      {/* Submit button */}
+                      <button
+                        onClick={(e) => {
+                          handleSendGuess(e);
+                          setShowNumPad(false);
+                        }}
+                        disabled={guessInput.length !== 4}
+                        className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-40 disabled:pointer-events-none text-white text-base font-black rounded-2xl shadow-xl shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.01] active:scale-[0.99] transition duration-200 cursor-pointer flex items-center justify-center gap-2 z-10"
+                      >
+                        <span>🚀</span>
+                        <span>{locale === 'vi' ? 'GỬI ĐOÁN MẬT MÃ' : 'SUBMIT GUESS'}</span>
+                      </button>
                     </motion.div>
                   </motion.div>
                 )}
@@ -2030,7 +2240,7 @@ export default function GameClient() {
                 placeholder={t('chatPlaceholder')}
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2 rounded-xl text-sm placeholder-slate-600"
+                className="flex-1 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2 rounded-xl text-base md:text-sm placeholder-slate-600"
               />
               <button
                 type="submit"

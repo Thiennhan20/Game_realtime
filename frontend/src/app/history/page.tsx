@@ -25,6 +25,7 @@ interface Match {
 
 function HistoryPageContent() {
   const searchParams = useSearchParams();
+  const [mounted, setMounted] = useState(false);
   const [locale, setLocale] = useState<'en' | 'vi'>('en');
   const [history, setHistory] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,12 +38,16 @@ function HistoryPageContent() {
     const queryLocale = searchParams.get('locale');
     if (queryLocale === 'vi' || queryLocale === 'en') {
       setLocale(queryLocale);
-      return;
+      localStorage.setItem('game_locale', queryLocale);
+    } else {
+      const storedLocale = localStorage.getItem('game_locale');
+      if (storedLocale === 'vi' || storedLocale === 'en') {
+        setLocale(storedLocale);
+      } else if (navigator.language.toLowerCase().includes('vi')) {
+        setLocale('vi');
+      }
     }
-    const storedLocale = localStorage.getItem('game_locale');
-    if (storedLocale === 'vi' || storedLocale === 'en') {
-      setLocale(storedLocale);
-    }
+    setMounted(true);
   }, [searchParams]);
 
   // Load user profile and then history
@@ -149,6 +154,14 @@ function HistoryPageContent() {
     };
     return translations[locale]?.[key] || translations['en']?.[key] || key;
   };
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -354,8 +367,7 @@ export default function HistoryPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
-        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">Loading History Content...</p>
+        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <HistoryPageContent />
