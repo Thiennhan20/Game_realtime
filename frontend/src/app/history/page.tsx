@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Trophy, Target, Swords, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { ArrowLeft, Clock, Trophy, Target, Swords, ChevronDown, ChevronUp, Calendar, Users } from 'lucide-react';
 
 interface Match {
   _id: string;
@@ -25,6 +25,7 @@ interface Match {
 
 function HistoryPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [locale, setLocale] = useState<'en' | 'vi'>('en');
   const [history, setHistory] = useState<Match[]>([]);
@@ -32,6 +33,8 @@ function HistoryPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ name: string; avatar: string } | null>(null);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   // Load language settings
   useEffect(() => {
@@ -49,6 +52,11 @@ function HistoryPageContent() {
     }
     setMounted(true);
   }, [searchParams]);
+
+  const toggleLocale = (selectedLocale: 'en' | 'vi') => {
+    setLocale(selectedLocale);
+    localStorage.setItem('game_locale', selectedLocale);
+  };
 
   // Load user profile and then history
   useEffect(() => {
@@ -72,6 +80,10 @@ function HistoryPageContent() {
         const profileData = await profileRes.json();
         const userId = profileData.user.id || profileData.user._id;
         setCurrentUser({ id: userId });
+        setUserProfile({
+          name: profileData.user.name || profileData.user.username || 'User',
+          avatar: profileData.user.avatar || ''
+        });
 
         // 2. Fetch game history from game server
         const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (isLocal ? 'http://localhost:8080' : window.location.origin);
@@ -194,28 +206,112 @@ function HistoryPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans p-4 overflow-x-hidden">
-      <div className="max-w-4xl w-full mx-auto py-6">
-        
-        {/* Header navigation */}
-        <header className="flex items-center justify-between pb-6 border-b border-slate-800 mb-8">
-          <div className="flex items-center space-x-3">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
+      {/* Header Info - Fixed Top Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
+        <div className="max-w-7xl w-full mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <button
-              onClick={() => window.location.href = `/?locale=${locale}`}
-              className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center"
+              onClick={() => router.push(`/?locale=${locale}`)}
+              className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
               title={t('back')}
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
             </button>
-            <div>
-              <h1 className="font-extrabold text-xl sm:text-2xl tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
+
+            <div className="hidden xs:block p-2 bg-purple-500/10 text-purple-400 rounded-xl shrink-0 border border-purple-500/20">
+              <Clock size={18} className="sm:w-5 sm:h-5" />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-sm sm:text-lg tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
                 {t('title')}
               </h1>
-              <p className="text-xs text-slate-400 hidden sm:block">{t('subtitle')}</p>
+              <p className="hidden sm:block text-[11px] text-slate-400">{t('subtitle')}</p>
             </div>
           </div>
-        </header>
 
+          {/* User Profile & Language Dropdown */}
+          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+            <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-[10px] font-bold">
+              <button
+                onClick={() => toggleLocale('en')}
+                className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
+                  locale === 'en' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => toggleLocale('vi')}
+                className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
+                  locale === 'vi' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                VI
+              </button>
+            </div>
+
+            {userProfile && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserDropdown(!showUserDropdown)}
+                  className="flex items-center space-x-1.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-1 rounded-full sm:px-3 sm:py-1.5 sm:rounded-xl transition duration-150 cursor-pointer"
+                >
+                  {userProfile.avatar ? (
+                    <img src={userProfile.avatar} alt={userProfile.name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 object-cover" />
+                  ) : (
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white">
+                      {userProfile.name.slice(0, 2)}
+                    </div>
+                  )}
+                  <span className="hidden sm:inline font-medium text-xs text-slate-200">{userProfile.name}</span>
+                  <ChevronDown size={14} className="hidden sm:inline text-slate-500" />
+                </button>
+
+                {showUserDropdown && (
+                  <div className="absolute right-0 mt-2 w-48 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50">
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
+                        window.location.href = isLocal ? 'http://localhost:3000/profile' : 'https://moviesaw.vercel.app/profile';
+                      }}
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                    >
+                      <Users size={14} className="text-purple-400" />
+                      <span>{locale === 'vi' ? 'Hồ sơ cá nhân' : 'User Profile'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        router.push(`/history?locale=${locale}`);
+                      }}
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                    >
+                      <Clock size={14} className="text-purple-400" />
+                      <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        router.push(`/leaderboard?locale=${locale}`);
+                      }}
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                    >
+                      <Trophy size={14} className="text-amber-400" />
+                      <span>{locale === 'vi' ? 'Bảng xếp hạng' : 'Leaderboard'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Body */}
+      <main className="flex-1 max-w-4xl w-full mx-auto p-4 pt-16 sm:pt-20 space-y-4">
         {/* Matches list container */}
         <div className="space-y-4">
           {history.length === 0 ? (
@@ -238,127 +334,96 @@ function HistoryPageContent() {
                     onClick={() => toggleExpand(match._id)}
                     className="p-4 sm:p-5 flex items-center justify-between cursor-pointer select-none"
                   >
-                    {/* Winner/Loser Badge and Opponent info */}
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                      {/* Win/Loss indicators */}
-                      <div className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-wider ${
+                    {/* Left: Outcome badge + Match basic info */}
+                    <div className="flex items-center space-x-4">
+                      {/* Winner / Loser Badge */}
+                      <div className={`px-3 py-1.5 rounded-xl font-black text-xs sm:text-sm tracking-wider ${
                         isWinner 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                       }`}>
-                        {isWinner ? <Trophy size={12} /> : null}
-                        <span>{isWinner ? t('win') : t('loss')}</span>
+                        {isWinner ? t('win') : t('loss')}
                       </div>
 
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest shrink-0 px-1">vs</span>
-
-                      {/* Opponent Identity */}
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {opponent?.avatar ? (
-                          <img src={opponent.avatar} alt={opponent.username} className="w-8 h-8 rounded-full border border-slate-700 shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 bg-slate-800 rounded-full flex items-center justify-center font-bold text-xs uppercase text-slate-400 shrink-0">
-                            {(opponent?.username || '??').slice(0, 2)}
-                          </div>
-                        )}
-                        <span className="font-extrabold text-sm text-slate-200 truncate max-w-[120px] sm:max-w-[200px]">
-                          {opponent?.username || (locale === 'vi' ? 'Đối thủ ẩn danh' : 'Unknown Opponent')}
-                        </span>
+                      {/* Opponent Info */}
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-slate-400">{t('opponent')}:</span>
+                          {opponent?.avatar ? (
+                            <img src={opponent.avatar} alt={opponent.username} className="w-5 h-5 rounded-full border border-slate-700 object-cover" />
+                          ) : (
+                            <div className="w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center font-bold text-[10px]">
+                              {opponent?.username?.slice(0, 1) || '?'}
+                            </div>
+                          )}
+                          <span className="font-bold text-sm text-slate-100">{opponent?.username || 'Unknown'}</span>
+                        </div>
+                        <div className="flex items-center space-x-3 text-xs text-slate-500 mt-1">
+                          <span className="flex items-center space-x-1">
+                            <Calendar size={12} />
+                            <span>{formatDate(match.finishedAt)}</span>
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center space-x-1">
+                            <Clock size={12} />
+                            <span>{formatDuration(match.duration)}</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Duration, Date & Expand button */}
-                    <div className="flex items-center gap-4 sm:gap-6 shrink-0">
-                      {/* Duration */}
-                      <div className="hidden xs:flex items-center space-x-1.5 text-slate-400 text-xs font-semibold">
-                        <Clock size={14} className="text-blue-400" />
-                        <span className="font-mono">{formatDuration(match.duration)}</span>
+                    {/* Right: Expand Toggle Button */}
+                    <div className="flex items-center space-x-3">
+                      <div className="hidden sm:block text-right text-xs">
+                        <span className="font-bold text-purple-400">{isWinner ? match.winnerGuessCount : match.loserGuessCount}</span>
+                        <span className="text-slate-500"> {t('turns')}</span>
                       </div>
-
-                      {/* Date */}
-                      <div className="hidden sm:flex items-center space-x-1.5 text-slate-500 text-xs">
-                        <Calendar size={13} />
-                        <span>{formatDate(match.finishedAt)}</span>
-                      </div>
-
-                      {/* Toggle indicator icon */}
-                      <div className="p-1.5 bg-slate-800/60 border border-slate-800/80 rounded-lg text-slate-400">
-                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      <div className="p-1.5 bg-slate-800/60 rounded-lg text-slate-400">
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
                     </div>
                   </div>
 
-                  {/* Expanded Detail Panel */}
+                  {/* Expanded Detailed Breakdown */}
                   <AnimatePresence>
                     {isExpanded && (
                       <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: 'auto' }}
-                        exit={{ height: 0 }}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="border-t border-slate-800/60 overflow-hidden"
+                        className="border-t border-slate-800/60 bg-slate-950/60 p-4 sm:p-5 space-y-4"
                       >
-                        <div className="p-5 bg-slate-950/20 space-y-4">
-                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-3">
-                            <Target size={14} className="text-purple-400" />
-                            <span>{t('details')}</span>
-                          </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                          {/* Stat 1 */}
+                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] mb-1">{t('firstMove')}</span>
+                            <span className="font-bold text-slate-200">
+                              {match.players[match.rpsWinnerIndex]?.username === currentUser?.id ? t('you') : match.players[match.rpsWinnerIndex]?.username}
+                            </span>
+                          </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            
-                            {/* Duration & Date Info */}
-                            <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl flex flex-col justify-center">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('duration')}</span>
-                              <div className="flex items-baseline space-x-2">
-                                <span className="font-mono text-xl font-extrabold text-white">{formatDuration(match.duration)}</span>
-                                <span className="text-[10px] text-slate-500">{formatDate(match.finishedAt)}</span>
-                              </div>
-                            </div>
+                          {/* Stat 2 */}
+                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] mb-1">{t('totalGuesses')}</span>
+                            <span className="font-bold text-slate-200">{match.totalGuesses} {t('turns')}</span>
+                          </div>
 
-                            {/* Guess Counts Comparison */}
-                            <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl space-y-2">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block">{t('guessStats')}</span>
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-400">{t('you')}:</span>
-                                <span className="font-mono font-extrabold text-white">
-                                  {isWinner ? match.winnerGuessCount : match.loserGuessCount} {t('turns')}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-400">{t('opponent')}:</span>
-                                <span className="font-mono font-extrabold text-slate-300">
-                                  {isWinner ? match.loserGuessCount : match.winnerGuessCount} {t('turns')}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Advantage details */}
-                            <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl flex flex-col justify-center">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">{t('firstMove')}</span>
-                              <div className="flex items-center gap-1.5 text-xs text-slate-200">
-                                <Swords size={14} className="text-amber-400" />
-                                <span className="font-bold">
-                                  {currentUser && match.rpsWinnerIndex === (isWinner ? match.winnerIndex : (match.winnerIndex === 0 ? 1 : 0))
-                                    ? t('you')
-                                    : opponent?.username}
-                                </span>
-                              </div>
-                              <span className="text-[9px] text-slate-500 mt-1 block">{t('totalGuesses')}: {match.totalGuesses}</span>
-                            </div>
-
+                          {/* Stat 3 */}
+                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] mb-1">Room ID</span>
+                            <span className="font-mono font-bold text-purple-400">{match.roomId}</span>
                           </div>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
-
                 </div>
               );
             })
           )}
         </div>
-
-      </div>
+      </main>
     </div>
   );
 }
@@ -366,8 +431,8 @@ function HistoryPageContent() {
 export default function HistoryPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
-        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+        <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <HistoryPageContent />

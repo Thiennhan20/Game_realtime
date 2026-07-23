@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 const { Redis } = require('@upstash/redis');
 const GameHistory = require('./models/GameHistory');
+const { getNextAiGuess } = require('./aiSolver');
 
 const app = express();
 app.use(cors());
@@ -154,8 +155,12 @@ async function loadRoomsFromRedis() {
       const data = await redis.get(key);
       if (data) {
         const room = typeof data === 'string' ? JSON.parse(data) : data;
-        rooms.set(room.roomId, room);
-        restored++;
+        if (room.isAiRoom) {
+          deleteRoomFromRedis(room.roomId);
+        } else {
+          rooms.set(room.roomId, room);
+          restored++;
+        }
       }
     }
     console.log(`[Redis] Restored ${restored} room(s) from Redis.`);
@@ -173,8 +178,94 @@ function generateRoomId() {
   return rid;
 }
 
+function generate4DigitCode() {
+  const digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  for (let i = digits.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [digits[i], digits[j]] = [digits[j], digits[i]];
+  }
+  return digits.slice(0, 4).join('');
+}
+
+function handleAiTurn(room) {
+  if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
+
+  setTimeout(() => {
+    if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
+
+    // Collect past AI guesses in this match
+    const pastAiGuesses = room.guesses
+      .filter(g => g.playerIndex === 1)
+      .map(g => ({
+        guess: g.guess,
+        correctNumbers: g.correctNumbers,
+        correctPosition: g.correctPosition
+      }));
+
+    // Generate smart guess using AI Solver according to room's difficulty
+    const aiGuess = getNextAiGuess(pastAiGuesses, room.aiDifficulty || 'medium');
+
+    const decryptedUserSecret = decryptSecret(room.players[0].secretNumber);
+    if (!decryptedUserSecret) return;
+
+    const { correctNumbers, correctPosition } = checkGuess(decryptedUserSecret, aiGuess);
+    const guessRecord = {
+      playerIndex: 1,
+      guess: aiGuess,
+      correctNumbers,
+      correctPosition,
+      timestamp: new Date().toISOString()
+    };
+    room.guesses.push(guessRecord);
+
+    if (correctPosition === 4) {
+      room.state = 'FINISHED';
+      room.winnerIndex = 1;
+      room.finishedAt = new Date().toISOString();
+      syncRoomToRedis(room.roomId, room);
+
+      const winnerGuesses = room.guesses.filter(g => g.playerIndex === 1);
+      const loserGuesses = room.guesses.filter(g => g.playerIndex === 0);
+      const durationMs = room.startedAt ? (new Date(room.finishedAt) - new Date(room.startedAt)) : 0;
+      const durationSec = Math.floor(durationMs / 1000);
+
+      const winnerSecretDecrypted = decryptSecret(room.players[1].secretNumber);
+      const loserSecretDecrypted = decryptSecret(room.players[0].secretNumber);
+
+      const matchStats = {
+        duration: durationSec,
+        totalGuesses: room.guesses.length,
+        winnerGuessCount: winnerGuesses.length,
+        loserGuessCount: loserGuesses.length,
+        rpsWinnerIndex: room.rpsWinnerIndex,
+        winnerSecret: winnerSecretDecrypted,
+        loserSecret: loserSecretDecrypted,
+        startedAt: room.startedAt,
+        finishedAt: room.finishedAt
+      };
+
+      io.to(room.roomId).emit('GAME_FINISHED', {
+        winnerIndex: 1,
+        winnerSecret: winnerSecretDecrypted,
+        loserSecret: loserSecretDecrypted,
+        stats: matchStats,
+        roomState: room
+      });
+      console.log(`[Game] AI won room ${room.roomId}.`);
+    } else {
+      room.activeTurnIndex = 0; // Turn back to human!
+      syncRoomToRedis(room.roomId, room);
+      io.to(room.roomId).emit('GUESS_RESULT', {
+        lastGuess: guessRecord,
+        roomState: room
+      });
+      console.log(`[Game] AI guessed ${aiGuess} in ${room.roomId}. Next turn: Human.`);
+    }
+  }, 1200);
+}
+
 // --- Socket.IO Connection Handler ---
-io.use(async (socket, next) => {
+io.use((socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
   if (!token) {
     return next(new Error('AUTH_ERROR: Token not provided'));
@@ -182,19 +273,22 @@ io.use(async (socket, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     socket.userId = decoded.userId;
-    socket.username = decoded.name || decoded.username || 'Player';
-    
-    // Fetch fresh user avatar/details from movie server database
-    try {
-      const profileRes = await axios.get(`${MOVIE_API_URL}/auth/profile`, {
-        headers: { Authorization: `Bearer ${token}` }
+    socket.username = socket.handshake.auth?.username || decoded.name || decoded.username || 'Player';
+    socket.avatar = socket.handshake.auth?.avatar || '';
+
+    // Asynchronously fetch fresh user details in background without blocking handshake
+    if (!socket.avatar && MOVIE_API_URL) {
+      axios.get(`${MOVIE_API_URL}/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 3000
+      }).then(res => {
+        if (res.data && res.data.user) {
+          socket.username = res.data.user.name || socket.username;
+          socket.avatar = res.data.user.avatar || socket.avatar;
+        }
+      }).catch(err => {
+        console.warn('Background profile fetch skipped/failed:', err.message);
       });
-      if (profileRes.data && profileRes.data.user) {
-        socket.username = profileRes.data.user.name || socket.username;
-        socket.avatar = profileRes.data.user.avatar || '';
-      }
-    } catch (err) {
-      console.warn('Could not fetch fresh user details in game ws auth, falling back to jwt payload:', err.message);
     }
     next();
   } catch (error) {
@@ -238,6 +332,11 @@ io.on('connection', (socket) => {
   // Send list of joinable rooms
   socket.emit('LOBBY_ROOMS', getJoinableRooms());
 
+  // Handle manual request for joinable rooms
+  socket.on('GET_LOBBY_ROOMS', () => {
+    socket.emit('LOBBY_ROOMS', getJoinableRooms());
+  });
+
   // --- CREATE ROOM ---
   socket.on('CREATE_ROOM', () => {
     const roomId = generateRoomId();
@@ -260,6 +359,7 @@ io.on('connection', (socket) => {
       activeTurnIndex: -1,
       winnerIndex: -1,
       startedAt: null,
+      createdAt: Date.now(),
       saved: false
     };
     rooms.set(roomId, room);
@@ -269,6 +369,57 @@ io.on('connection', (socket) => {
     socket.emit('ROOM_CREATED', room);
     io.emit('LOBBY_ROOMS', getJoinableRooms());
     console.log(`[Game] Room created: ${roomId} by ${socket.username}`);
+  });
+
+  // --- CREATE AI ROOM ---
+  socket.on('CREATE_AI_ROOM', (data) => {
+    const difficulty = (data && data.difficulty) ? data.difficulty : 'medium';
+    const roomId = generateRoomId();
+    const aiSecret = generate4DigitCode();
+    const aiRps = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+
+    let botTitle = 'AI Bot (Trung Bình) 🤖';
+    if (difficulty === 'easy') botTitle = 'AI Bot (Dễ) 🤖';
+    if (difficulty === 'hard') botTitle = 'AI Bot (Cực Khó) 🤖';
+
+    const room = {
+      roomId,
+      isAiRoom: true,
+      aiDifficulty: difficulty,
+      players: [
+        {
+          userId: socket.userId,
+          username: socket.username,
+          avatar: socket.avatar || '',
+          socketId: socket.id,
+          secretNumber: null,
+          rpsChoice: null,
+          ready: false
+        },
+        {
+          userId: 'ai_bot_system',
+          username: botTitle,
+          avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=GameAI',
+          socketId: 'ai_bot_socket',
+          secretNumber: encryptSecret(aiSecret),
+          rpsChoice: aiRps,
+          ready: true
+        }
+      ],
+      state: 'SETTING_SECRET',
+      guesses: [],
+      rpsWinnerIndex: -1,
+      activeTurnIndex: -1,
+      winnerIndex: -1,
+      startedAt: new Date().toISOString(),
+      createdAt: Date.now(),
+      saved: false
+    };
+    rooms.set(roomId, room);
+    socket.join(roomId);
+    socket.emit('ROOM_CREATED', room);
+    socket.emit('GAME_START', room);
+    console.log(`[Game] AI Room created (${difficulty}): ${roomId} by ${socket.username}`);
   });
 
   // --- JOIN ROOM ---
@@ -333,6 +484,9 @@ io.on('connection', (socket) => {
     if (allReady) {
       // Clear ready statuses for RPS phase
       room.players.forEach(p => p.ready = false);
+      if (room.isAiRoom) {
+        room.players[1].ready = true; // AI is ready with its pre-selected RPS choice!
+      }
       room.state = 'RPS_DECISION';
       syncRoomToRedis(roomId, room);
       io.to(roomId).emit('RPS_PHASE', room);
@@ -386,6 +540,10 @@ io.on('connection', (socket) => {
           p.rpsChoice = null;
           p.ready = false;
         });
+        if (room.isAiRoom) {
+          room.players[1].rpsChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+          room.players[1].ready = true;
+        }
         syncRoomToRedis(roomId, room);
         io.to(roomId).emit('RPS_TIE', {
           p1Choice: p1.rpsChoice,
@@ -407,6 +565,10 @@ io.on('connection', (socket) => {
           roomState: room
         });
         console.log(`[Game] RPS winner in ${roomId}: Player ${winnerIdx} (${room.players[winnerIdx].username}).`);
+
+        if (room.isAiRoom && winnerIdx === 1) {
+          handleAiTurn(room);
+        }
       }
     } else {
       syncRoomToRedis(roomId, room);
@@ -498,6 +660,10 @@ io.on('connection', (socket) => {
         roomState: room
       });
       console.log(`[Game] Guess in ${roomId}: Player ${playerIdx} guessed ${guess}. Result: ${correctNumbers} nums, ${correctPosition} pos. Next turn: Player ${opponentIdx}.`);
+
+      if (room.isAiRoom && room.activeTurnIndex === 1) {
+        handleAiTurn(room);
+      }
     }
   });
 
@@ -514,13 +680,23 @@ io.on('connection', (socket) => {
     player.ready = true;
 
     const bothReady = room.players.every(p => p.ready);
-    if (bothReady) {
+    if (bothReady || room.isAiRoom) {
+      const newAiSecret = generate4DigitCode();
+      const newAiRps = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+
       // Reset state for new round
       room.players.forEach(p => {
         p.secretNumber = null;
         p.rpsChoice = null;
         p.ready = false;
       });
+
+      if (room.isAiRoom) {
+        room.players[1].secretNumber = encryptSecret(newAiSecret);
+        room.players[1].rpsChoice = newAiRps;
+        room.players[1].ready = true;
+      }
+
       room.guesses = [];
       room.state = 'SETTING_SECRET';
       room.rpsWinnerIndex = -1;
@@ -607,27 +783,34 @@ io.on('connection', (socket) => {
           disconnectTimers.delete(timerKey);
         }
         
-        // Remove player from room immediately
-        room.players.splice(pIdx, 1);
-        socket.leave(roomId);
-        
-        if (room.players.length === 0) {
+        if (room.isAiRoom) {
           rooms.delete(roomId);
           deleteRoomFromRedis(roomId);
-          console.log(`[Game] Room ${roomId} deleted as it became empty.`);
+          socket.leave(roomId);
+          console.log(`[Game] AI Room ${roomId} destroyed immediately because human left.`);
         } else {
-          room.state = 'WAITING_FOR_PLAYERS';
-          room.guesses = [];
-          room.players.forEach(p => {
-            p.secretNumber = null;
-            p.rpsChoice = null;
-            p.ready = false;
-          });
-          syncRoomToRedis(roomId, room);
-          io.to(roomId).emit('PLAYER_LEFT', {
-            username: socket.username,
-            roomState: room
-          });
+          // Remove player from room immediately
+          room.players.splice(pIdx, 1);
+          socket.leave(roomId);
+          
+          if (room.players.length === 0) {
+            rooms.delete(roomId);
+            deleteRoomFromRedis(roomId);
+            console.log(`[Game] Room ${roomId} deleted as it became empty.`);
+          } else {
+            room.state = 'WAITING_FOR_PLAYERS';
+            room.guesses = [];
+            room.players.forEach(p => {
+              p.secretNumber = null;
+              p.rpsChoice = null;
+              p.ready = false;
+            });
+            syncRoomToRedis(roomId, room);
+            io.to(roomId).emit('PLAYER_LEFT', {
+              username: socket.username,
+              roomState: room
+            });
+          }
         }
         
         io.emit('LOBBY_ROOMS', getJoinableRooms());
@@ -647,6 +830,14 @@ io.on('connection', (socket) => {
     rooms.forEach((room, roomId) => {
       const player = room.players.find(p => p.userId === socket.userId);
       if (player) {
+        if (room.isAiRoom) {
+          rooms.delete(roomId);
+          deleteRoomFromRedis(roomId);
+          console.log(`[Game] AI Room ${roomId} destroyed immediately on user disconnect.`);
+          io.emit('LOBBY_ROOMS', getJoinableRooms());
+          return;
+        }
+
         // Mark player as temporarily disconnected
         player.disconnectedAt = Date.now();
         syncRoomToRedis(roomId, room);
@@ -707,14 +898,19 @@ io.on('connection', (socket) => {
 function getJoinableRooms() {
   const list = [];
   rooms.forEach((room) => {
-    if (room.state === 'WAITING_FOR_PLAYERS') {
+    if (!room.isAiRoom && room.state !== 'FINISHED' && room.players && room.players.length > 0) {
       list.push({
         roomId: room.roomId,
-        hostName: room.players[0].username,
-        playerCount: room.players.length
+        hostName: room.players[0]?.username || 'Host',
+        hostAvatar: room.players[0]?.avatar || '',
+        playerCount: room.players.length,
+        maxPlayers: 2,
+        state: room.state,
+        createdAt: room.createdAt || Date.now()
       });
     }
   });
+  list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return list;
 }
 

@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Gamepad2, Users, Send, KeyRound, Dices, RefreshCw, LogOut, Copy, Check, MessageSquare, ArrowLeft, ChevronDown, ChevronUp, Search,
-  Trophy, Clock, Target, Swords, Wifi, WifiOff, X
+  Trophy, Clock, Target, Swords, Wifi, WifiOff, X, Grid, Bot, Flame, Lock
 } from 'lucide-react';
 
 interface Player {
@@ -53,7 +53,11 @@ interface Room {
 interface LobbyRoom {
   roomId: string;
   hostName: string;
+  hostAvatar?: string;
   playerCount: number;
+  maxPlayers?: number;
+  state?: string;
+  createdAt?: number;
 }
 
 const translations = {
@@ -68,7 +72,7 @@ const translations = {
     chooseModeDesc: "Create a private arena or join a lobby room.",
     createRoom: "Create Private Room",
     orJoin: "Or Join Room ID",
-    enterRoomId: "e.g. G-123456",
+    enterRoomId: "Example: G-123456",
     join: "Join",
     lobbyRooms: "Lobby Rooms",
     noRooms: "No rooms currently waiting.",
@@ -119,7 +123,7 @@ const translations = {
     chatPlaceholder: "Send message...",
     invalidCode: "Code must be exactly 4 unique digits.",
     invalidGuess: "Guess must be exactly 4 unique digits.",
-    cannotConnect: "Cannot connect to game server. Please ensure the backend is running.",
+    cannotConnect: "Unable to connect to service. Please wait or check your connection.",
     opponentLeft: "Opponent {username} left. Resetting game room to lobby.",
     activeTabGame: "Arena",
     activeTabChat: "Chat Room",
@@ -200,7 +204,7 @@ const translations = {
     chatPlaceholder: "Nhập tin nhắn...",
     invalidCode: "Mật mã phải gồm đúng 4 chữ số khác nhau.",
     invalidGuess: "Số đoán phải gồm đúng 4 chữ số khác nhau.",
-    cannotConnect: "Không thể kết nối đến máy chủ game. Vui lòng kiểm tra lại backend.",
+    cannotConnect: "Không thể kết nối được thông tin. Vui lòng đợi hoặc kiểm tra lại",
     opponentLeft: "Đối thủ {username} đã rời phòng. Đang quay lại phòng chờ.",
     activeTabGame: "Trận đấu",
     activeTabChat: "Trò chuyện",
@@ -240,6 +244,7 @@ const translateBackendError = (msg: string, locale: 'en' | 'vi') => {
 
 export default function GameClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [user, setUser] = useState<{ id: string; name: string; avatar: string } | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -275,6 +280,9 @@ export default function GameClient() {
   };
   
   const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>([]);
+  const [isRefreshingLobby, setIsRefreshingLobby] = useState(false);
+  const [showAllRoomsModal, setShowAllRoomsModal] = useState(false);
+  const [showAiDifficultyModal, setShowAiDifficultyModal] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [joinedRoomId, setJoinedRoomId] = useState('');
@@ -414,24 +422,48 @@ export default function GameClient() {
     if (!user) return;
     const token = localStorage.getItem('token');
     
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
-      (typeof window !== 'undefined' 
-        ? (window.location.port === '3002' ? 'http://localhost:8080' : window.location.origin) 
-        : 'http://localhost:8080');
+    const isLocal = typeof window !== 'undefined' && (
+      window.location.hostname.includes('localhost') || 
+      window.location.hostname === '127.0.0.1'
+    );
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (isLocal ? 'http://localhost:8080' : window.location.origin);
         
     const socket = io(socketUrl, {
-      auth: { token }
+      auth: { 
+        token,
+        username: user.name,
+        avatar: user.avatar
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 500,
+      randomizationFactor: 0.1,
+      timeout: 5000
     });
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('Connected to socket server');
       setErrorMsg(null);
+      setIsReconnecting(false);
     });
 
     socket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err.message);
+      console.warn('Socket connection error:', err.message);
+      if (err.message && err.message.includes('AUTH_ERROR')) {
+        setAuthError('INVALID_TOKEN');
+        setErrorMsg(t('authRequired'));
+      } else {
+        setIsReconnecting(true);
+      }
+    });
+
+    socket.io.on('reconnect_failed', () => {
+      console.error('Socket reconnection failed permanently');
       setErrorMsg(t('cannotConnect'));
+      setIsReconnecting(false);
     });
 
     socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
@@ -554,12 +586,11 @@ export default function GameClient() {
     });
 
     // Socket.IO built-in reconnection events
-    socket.on('disconnect', () => {
-      setIsReconnecting(true);
-    });
-
-    socket.on('connect', () => {
-      setIsReconnecting(false);
+    socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+      if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
+        setIsReconnecting(true);
+      }
     });
 
     socket.on('CHAT_MESSAGE', (msg: { username: string; content: string; timestamp: string }) => {
@@ -651,10 +682,37 @@ export default function GameClient() {
     socketRef.current?.emit('CREATE_ROOM');
   };
 
+  const handleCreateAiRoom = () => {
+    setShowAiDifficultyModal(true);
+  };
+
+  const handleStartAiMatch = (difficulty: 'easy' | 'medium' | 'hard') => {
+    setShowAiDifficultyModal(false);
+    socketRef.current?.emit('CREATE_AI_ROOM', { difficulty });
+  };
+
   const handleJoinRoom = (rid: string) => {
     const formatted = rid.trim().toUpperCase();
-    if (!formatted) return;
-    socketRef.current?.emit('JOIN_ROOM', formatted);
+    if (!formatted) {
+      setErrorMsg(locale === 'vi' ? 'Vui lòng nhập ID phòng.' : 'Please enter a Room ID.');
+      return;
+    }
+    if (!/^G-\d{6}$/.test(formatted) && !/^\d{6}$/.test(formatted)) {
+      setErrorMsg(locale === 'vi' ? 'ID phòng không đúng định dạng (Ví dụ: G-123456).' : 'Invalid Room ID format (e.g. G-123456).');
+      return;
+    }
+    const finalRoomId = formatted.startsWith('G-') ? formatted : `G-${formatted}`;
+    socketRef.current?.emit('JOIN_ROOM', finalRoomId);
+  };
+
+  const handleRefreshLobby = () => {
+    if (socketRef.current && !isRefreshingLobby) {
+      setIsRefreshingLobby(true);
+      socketRef.current.emit('GET_LOBBY_ROOMS');
+      setTimeout(() => {
+        setIsRefreshingLobby(false);
+      }, 750);
+    }
   };
 
   const handleSetSecret = (e: React.FormEvent) => {
@@ -733,10 +791,11 @@ export default function GameClient() {
     setHistoryError(null);
     try {
       const token = localStorage.getItem('token');
-      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
-        (typeof window !== 'undefined' 
-          ? (window.location.port === '3002' ? 'http://localhost:8080' : window.location.origin) 
-          : 'http://localhost:8080');
+      const isLocal = typeof window !== 'undefined' && (
+        window.location.hostname.includes('localhost') || 
+        window.location.hostname === '127.0.0.1'
+      );
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (isLocal ? 'http://localhost:8080' : window.location.origin);
           
       const response = await fetch(`${socketUrl}/api/history`, {
         headers: {
@@ -758,11 +817,21 @@ export default function GameClient() {
 
 
 
-  // --- Helper: format duration ---
+  // --- Helper: format duration & time ago ---
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatElapsedTime = (timestamp?: number) => {
+    if (!timestamp) return locale === 'vi' ? 'Vừa xong' : 'Just now';
+    const diff = Math.floor((Date.now() - timestamp) / 1000);
+    if (diff < 60) return locale === 'vi' ? 'Vừa xong' : 'Just now';
+    const mins = Math.floor(diff / 60);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h`;
   };
 
   // --- Custom Confetti Particle Canvas ---
@@ -841,9 +910,10 @@ export default function GameClient() {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col p-3 sm:p-4 overflow-hidden max-w-full">
-      {/* Header Info */}
-      <header className="max-w-7xl w-full mx-auto flex items-center justify-between py-3 sm:py-4 border-b border-slate-800 mb-3 sm:mb-6 shrink-0 gap-2">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
+      {/* Header Info - Fixed at top */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
+        <div className="max-w-7xl w-full mx-auto flex items-center justify-between gap-2">
         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           <button
             onClick={() => {
@@ -938,18 +1008,30 @@ export default function GameClient() {
                 <button
                   onClick={() => {
                     setShowUserDropdown(false);
-                    window.location.href = `/history?locale=${locale}`;
+                    router.push(`/history?locale=${locale}`);
                   }}
                   className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                 >
                   <Clock size={16} className="text-purple-400" />
                   <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    router.push(`/leaderboard?locale=${locale}`);
+                  }}
+                  className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                >
+                  <Trophy size={16} className="text-amber-400" />
+                  <span>{locale === 'vi' ? 'Bảng xếp hạng' : 'Leaderboard'}</span>
+                </button>
               </div>
             )}
           </div>
         </div>
-      </header>
+      </div>
+    </header>
 
       {/* FLOATING TOAST NOTIFICATIONS - Top Right */}
       <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[200] flex flex-col gap-2.5 max-w-xs sm:max-w-sm w-full pointer-events-none">
@@ -1039,55 +1121,117 @@ export default function GameClient() {
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row gap-6 mb-4 min-h-0 overflow-hidden">
+      <main className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0">
         {/* LEFT COLUMN: MAIN GAME BOARD */}
         <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${room && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'}`}>
           
           {/* LOBBY STATE */}
           {!room && (
-            <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-6 py-6 sm:py-12 max-w-6xl mx-auto w-full">
+            <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-4 sm:gap-6 py-1 sm:py-2 max-w-6xl mx-auto w-full">
               
-              {/* DESKTOP LEFT SIDEBAR: GUIDE PART 1 */}
-              <div className="hidden lg:flex flex-col flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl shadow-xl justify-between">
-                <div className="space-y-5">
-                  <h3 className="text-sm font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
-                    {locale === 'vi' ? '📖 Hướng Dẫn: Khởi Động' : '📖 Guide: Setup'}
-                  </h3>
-                  
-                  {/* Step 1 */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">1</div>
-                      <h4 className="font-bold text-sm text-slate-200">
-                        {locale === 'vi' ? 'Tạo hoặc Vào phòng' : 'Create or Join Room'}
-                      </h4>
+              {/* DESKTOP LEFT SIDEBAR: SPLIT INTO 2 BOXES */}
+              <div className="hidden lg:flex flex-col flex-1 gap-4 min-w-0">
+                
+                {/* TOP BOX: GUIDE SETUP (STEPS 1 & 2) */}
+                <div className="flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
+                      {locale === 'vi' ? '📖 Hướng Dẫn: Khởi Động' : '📖 Guide: Setup'}
+                    </h3>
+                    
+                    {/* Step 1 */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center font-bold text-[11px] text-white shrink-0">1</div>
+                        <h4 className="font-bold text-xs text-slate-200">
+                          {locale === 'vi' ? 'Tạo hoặc Vào phòng' : 'Create or Join Room'}
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed pl-7">
+                        {locale === 'vi' 
+                          ? 'Nhấp chọn chế độ đấu với Bạn bè hoặc đấu với Máy để tạo phòng chơi.'
+                          : 'Click to select Play with Friends or Play vs Bot to start playing.'}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
-                      {locale === 'vi' 
-                        ? 'Nhấp "Tạo phòng riêng" để nhận mã phòng và mời bạn bè, hoặc chọn phòng đang chờ ở danh sách "Lobby Rooms" bên dưới.'
-                        : 'Click "Create Private Room" to get a Room ID and invite friends, or select a waiting room in the "Lobby Rooms" list below.'}
-                    </p>
+
+                    {/* Step 2 */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center font-bold text-[11px] text-white shrink-0">2</div>
+                        <h4 className="font-bold text-xs text-slate-200">
+                          {locale === 'vi' ? 'Thiết lập mật mã' : 'Lock Secret Code'}
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed pl-7">
+                        {locale === 'vi' 
+                          ? 'Mỗi người chọn 4 chữ số khác nhau (ví dụ: 1357). Bảo mật AES-256 E2E.'
+                          : 'Choose 4 unique digits (e.g. 1357). Protected with AES-256 E2E.'}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Step 2 */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">2</div>
-                      <h4 className="font-bold text-sm text-slate-200">
-                        {locale === 'vi' ? 'Thiết lập mật mã' : 'Lock Secret Code'}
-                      </h4>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed pl-8">
-                      {locale === 'vi' 
-                        ? 'Mỗi người chọn mật mã 4 số khác nhau (ví dụ: 1357). Hệ thống mã hoá AES-256 đầu cuối để bảo vệ mật mã của bạn khỏi đối thủ.'
-                        : 'Choose a unique 4-digit secret code (e.g. 1357). The server uses AES-256 E2E encryption to protect your code.'}
-                    </p>
+                  <div className="border-t border-slate-850 pt-3 mt-3 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                    {locale === 'vi' ? 'Đấu trường đoán số 4 chữ số' : '4-Digit Numbers Duel'}
                   </div>
                 </div>
 
-                <div className="border-t border-slate-805 pt-4 mt-6 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                  {locale === 'vi' ? 'Đấu trường đoán số 4 chữ số' : '4-Digit Numbers Duel'}
+                {/* BOTTOM BOX: TOP RANKING PREVIEW */}
+                <div className="flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-850">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                        <Trophy size={14} className="text-amber-400" />
+                        <span>{locale === 'vi' ? 'BXH Cao Thủ' : 'Top Ranking'}</span>
+                      </h3>
+                      <button
+                        onClick={() => router.push(`/leaderboard?locale=${locale}`)}
+                        className="text-[11px] font-bold text-purple-400 hover:text-purple-300 transition cursor-pointer flex items-center gap-0.5"
+                      >
+                        <span>{locale === 'vi' ? 'Xem tất cả' : 'View All'}</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+
+                    {/* Mini Top 3 List */}
+                    <div className="space-y-2">
+                      {/* Top 1 */}
+                      <div className="flex items-center justify-between p-2 bg-slate-950/60 rounded-xl border border-amber-500/30">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="text-xs font-extrabold text-amber-400 w-4 text-center">👑</span>
+                          <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" className="w-6 h-6 rounded-full border border-amber-400 object-cover shrink-0" alt="Top 1" />
+                          <span className="text-xs font-bold text-slate-100 truncate">Nhân Nguyễn</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-extrabold text-amber-400 shrink-0">2,450 LP</span>
+                      </div>
+
+                      {/* Top 2 */}
+                      <div className="flex items-center justify-between p-2 bg-slate-950/60 rounded-xl border border-slate-800">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="text-xs font-extrabold text-slate-300 w-4 text-center">🥈</span>
+                          <img src="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&q=80" className="w-6 h-6 rounded-full border border-slate-700 object-cover shrink-0" alt="Top 2" />
+                          <span className="text-xs font-bold text-slate-200 truncate">Superman</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-slate-300 shrink-0">2,310 LP</span>
+                      </div>
+
+                      {/* Top 3 */}
+                      <div className="flex items-center justify-between p-2 bg-slate-950/60 rounded-xl border border-slate-800">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="text-xs font-extrabold text-amber-600 w-4 text-center">🥉</span>
+                          <img src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80" className="w-6 h-6 rounded-full border border-slate-700 object-cover shrink-0" alt="Top 3" />
+                          <span className="text-xs font-bold text-slate-200 truncate">Thị Tư Hổ</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-amber-500/80 shrink-0">2,180 LP</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-850 pt-3 mt-3 text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center justify-between">
+                    <span>{locale === 'vi' ? 'Bảng xếp hạng toàn cầu' : 'Global Leaderboard'}</span>
+                    <span className="text-purple-400 font-mono">Live</span>
+                  </div>
                 </div>
+
               </div>
 
               {/* MAIN CHOOSE MODE CARD */}
@@ -1149,13 +1293,25 @@ export default function GameClient() {
                     <p className="text-xs sm:text-sm text-slate-400">{t('chooseModeDesc')}</p>
                   </div>
 
-                  <button
-                    onClick={handleCreateRoom}
-                    className="w-full py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer"
-                  >
-                    <Gamepad2 size={18} className="sm:w-5 sm:h-5" />
-                    <span>{t('createRoom')}</span>
-                  </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Button 1: Play with Friends (PvP) */}
+                    <button
+                      onClick={handleCreateRoom}
+                      className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer"
+                    >
+                      <Users size={18} className="shrink-0" />
+                      <span>{locale === 'vi' ? 'Chơi với bạn' : 'Play vs Friends'}</span>
+                    </button>
+
+                    {/* Button 2: Play vs AI Bot */}
+                    <button
+                      onClick={handleCreateAiRoom}
+                      className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer border border-cyan-400/30"
+                    >
+                      <Bot size={18} className="shrink-0" />
+                      <span>{locale === 'vi' ? 'Chơi với máy' : 'Play vs Bot'}</span>
+                    </button>
+                  </div>
 
                   <div className="relative flex items-center justify-center">
                     <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
@@ -1180,34 +1336,140 @@ export default function GameClient() {
 
                   {/* Available Lobby Rooms */}
                   <div className="space-y-2.5 pt-1 sm:pt-2">
-                    <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
-                      <Users size={12} className="sm:w-3.5 sm:h-3.5" />
-                      <span>{t('lobbyRooms')}</span>
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+                        <Users size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400" />
+                        <span>{t('lobbyRooms')}</span>
+                        <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 rounded-md text-[10px] font-mono font-bold">
+                          {lobbyRooms.length}
+                        </span>
+                      </h3>
+                      <button
+                        onClick={handleRefreshLobby}
+                        disabled={isRefreshingLobby}
+                        className={`flex items-center space-x-1.5 px-3 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 border ${
+                          isRefreshingLobby 
+                            ? 'bg-purple-950/60 border-purple-500/60 text-purple-300 shadow-md shadow-purple-900/20' 
+                            : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800/80 hover:border-purple-500/40 text-slate-300 hover:text-white'
+                        }`}
+                        title={locale === 'vi' ? 'Làm mới danh sách phòng' : 'Refresh room list'}
+                      >
+                        <RefreshCw 
+                          size={13} 
+                          className={`shrink-0 ${isRefreshingLobby ? 'animate-spin text-purple-400' : ''}`} 
+                        />
+                        <span>
+                          {isRefreshingLobby 
+                            ? (locale === 'vi' ? 'Đang làm mới...' : 'Refreshing...') 
+                            : (locale === 'vi' ? 'Làm mới' : 'Refresh')
+                          }
+                        </span>
+                      </button>
+                    </div>
                     
                     {lobbyRooms.length === 0 ? (
-                      <div className="text-center py-5 sm:py-6 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
+                      <div className="text-center py-4 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
                         {t('noRooms')}
                       </div>
                     ) : (
-                      <div className="max-h-40 sm:max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                        {lobbyRooms.map((r) => (
-                          <div 
-                            key={r.roomId}
-                            className="flex items-center justify-between p-2.5 sm:p-3.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-800/60 rounded-xl"
-                          >
-                            <div className="min-w-0">
-                              <p className="font-mono text-xs sm:text-sm font-bold text-purple-400">{r.roomId}</p>
-                              <p className="text-[10px] sm:text-xs text-slate-400 truncate">Host: {r.hostName}</p>
-                            </div>
-                            <button
-                              onClick={() => handleJoinRoom(r.roomId)}
-                              className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 cursor-pointer"
+                      <div className="space-y-2">
+                        {lobbyRooms.slice(0, 2).map((r) => {
+                          const isFull = r.playerCount >= 2 || (!!r.state && r.state !== 'WAITING_FOR_PLAYERS');
+                          return (
+                            <div 
+                              key={r.roomId}
+                              className={`p-3 sm:p-3.5 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3 ${
+                                isFull 
+                                  ? 'bg-slate-950/40 border-slate-850 opacity-75' 
+                                  : 'bg-slate-950/70 hover:bg-slate-950 border-slate-800/80 hover:border-purple-500/50 shadow-md'
+                              }`}
                             >
-                              {t('joinArena')}
-                            </button>
-                          </div>
-                        ))}
+                              {/* Avatar & Info */}
+                              <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
+                                {r.hostAvatar ? (
+                                  <img 
+                                    src={r.hostAvatar} 
+                                    alt={r.hostName} 
+                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-700 object-cover shrink-0" 
+                                  />
+                                ) : (
+                                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-full flex items-center justify-center font-extrabold text-xs uppercase text-white shrink-0 border border-slate-700">
+                                    {r.hostName ? r.hostName.slice(0, 2) : 'P'}
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  {/* Title & Badges */}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-mono text-xs sm:text-sm font-extrabold text-amber-400">
+                                      #{r.roomId}
+                                    </span>
+                                    
+                                    {/* Status Badge */}
+                                    {isFull ? (
+                                      <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-md text-[10px] font-bold flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                        {locale === 'vi' ? 'Đã đầy' : 'Full'}
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 bg-blue-500/15 border border-blue-500/30 text-blue-300 rounded-md text-[10px] font-bold flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                                        {locale === 'vi' ? 'Đang đợi' : 'Waiting'}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Subtitle Details: Host on line 2, Count & Time on line 3 */}
+                                  <div className="space-y-0.5">
+                                    <p className="text-xs text-slate-300 font-medium truncate">
+                                      {locale === 'vi' ? 'Chủ phòng:' : 'Host:'} <strong className="text-white font-bold">{r.hostName}</strong>
+                                    </p>
+                                    <div className="flex items-center space-x-3 text-[11px] text-slate-400">
+                                      <span className="flex items-center space-x-1 shrink-0">
+                                        <Users size={11} className="text-slate-500" />
+                                        <span>{r.playerCount}/2</span>
+                                      </span>
+                                      <span className="flex items-center space-x-1 shrink-0">
+                                        <Clock size={11} className="text-slate-500" />
+                                        <span>{formatElapsedTime(r.createdAt)}</span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Action Button */}
+                              <div className="shrink-0">
+                                {!isFull ? (
+                                  <button
+                                    onClick={() => handleJoinRoom(r.roomId)}
+                                    className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-md transition duration-200 cursor-pointer"
+                                  >
+                                    {locale === 'vi' ? 'Tham gia' : 'Join'}
+                                  </button>
+                                ) : (
+                                  <button
+                                    disabled
+                                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs sm:text-sm rounded-xl cursor-not-allowed opacity-60"
+                                  >
+                                    {locale === 'vi' ? 'Đã đầy' : 'Full'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* View All Rooms Button */}
+                        {lobbyRooms.length > 0 && (
+                          <button
+                            onClick={() => setShowAllRoomsModal(true)}
+                            className="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 text-purple-300 hover:text-purple-200 text-xs font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm mt-2"
+                          >
+                            <Grid size={14} />
+                            <span>{locale === 'vi' ? `Xem tất cả phòng (${lobbyRooms.length})` : `View All Rooms (${lobbyRooms.length})`}</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2253,6 +2515,293 @@ export default function GameClient() {
           </div>
         )}
       </main>
+
+      {/* ALL ACTIVE ROOMS MODAL */}
+      <AnimatePresence>
+        {showAllRoomsModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md"
+            onClick={() => setShowAllRoomsModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.93, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.93, y: 15 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 border border-slate-800 w-full max-w-6xl xl:max-w-7xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[90vh] max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 bg-purple-500/20 text-purple-400 rounded-lg shrink-0">
+                    <Grid size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                      <span>{locale === 'vi' ? 'Danh sách tất cả các phòng' : 'All Active Rooms'}</span>
+                      <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 text-[10px] rounded-full font-mono font-bold">
+                        {lobbyRooms.length}
+                      </span>
+                    </h2>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400">
+                      {locale === 'vi' ? 'Chọn phòng bất kỳ để tham gia thi đấu' : 'Select any waiting room to join'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {/* Refresh Button */}
+                  <button
+                    onClick={handleRefreshLobby}
+                    disabled={isRefreshingLobby}
+                    className="flex items-center space-x-1 px-2.5 py-1 text-[11px] font-bold text-purple-300 hover:text-white bg-purple-500/15 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/60 rounded-lg transition duration-150 cursor-pointer disabled:opacity-50 shadow-sm"
+                    title={locale === 'vi' ? 'Làm mới danh sách phòng' : 'Refresh room list'}
+                  >
+                    <RefreshCw size={11} className={`${isRefreshingLobby ? 'animate-spin text-purple-400' : ''}`} />
+                    <span>{locale === 'vi' ? 'Làm mới' : 'Refresh'}</span>
+                  </button>
+
+                  {/* Close Button - Standout Red Theme */}
+                  <button
+                    onClick={() => setShowAllRoomsModal(false)}
+                    className="p-1 bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 hover:border-rose-500 rounded-lg transition duration-150 cursor-pointer shadow-md flex items-center justify-center"
+                    title={locale === 'vi' ? 'Đóng' : 'Close'}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body - Responsive Grid */}
+              <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
+                {lobbyRooms.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-slate-800 rounded-2xl text-slate-500">
+                    <Users size={32} className="mx-auto mb-3 opacity-40" />
+                    <p className="font-semibold text-sm">{t('noRooms')}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {lobbyRooms.map((r) => {
+                      const isFull = r.playerCount >= 2 || (!!r.state && r.state !== 'WAITING_FOR_PLAYERS');
+                      return (
+                        <div 
+                          key={r.roomId}
+                          className={`p-4 rounded-xl border transition-all duration-200 flex flex-col justify-between gap-3 ${
+                            isFull 
+                              ? 'bg-slate-950/40 border-slate-850 opacity-75' 
+                              : 'bg-slate-950/80 hover:bg-slate-950 border-slate-800 hover:border-purple-500/50 shadow-lg'
+                          }`}
+                        >
+                          {/* Top Info */}
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-sm font-extrabold text-amber-400">
+                                #{r.roomId}
+                              </span>
+                              {isFull ? (
+                                <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-md text-[10px] font-bold flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                  {locale === 'vi' ? 'Đã đầy' : 'Full'}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-blue-500/15 border border-blue-500/30 text-blue-300 rounded-md text-[10px] font-bold flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                                  {locale === 'vi' ? 'Đang đợi' : 'Waiting'}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center space-x-3">
+                              {r.hostAvatar ? (
+                                <img 
+                                  src={r.hostAvatar} 
+                                  alt={r.hostName} 
+                                  className="w-10 h-10 rounded-full border border-slate-700 object-cover shrink-0" 
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-full flex items-center justify-center font-extrabold text-xs uppercase text-white shrink-0 border border-slate-700">
+                                  {r.hostName ? r.hostName.slice(0, 2) : 'P'}
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <p className="text-xs text-slate-300 font-medium truncate">
+                                  {locale === 'vi' ? 'Chủ phòng:' : 'Host:'} <strong className="text-white font-bold">{r.hostName}</strong>
+                                </p>
+                                <div className="flex items-center space-x-3 text-[11px] text-slate-400">
+                                  <span className="flex items-center space-x-1 shrink-0">
+                                    <Users size={11} className="text-slate-500" />
+                                    <span>{r.playerCount}/2</span>
+                                  </span>
+                                  <span className="flex items-center space-x-1 shrink-0">
+                                    <Clock size={11} className="text-slate-500" />
+                                    <span>{formatElapsedTime(r.createdAt)}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Button */}
+                          <div className="pt-1">
+                            {!isFull ? (
+                              <button
+                                onClick={() => {
+                                  setShowAllRoomsModal(false);
+                                  handleJoinRoom(r.roomId);
+                                }}
+                                className="w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-xs rounded-xl shadow-md transition duration-200 cursor-pointer"
+                              >
+                                {locale === 'vi' ? 'Tham gia' : 'Join'}
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="w-full py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl cursor-not-allowed opacity-60"
+                              >
+                                {locale === 'vi' ? 'Đã đầy' : 'Full'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* AI BOT DIFFICULTY SELECTION MODAL */}
+      <AnimatePresence>
+        {showAiDifficultyModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+            onClick={() => setShowAiDifficultyModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.93, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.93, y: 15 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-cyan-500/20 text-cyan-400 rounded-xl">
+                    <Bot size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-bold text-white">
+                      {locale === 'vi' ? 'Chọn độ khó khi đấu với Máy' : 'Select AI Bot Difficulty'}
+                    </h2>
+                    <p className="text-[11px] text-slate-400">
+                      {locale === 'vi' ? 'Thử thách trí tuệ với các cấp độ thuật toán' : 'Challenge your mind with AI algorithm levels'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowAiDifficultyModal(false)}
+                  className="p-1 bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-lg transition duration-150 cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Body - 3 Difficulties */}
+              <div className="p-4 space-y-3">
+                {/* 1. EASY LEVEL */}
+                <button
+                  onClick={() => handleStartAiMatch('easy')}
+                  className="w-full p-3.5 bg-slate-950/80 hover:bg-emerald-950/30 border border-slate-800 hover:border-emerald-500/50 rounded-xl transition duration-150 text-left flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-md">
+                        🟢 {locale === 'vi' ? 'Dễ' : 'Easy'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-200">
+                        {locale === 'vi' ? 'Đoán ngẫu nhiên' : 'Random Guesser'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {locale === 'vi' ? 'Chưa qua xử lý logic loại trừ, phù hợp giải trí nhẹ nhàng.' : 'Makes un-deduced random guesses for casual fun.'}
+                    </p>
+                  </div>
+                  <Bot size={20} className="text-emerald-400 opacity-60 group-hover:opacity-100 transition shrink-0 ml-2" />
+                </button>
+
+                {/* 2. MEDIUM LEVEL - LOCKED */}
+                <button
+                  onClick={() => {
+                    setErrorMsg(locale === 'vi' ? '🔒 Cấp độ Trung Bình tạm thời đang bị khóa!' : '🔒 Medium difficulty is temporarily locked!');
+                  }}
+                  className="w-full p-3.5 bg-slate-950/40 border border-slate-800/60 rounded-xl text-left flex items-center justify-between group opacity-60 hover:opacity-75 transition cursor-pointer"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400/80 text-xs font-bold rounded-md flex items-center gap-1">
+                        🟡 {locale === 'vi' ? 'Trung Bình' : 'Medium'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        {locale === 'vi' ? 'Suy luận loại trừ' : 'Logical Elimination'}
+                      </span>
+                      <span className="px-1.5 py-0.2 bg-slate-800/80 text-slate-400 text-[10px] rounded-md font-mono font-bold flex items-center gap-1">
+                        <Lock size={10} /> {locale === 'vi' ? 'Khóa' : 'Locked'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      {locale === 'vi' ? 'Tự động loại bỏ các đáp án mâu thuẫn từ gợi ý trước.' : 'Eliminates impossible candidates logically.'}
+                    </p>
+                  </div>
+                  <Lock size={18} className="text-slate-500 shrink-0 ml-2" />
+                </button>
+
+                {/* 3. HARD LEVEL (MINIMAX) - LOCKED */}
+                <button
+                  onClick={() => {
+                    setErrorMsg(locale === 'vi' ? '🔒 Cấp độ Cực Khó tạm thời đang bị khóa!' : '🔒 Hard difficulty is temporarily locked!');
+                  }}
+                  className="w-full p-3.5 bg-slate-950/40 border border-slate-800/60 rounded-xl text-left flex items-center justify-between group opacity-60 hover:opacity-75 transition cursor-pointer"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400/80 text-xs font-bold rounded-md flex items-center gap-1">
+                        🔴 {locale === 'vi' ? 'Cực Khó' : 'Hard'}
+                        <Flame size={12} className="text-rose-400/60" />
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        {locale === 'vi' ? 'Minimax Solver' : 'Minimax Entropy'}
+                      </span>
+                      <span className="px-1.5 py-0.2 bg-slate-800/80 text-slate-400 text-[10px] rounded-md font-mono font-bold flex items-center gap-1">
+                        <Lock size={10} /> {locale === 'vi' ? 'Khóa' : 'Locked'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      {locale === 'vi' ? 'Thuật toán tối ưu toán học 100%, giải mã trong 4-5 lượt!' : 'Donald Knuth optimal entropy algorithm, wins in 4-5 turns!'}
+                    </p>
+                  </div>
+                  <Lock size={18} className="text-slate-500 shrink-0 ml-2" />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
