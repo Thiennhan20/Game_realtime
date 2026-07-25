@@ -53,6 +53,7 @@ html, body, .no-scrollbar {
 }
 
 .custom-scrollbar {
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(168, 85, 247, 0.45) rgba(2, 6, 23, 0.4);
 }

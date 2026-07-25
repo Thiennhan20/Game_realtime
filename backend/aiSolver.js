@@ -2,11 +2,15 @@
  * AI Solver for 4-Digit Number Guessing Game (Bulls and Cows)
  * Supports 3 Difficulty Levels:
  * 1. 'easy': Random guesser without deduction.
- * 2. 'medium': Deductive candidate elimination (logical guesser).
- * 3. 'hard': Minimax information entropy solver (master optimal guesser).
+ * 2. 'medium': Deductive elimination + digit-frequency heuristic.
+ * 3. 'hard': Deductive elimination + minimax optimal solver.
+ *
+ * correctNumbers = total digits in guess that exist anywhere in target (bulls + cows)
+ * correctPosition = digits in exact position (bulls only)
+ * This MUST match checkGuess() in server.js exactly.
  */
 
-// Pre-generate all 5,040 valid 4-digit codes with unique digits (cached in memory)
+// Pre-generate all 5,040 valid 4-digit codes with unique digits (cached)
 const ALL_CANDIDATES = (() => {
   const candidates = [];
   for (let i = 0; i <= 9; i++) {
@@ -24,23 +28,47 @@ const ALL_CANDIDATES = (() => {
   return candidates;
 })();
 
-// Zero-allocation feedback evaluation (Ultra-fast)
-// correctPosition: exact index matches
-// correctNumbers: total character matches anywhere in target
+/**
+ * Evaluate feedback between a guess and a target.
+ * MUST produce identical results to checkGuess() in server.js.
+ */
 function evaluateFeedback(guess, target) {
   let correctPosition = 0;
   let correctNumbers = 0;
 
+  // Bulls: exact position match
   for (let i = 0; i < 4; i++) {
-    if (guess.charCodeAt(i) === target.charCodeAt(i)) {
+    if (guess[i] === target[i]) {
       correctPosition++;
     }
-    if (target.indexOf(guess[i]) !== -1) {
+  }
+
+  // correctNumbers: total matching digits (bulls + cows)
+  const targetSet = new Set(target);
+  for (let i = 0; i < 4; i++) {
+    if (targetSet.has(guess[i])) {
       correctNumbers++;
     }
   }
 
   return { correctNumbers, correctPosition };
+}
+
+/**
+ * Filter candidates that are consistent with ALL past feedback.
+ */
+function filterCandidates(pastAiGuesses) {
+  return ALL_CANDIDATES.filter(candidate => {
+    for (let i = 0; i < pastAiGuesses.length; i++) {
+      const past = pastAiGuesses[i];
+      const fb = evaluateFeedback(past.guess, candidate);
+      if (fb.correctPosition !== past.correctPosition ||
+          fb.correctNumbers !== past.correctNumbers) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 /**
@@ -50,79 +78,92 @@ function evaluateFeedback(guess, target) {
  * @returns {string} Next 4-digit guess string
  */
 function getNextAiGuess(pastAiGuesses = [], difficulty = 'medium') {
-  // --- EASY DIFFICULTY ---
+  // --- EASY: pure random, no elimination ---
   if (difficulty === 'easy') {
-    const guessedSet = new Set(pastAiGuesses.map(p => p.guess));
-    const unGuessed = ALL_CANDIDATES.filter(c => !guessedSet.has(c));
-    return unGuessed[Math.floor(Math.random() * unGuessed.length)] || "1234";
+    const guessedSet = new Set((pastAiGuesses || []).map(p => p.guess));
+    const pool = ALL_CANDIDATES.filter(c => !guessedSet.has(c));
+    return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : '1234';
   }
 
-  // --- INITIAL GUESS (MEDIUM & HARD) ---
+  // --- MEDIUM & HARD: first guess ---
   if (!pastAiGuesses || pastAiGuesses.length === 0) {
-    const initialGuesses = ["0123", "1234", "3456", "5678", "2468", "1357"];
-    return initialGuesses[Math.floor(Math.random() * initialGuesses.length)];
+    // Good strategic opening guesses
+    const openers = ['1234', '0123', '2468', '1357', '3456', '5678'];
+    return openers[Math.floor(Math.random() * openers.length)];
   }
 
-  // --- DEDUCTIVE CANDIDATE ELIMINATION ---
-  let candidates = ALL_CANDIDATES.filter(candidate => {
-    for (let i = 0; i < pastAiGuesses.length; i++) {
-      const past = pastAiGuesses[i];
-      const feedback = evaluateFeedback(past.guess, candidate);
-      if (
-        feedback.correctPosition !== past.correctPosition ||
-        feedback.correctNumbers !== past.correctNumbers
-      ) {
-        return false;
-      }
-    }
-    return true;
-  });
+  // --- Deductive elimination ---
+  const candidates = filterCandidates(pastAiGuesses);
 
-  // Fallback if empty
+  console.log(`[AI Solver] difficulty=${difficulty}, pastGuesses=${pastAiGuesses.length}, candidates=${candidates.length}`);
+
   if (candidates.length === 0) {
+    // Should not happen, but fallback
+    console.warn('[AI Solver] No valid candidates! Falling back to random.');
     const guessedSet = new Set(pastAiGuesses.map(p => p.guess));
-    const fallbackList = ALL_CANDIDATES.filter(c => !guessedSet.has(c));
-    return fallbackList.length > 0 ? fallbackList[Math.floor(Math.random() * fallbackList.length)] : "1234";
+    const pool = ALL_CANDIDATES.filter(c => !guessedSet.has(c));
+    return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : '1234';
   }
 
   if (candidates.length === 1) {
     return candidates[0];
   }
 
-  // --- MEDIUM DIFFICULTY ---
+  // --- MEDIUM: pick the candidate with highest digit-frequency score ---
+  // Count how often each digit appears at each position across all candidates
   if (difficulty === 'medium') {
-    return candidates[Math.floor(Math.random() * candidates.length)];
-  }
-
-  // --- HARD DIFFICULTY (MINIMAX INFORMATION ENTROPY) ---
-  let bestGuess = candidates[0];
-  let minMaxScore = Infinity;
-
-  // Ultra-fast evaluation pool sample (max 80 candidates for <1ms execution)
-  const poolToEvaluate = candidates.length > 80 ? candidates.slice(0, 80) : candidates;
-
-  for (let i = 0; i < poolToEvaluate.length; i++) {
-    const guessAttempt = poolToEvaluate[i];
-    const feedbackCounts = {};
-    let maxCountForGuess = 0;
-
-    for (let j = 0; j < candidates.length; j++) {
-      const fb = evaluateFeedback(guessAttempt, candidates[j]);
-      const key = `${fb.correctNumbers}-${fb.correctPosition}`;
-      const count = (feedbackCounts[key] || 0) + 1;
-      feedbackCounts[key] = count;
-      if (count > maxCountForGuess) {
-        maxCountForGuess = count;
+    const digitFreq = Array.from({ length: 4 }, () => new Array(10).fill(0));
+    for (const c of candidates) {
+      for (let i = 0; i < 4; i++) {
+        digitFreq[i][parseInt(c[i], 10)]++;
       }
     }
 
-    if (maxCountForGuess < minMaxScore) {
-      minMaxScore = maxCountForGuess;
-      bestGuess = guessAttempt;
+    let bestScore = -1;
+    let bestGuess = candidates[0];
+    // Evaluate a sample of candidates (up to 100)
+    const evalPool = candidates.length > 100 ? candidates.slice(0, 100) : candidates;
+    for (const c of evalPool) {
+      let score = 0;
+      for (let i = 0; i < 4; i++) {
+        score += digitFreq[i][parseInt(c[i], 10)];
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestGuess = c;
+      }
+    }
+    console.log(`[AI Solver][Medium] Chose ${bestGuess} (score ${bestScore}) from ${candidates.length} candidates`);
+    return bestGuess;
+  }
+
+  // --- HARD: minimax — minimize the worst-case remaining pool ---
+  let bestGuess = candidates[0];
+  let minMaxBucket = Infinity;
+
+  const evalPool = candidates.length > 80 ? candidates.slice(0, 80) : candidates;
+
+  for (let i = 0; i < evalPool.length; i++) {
+    const attempt = evalPool[i];
+    const buckets = {};
+    let maxBucket = 0;
+
+    for (let j = 0; j < candidates.length; j++) {
+      const fb = evaluateFeedback(attempt, candidates[j]);
+      const key = fb.correctNumbers * 10 + fb.correctPosition; // cheap numeric key
+      const count = (buckets[key] || 0) + 1;
+      buckets[key] = count;
+      if (count > maxBucket) maxBucket = count;
+    }
+
+    if (maxBucket < minMaxBucket) {
+      minMaxBucket = maxBucket;
+      bestGuess = attempt;
     }
   }
 
-  return bestGuess || candidates[0];
+  console.log(`[AI Solver][Hard] Chose ${bestGuess} (worstCase ${minMaxBucket}) from ${candidates.length} candidates`);
+  return bestGuess;
 }
 
 module.exports = {
