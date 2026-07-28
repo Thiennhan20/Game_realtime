@@ -134,6 +134,7 @@ export function useGameController() {
       console.log('Connected to socket server');
       setErrorMsg(null);
       setIsReconnecting(false);
+      socket.emit('GET_LOBBY_ROOMS');
     });
 
     socket.on('connect_error', (error) => {

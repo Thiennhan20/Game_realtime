@@ -55,8 +55,11 @@ export function navigateTopWindow(targetUrl: string) {
 }
 
 export function normalizeRoomId(value: string) {
-  const normalized = value.trim().toUpperCase();
+  let normalized = value.trim().toUpperCase();
   if (!normalized) return null;
+  if (/^G\d{6}$/.test(normalized)) {
+    normalized = `G-${normalized.slice(1)}`;
+  }
   if (!/^G-\d{6}$/.test(normalized) && !/^\d{6}$/.test(normalized)) {
     return null;
   }
