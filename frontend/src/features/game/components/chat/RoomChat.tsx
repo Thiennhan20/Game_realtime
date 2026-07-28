@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
+import { ArrowDown, MessageSquare, Send } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { ChatMessage } from '../../types';
@@ -29,16 +29,57 @@ export function RoomChat({
   onSubmit,
 }: RoomChatProps) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+  const [showNewMessageButton, setShowNewMessageButton] = useState(false);
+  const prevMessagesLengthRef = useRef(messages.length);
+
+  const handleScroll = () => {
+    if (!messagesRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesRef.current;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 60;
+    setIsUserAtBottom(atBottom);
+    if (atBottom) {
+      setShowNewMessageButton(false);
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTo({
+        top: messagesRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+      setShowNewMessageButton(false);
+      setIsUserAtBottom(true);
+    }
+  };
 
   useEffect(() => {
-    if (messagesRef.current) {
+    const isNew = messages.length > prevMessagesLengthRef.current;
+    prevMessagesLengthRef.current = messages.length;
+
+    if (!messagesRef.current || messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    const sentByMe = lastMessage?.username === currentUsername;
+
+    if (sentByMe || isUserAtBottom) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+      setShowNewMessageButton(false);
+    } else if (isNew) {
+      setShowNewMessageButton(true);
+    }
+  }, [messages, currentUsername, isUserAtBottom]);
+
+  useEffect(() => {
+    if (isActive && messagesRef.current && isUserAtBottom) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
-  }, [isActive, messages.length]);
+  }, [isActive, isUserAtBottom]);
 
   return (
     <div
-      className={`w-full lg:w-80 lg:flex-none bg-slate-900/70 border border-slate-800/80 rounded-2xl flex-col flex-1 min-h-[450px] lg:h-auto overflow-hidden ${className}`}
+      className={`relative w-full lg:w-80 lg:flex-none bg-slate-900/70 border border-slate-800/80 rounded-2xl flex flex-col h-[calc(100dvh-8rem)] max-h-[600px] lg:h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-6rem)] overflow-hidden ${className}`}
     >
       <div className="p-4 border-b border-slate-800 flex items-center space-x-2 shrink-0 bg-slate-950/20">
         <MessageSquare size={16} className="text-purple-400" />
@@ -49,6 +90,7 @@ export function RoomChat({
 
       <div
         ref={messagesRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 min-h-0 bg-slate-950/10"
       >
         {messages.map((message, index) => {
@@ -87,6 +129,17 @@ export function RoomChat({
           </div>
         )}
       </div>
+
+      {showNewMessageButton && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-xl border border-purple-400/40 flex items-center space-x-1.5 transition-all duration-200 animate-bounce cursor-pointer z-20"
+        >
+          <ArrowDown size={14} />
+          <span>{t('newMessages')}</span>
+        </button>
+      )}
 
       <form
         onSubmit={onSubmit}

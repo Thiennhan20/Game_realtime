@@ -74,15 +74,21 @@ export default function GameClient() {
         onDismissOpponent={() => game.setOpponentTempDisconnected(null)}
       />
 
-      {game.room && (
-        <MobileRoomTabs
-          activeTab={activeMobileTab}
-          t={game.t}
-          onChange={setActiveMobileTab}
-        />
-      )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0">
+        {game.room && (
+          <MobileRoomTabs
+            activeTab={activeMobileTab}
+            unreadCount={activeMobileTab === 'arena' ? game.unreadChatCount : 0}
+            t={game.t}
+            onChange={(tab) => {
+              setActiveMobileTab(tab);
+              if (tab === 'chat') {
+                game.setUnreadChatCount(0);
+              }
+            }}
+          />
+        )}
         <div
           className={`flex-1 flex flex-col min-w-0 min-h-0 ${
             game.room && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'

@@ -24,9 +24,25 @@ export function getSocketUrl() {
   return typeof window !== 'undefined' ? window.location.origin : '';
 }
 
-export function getMainSiteUrl(path = '') {
+export function getMainSiteUrl(path = '', locale?: Locale) {
   const baseUrl = isLocalHost() ? 'http://localhost:3000' : 'https://moviesaw.vercel.app';
-  return `${baseUrl}${path}`;
+  const url = `${baseUrl}${path}`;
+
+  let activeLocale = locale;
+  if (!activeLocale && typeof window !== 'undefined') {
+    const stored = localStorage.getItem('game_locale');
+    if (stored === 'vi' || stored === 'en') {
+      activeLocale = stored as Locale;
+    }
+  }
+
+  if (activeLocale) {
+    const separator = url.includes('?') ? '&' : '?';
+    const langFull = activeLocale === 'vi' ? 'vi-VN' : 'en-US';
+    return `${url}${separator}lang=${langFull}&locale=${activeLocale}`;
+  }
+
+  return url;
 }
 
 export function navigateTopWindow(targetUrl: string) {

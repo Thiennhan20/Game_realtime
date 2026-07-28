@@ -31,6 +31,7 @@ export function useGameController() {
   const [guessInput, setGuessInput] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [opponentRpsSubmitted, setOpponentRpsSubmitted] = useState(false);
   const [opponentSecretSet, setOpponentSecretSet] = useState(false);
   const [opponentWantsPlayAgain, setOpponentWantsPlayAgain] = useState(false);
@@ -50,11 +51,16 @@ export function useGameController() {
 
   const socketRef = useRef<Socket | null>(null);
   const localeRef = useRef(locale);
+  const userRef = useRef(user);
   const previousRoomStateRef = useRef<string | null>(null);
 
   useEffect(() => {
     localeRef.current = locale;
   }, [locale]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const roomState = room?.state;
 
@@ -285,6 +291,9 @@ export function useGameController() {
 
     socket.on('CHAT_MESSAGE', (message: ChatMessage) => {
       setChatMessages((messages) => [...messages, message]);
+      if (userRef.current && message.username !== userRef.current.name) {
+        setUnreadChatCount((count) => count + 1);
+      }
     });
 
     socket.on('GAME_ERROR', (message: string) => {
@@ -447,6 +456,8 @@ export function useGameController() {
     chatInput,
     setChatInput,
     chatMessages,
+    unreadChatCount,
+    setUnreadChatCount,
     opponentRpsSubmitted,
     opponentSecretSet,
     opponentWantsPlayAgain,

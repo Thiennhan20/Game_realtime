@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Clock, Trophy, Target, Swords, ChevronDown, ChevronUp, Calendar, Users } from 'lucide-react';
+import { getMainSiteUrl, navigateTopWindow } from '@/features/game/utils';
 
 interface Match {
   _id: string;
@@ -274,8 +275,7 @@ function HistoryPageContent() {
                     <button
                       onClick={() => {
                         setShowUserDropdown(false);
-                        const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
-                        window.location.href = isLocal ? 'http://localhost:3000/profile' : 'https://moviesaw.vercel.app/profile';
+                        navigateTopWindow(getMainSiteUrl('/profile', locale));
                       }}
                       className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
                     >
