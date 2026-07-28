@@ -949,7 +949,7 @@ io.on('connection', (socket) => {
 function getJoinableRooms() {
   const list = [];
   rooms.forEach((room) => {
-    if (!room.isAiRoom && room.state === 'WAITING_FOR_PLAYERS' && room.players && room.players.length === 1) {
+    if (!room.isAiRoom && room.state !== 'FINISHED' && room.players && room.players.length > 0 && room.players.length < 2) {
       list.push({
         roomId: room.roomId,
         hostName: room.players[0]?.username || 'Host',
