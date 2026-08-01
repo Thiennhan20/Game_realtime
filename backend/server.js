@@ -1147,8 +1147,8 @@ io.on('connection', (socket) => {
       socket.emit('GAME_ERROR', 'Room is already full or in play.');
       return;
     }
-    if (room.players.some(player => player.disconnectedAt || player.hasLeft)) {
-      socket.emit('GAME_ERROR', 'Room host is reconnecting. Please try again shortly.');
+    if (room.players.some(player => player.hasLeft)) {
+      socket.emit('GAME_ERROR', 'Room host has left the room.');
       return;
     }
     // Prevent duplicate joining
@@ -1156,6 +1156,11 @@ io.on('connection', (socket) => {
       socket.emit('GAME_ERROR', 'You have already joined this room.');
       return;
     }
+
+    // Clear disconnectedAt flag if host was temporarily marked as disconnected
+    room.players.forEach(p => {
+      p.disconnectedAt = null;
+    });
 
     room.players.push({
       userId: socket.userId,

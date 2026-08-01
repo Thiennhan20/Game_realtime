@@ -347,18 +347,9 @@ export function useGameController() {
 
     // 1. Bind event listeners FIRST so no server events are missed
     socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
-      setLobbyRooms((prev) => {
-        if (Array.isArray(roomsList)) {
-          if (roomsList.length === 0 && prev.length > 0) {
-            return prev; // Protect valid existing rooms from being wiped by temporary empty socket pulses
-          }
-          if (isSameLobbyRooms(prev, roomsList)) {
-            return prev;
-          }
-          return roomsList;
-        }
-        return prev;
-      });
+      if (Array.isArray(roomsList)) {
+        setLobbyRooms((prev) => (isSameLobbyRooms(prev, roomsList) ? prev : roomsList));
+      }
       setIsRefreshingLobby(false);
     });
 
