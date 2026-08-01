@@ -63,7 +63,7 @@ export function ModeSelector({
           placeholder={t('enterRoomId')}
           value={roomId}
           onChange={(event) => onRoomIdChange(event.target.value)}
-          className={`flex-1 w-full bg-slate-950 border px-4 py-2.5 rounded-xl text-center text-sm sm:text-base font-mono font-bold placeholder:font-sans placeholder:text-xs sm:placeholder:text-sm placeholder-slate-500 uppercase min-w-0 transition-all duration-300 ${
+          className={`flex-1 w-full bg-slate-950 border px-4 py-2.5 rounded-xl text-center text-base font-mono font-bold placeholder:font-sans placeholder:text-xs sm:placeholder:text-sm placeholder-slate-500 uppercase min-w-0 transition-all duration-300 ${
             !roomId || roomId.trim() === ''
               ? 'border-purple-500/70 shadow-[0_0_18px_rgba(168,85,247,0.3)] ring-2 ring-purple-500/30 animate-pulse hover:border-purple-400'
               : 'border-purple-500/80 shadow-[0_0_15px_rgba(168,85,247,0.25)]'

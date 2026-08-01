@@ -298,7 +298,7 @@ function LeaderboardPageContent() {
               placeholder={locale === 'vi' ? 'Tìm người chơi...' : 'Search player...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-amber-500 focus:outline-none pl-9 pr-3 py-1.5 rounded-xl text-xs placeholder-slate-600 text-white"
+              className="w-full bg-slate-950 border border-slate-800 focus:border-amber-500 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-base sm:text-xs placeholder-slate-600 text-white shadow-inner"
             />
           </div>
         </div>
@@ -515,7 +515,7 @@ function LeaderboardPageContent() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
+                  <table className="w-full min-w-[540px] text-left text-xs text-slate-300">
                     <thead className="bg-slate-950/80 text-[10px] text-slate-400 uppercase font-bold tracking-wider border-b border-slate-800">
                       <tr>
                         <th className="py-3 px-4 text-center">{locale === 'vi' ? 'HẠNG' : 'RANK'}</th>
@@ -528,7 +528,7 @@ function LeaderboardPageContent() {
                     <tbody className="divide-y divide-slate-805">
                       {tableDisplayList.map((item) => (
                         <tr key={item.userId} className="hover:bg-slate-800/40 transition duration-150">
-                          <td className="py-3.5 px-4 text-center font-mono font-extrabold text-sm">
+                          <td className="py-3.5 px-4 text-center font-mono font-extrabold text-sm whitespace-nowrap">
                             {item.rank === 1 ? <span className="text-amber-400">#1</span> :
                              item.rank === 2 ? <span className="text-slate-300">#2</span> :
                              item.rank === 3 ? <span className="text-amber-600">#3</span> :
@@ -551,12 +551,12 @@ function LeaderboardPageContent() {
                               </div>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-bold text-xs">
+                          <td className="py-3.5 px-4 text-center font-mono font-bold text-xs whitespace-nowrap">
                             <span className="text-emerald-400">{item.wins}W</span>
                             <span className="mx-1 text-slate-600 font-normal">-</span>
                             <span className="text-rose-400">{item.losses}L</span>
                           </td>
-                          <td className="py-3.5 px-4 text-center">
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center space-x-2">
                               <div className="w-16 bg-slate-950 rounded-full h-1.5 overflow-hidden hidden sm:block">
                                 <div className="bg-gradient-to-r from-purple-500 to-amber-400 h-full rounded-full" style={{ width: `${item.winRate}%` }} />
@@ -564,7 +564,7 @@ function LeaderboardPageContent() {
                               <span className="font-mono font-bold text-amber-300">{item.winRate}%</span>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-right font-mono text-xs">
+                          <td className="py-3.5 px-4 text-right font-mono text-xs whitespace-nowrap">
                             <div className="font-extrabold text-amber-400 text-sm">{item.rating} Rating</div>
                             <div className="text-[10px] text-slate-500 font-medium">Peak: {item.highestRating || item.rating}</div>
                           </td>
