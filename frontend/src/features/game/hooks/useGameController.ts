@@ -254,10 +254,10 @@ export function useGameController() {
       }
     }
 
-    // 2. Fetch fresh rooms from /api/rooms
+    // 2. Fetch fresh rooms from /api/rooms (no-store to bypass browser HTTP cache)
     const prefetchRooms = async () => {
       try {
-        const response = await fetch(getGameApiUrl('/api/rooms'));
+        const response = await fetch(getGameApiUrl('/api/rooms'), { cache: 'no-store' });
         if (response.ok) {
           const data = await response.json();
           if (active && Array.isArray(data?.rooms)) {
@@ -625,7 +625,7 @@ export function useGameController() {
       socketRef.current.emit('GET_LOBBY_ROOMS');
     }
     try {
-      const response = await fetch(getGameApiUrl('/api/rooms'));
+      const response = await fetch(getGameApiUrl('/api/rooms'), { cache: 'no-store' });
       if (response.ok) {
         const data: unknown = await response.json();
         if (data && typeof data === 'object' && 'rooms' in data && Array.isArray((data as { rooms: unknown }).rooms)) {
