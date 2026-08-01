@@ -330,6 +330,19 @@ export function useGameController() {
       }
     }, 1000);
 
+    // 1. Bind event listeners FIRST so no server events are missed
+    socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
+      setLobbyRooms(roomsList);
+      setIsRefreshingLobby(false);
+    });
+
+    socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
+      console.log('Successfully reconnected to active room:', reconnectedRoom.roomId);
+      setRoom(reconnectedRoom);
+      setErrorMsg(null);
+      setIsReconnecting(false);
+    });
+
     socket.on('connect', () => {
       console.log('Connected to socket server');
       clearTimeout(connectionTimer);
@@ -338,6 +351,12 @@ export function useGameController() {
       socket.emit('GET_LOBBY_ROOMS');
       socket.emit('CHECK_ACTIVE_ROOM');
     });
+
+    // If socket was already connected on mount, request rooms immediately
+    if (socket.connected) {
+      socket.emit('GET_LOBBY_ROOMS');
+      socket.emit('CHECK_ACTIVE_ROOM');
+    }
 
     socket.on('connect_error', (error) => {
       console.warn('Socket connection error:', error.message);
@@ -354,18 +373,6 @@ export function useGameController() {
       console.error('Socket reconnection failed permanently');
       clearTimeout(connectionTimer);
       setErrorMsg(translate()('cannotConnect'));
-      setIsReconnecting(false);
-    });
-
-    socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
-      setLobbyRooms(roomsList);
-      setIsRefreshingLobby(false);
-    });
-
-    socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
-      console.log('Successfully reconnected to active room:', reconnectedRoom.roomId);
-      setRoom(reconnectedRoom);
-      setErrorMsg(null);
       setIsReconnecting(false);
     });
 
@@ -611,11 +618,25 @@ export function useGameController() {
     socketRef.current?.emit('JOIN_ROOM', normalizedRoomId);
   };
 
-  const handleRefreshLobby = () => {
-    if (!socketRef.current || isRefreshingLobby) return;
+  const handleRefreshLobby = async () => {
+    if (isRefreshingLobby) return;
     setIsRefreshingLobby(true);
-    socketRef.current.emit('GET_LOBBY_ROOMS');
-    setTimeout(() => setIsRefreshingLobby(false), 750);
+    if (socketRef.current) {
+      socketRef.current.emit('GET_LOBBY_ROOMS');
+    }
+    try {
+      const response = await fetch(getGameApiUrl('/api/rooms'));
+      if (response.ok) {
+        const data: unknown = await response.json();
+        if (data && typeof data === 'object' && 'rooms' in data && Array.isArray((data as { rooms: unknown }).rooms)) {
+          setLobbyRooms((data as { rooms: LobbyRoom[] }).rooms);
+        }
+      }
+    } catch {
+      // Ignore manual refresh REST error
+    } finally {
+      setTimeout(() => setIsRefreshingLobby(false), 500);
+    }
   };
 
   const handleSetSecret = (event: FormEvent<HTMLFormElement>) => {
