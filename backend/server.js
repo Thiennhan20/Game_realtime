@@ -1862,15 +1862,11 @@ io.on('connection', (socket) => {
 });
 
 // Helper to get rooms waiting for players (Lobby view)
-// NOTE: We intentionally do NOT filter out rooms whose host has a temporary
-// disconnectedAt timestamp (tab switch, mobile network hiccup). As long as
-// the host hasn't explicitly left (hasLeft), the room stays visible so other
-// players can join immediately.
 function getJoinableRooms() {
   const list = [];
   rooms.forEach((room) => {
-    const hasActiveHost = room.players?.some(
-      player => !player.hasLeft
+    const hasOnlyConnectedPlayers = room.players?.every(
+      player => !player.disconnectedAt && !player.hasLeft
     );
     if (
       !room.isAiRoom
@@ -1878,7 +1874,7 @@ function getJoinableRooms() {
       && room.players
       && room.players.length > 0
       && room.players.length < 2
-      && hasActiveHost
+      && hasOnlyConnectedPlayers
     ) {
       list.push({
         roomId: room.roomId,
