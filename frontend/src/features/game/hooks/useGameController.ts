@@ -280,8 +280,16 @@ export function useGameController() {
 
     const translate = () => createTranslator(localeRef.current);
 
+    setIsRefreshingLobby(true);
+    const connectionTimer = setTimeout(() => {
+      if (socketRef.current && !socketRef.current.connected) {
+        setIsReconnecting(true);
+      }
+    }, 1000);
+
     socket.on('connect', () => {
       console.log('Connected to socket server');
+      clearTimeout(connectionTimer);
       setErrorMsg(null);
       setIsReconnecting(false);
       socket.emit('GET_LOBBY_ROOMS');
@@ -290,6 +298,7 @@ export function useGameController() {
 
     socket.on('connect_error', (error) => {
       console.warn('Socket connection error:', error.message);
+      clearTimeout(connectionTimer);
       if (error.message?.includes('AUTH_ERROR')) {
         setAuthError('INVALID_TOKEN');
         setErrorMsg(translate()('authRequired'));
@@ -300,12 +309,14 @@ export function useGameController() {
 
     socket.io.on('reconnect_failed', () => {
       console.error('Socket reconnection failed permanently');
+      clearTimeout(connectionTimer);
       setErrorMsg(translate()('cannotConnect'));
       setIsReconnecting(false);
     });
 
     socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
       setLobbyRooms(roomsList);
+      setIsRefreshingLobby(false);
     });
 
     socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
@@ -452,6 +463,13 @@ export function useGameController() {
       setRoom(data.roomState);
       setErrorMsg(translate()('playerLeft').replace('{username}', data.username));
       setSecretReveal(null);
+      setOpponentWantsPlayAgain(true);
+    });
+
+    socket.on('PLAYER_DISCONNECTED', (data: { username: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      setErrorMsg(translate()('opponentLeft').replace('{username}', data.username));
+      setSecretReveal(null);
       setOpponentWantsPlayAgain(false);
       setOpponentTempDisconnected(null);
       setShowMatchModal(false);
@@ -459,32 +477,27 @@ export function useGameController() {
       setTimeout(() => setErrorMsg(null), 5000);
     });
 
-    socket.on(
-      'PLAYER_TEMPORARILY_DISCONNECTED',
-      (data: { username: string; roomState: Room }) => {
-        setRoom(data.roomState);
-        setOpponentTempDisconnected(data.username);
-      },
-    );
+    socket.on('PLAYER_LEFT', (data: { username: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      setErrorMsg(translate()('playerLeft').replace('{username}', data.username));
+      setSecretReveal(null);
+      setOpponentWantsPlayAgain(false);
+      setOpponentTempDisconnected(null);
+      setShowMatchModal(false);
+      setShowGuessHistoryModal(false);
+      setTimeout(() => setErrorMsg(null), 5000);
+    });
+
+    socket.on('PLAYER_TEMPORARILY_DISCONNECTED', (data: { username: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      setOpponentTempDisconnected(data.username);
+    });
 
     socket.on('OPPONENT_RECONNECTED', (data: { username: string; roomState: Room }) => {
       setRoom(data.roomState);
       setOpponentTempDisconnected(null);
       setErrorMsg(translate()('opponentReconnected').replace('{username}', data.username));
       setTimeout(() => setErrorMsg(null), 3000);
-    });
-
-    socket.on('RECONNECTED_TO_ROOM', (roomState: Room) => {
-      setRoom(roomState);
-      setIsReconnecting(false);
-      setErrorMsg(null);
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
-      if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
-        setIsReconnecting(true);
-      }
     });
 
     socket.on('CHAT_MESSAGE', (message: ChatMessage) => {
@@ -508,6 +521,7 @@ export function useGameController() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      clearTimeout(connectionTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.disconnect();
       if (socketRef.current === socket) {

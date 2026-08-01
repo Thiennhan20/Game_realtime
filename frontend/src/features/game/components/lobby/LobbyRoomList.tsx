@@ -60,9 +60,20 @@ export function LobbyRoomList({
       </div>
 
       {rooms.length === 0 ? (
-        <div className="text-center py-4 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
-          {t('noRooms')}
-        </div>
+        isRefreshing ? (
+          <div className="py-4 border border-purple-500/20 bg-slate-900/40 rounded-xl text-purple-300 text-xs sm:text-sm flex items-center justify-center space-x-2 animate-pulse">
+            <RefreshCw size={14} className="animate-spin text-purple-400 shrink-0" />
+            <span>
+              {locale === 'vi'
+                ? 'Đang kết nối & tải danh sách phòng...'
+                : 'Connecting & loading lobby rooms...'}
+            </span>
+          </div>
+        ) : (
+          <div className="text-center py-4 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
+            {t('noRooms')}
+          </div>
+        )
       ) : (
         <div className="space-y-2">
           {rooms.slice(0, 2).map((room) => (
