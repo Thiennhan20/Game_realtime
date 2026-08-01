@@ -233,11 +233,32 @@ export function useGameController() {
     return () => window.clearTimeout(timeoutId);
   }, [room, user]);
 
+  // --- Fast REST Pre-fetch for Instant Room List Display ---
+  useEffect(() => {
+    let active = true;
+    const prefetchRooms = async () => {
+      try {
+        const response = await fetch(getGameApiUrl('/api/rooms'));
+        if (response.ok) {
+          const data = await response.json();
+          if (active && Array.isArray(data?.rooms)) {
+            setLobbyRooms(data.rooms);
+            setIsRefreshingLobby(false);
+          }
+        }
+      } catch {
+        // Ignore prefetch error
+      }
+    };
+    void prefetchRooms();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const userId = user?.id;
 
   useEffect(() => {
-    if (!userId) return;
-
     let token: string | null = null;
     if (typeof window !== 'undefined') {
       try {
@@ -254,6 +275,9 @@ export function useGameController() {
         // Ignore storage error
       }
     }
+
+    if (!token && !userId) return;
+
     if (token) {
       try {
         localStorage.setItem('token', token);

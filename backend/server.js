@@ -2065,6 +2065,10 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
+app.get('/api/rooms', (req, res) => {
+  res.json({ rooms: getJoinableRooms() });
+});
+
 app.get('/', (req, res) => {
   res.send('Game Backend is running.');
 });
