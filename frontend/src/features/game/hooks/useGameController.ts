@@ -64,12 +64,27 @@ function normalizeGameProfile(value: unknown): GameProfile {
   };
 }
 
+function isSameLobbyRooms(a: LobbyRoom[], b: LobbyRoom[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i]?.roomId !== b[i]?.roomId ||
+      a[i]?.playerCount !== b[i]?.playerCount ||
+      a[i]?.state !== b[i]?.state ||
+      a[i]?.hostName !== b[i]?.hostName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function useGameController() {
   const { locale, mounted, t, toggleLocale } = useGameLocale();
   const { user, loadingUser, authError, setAuthError } = useAuthProfile();
 
   const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>([]);
-  const [isRefreshingLobby, setIsRefreshingLobby] = useState(false);
+  const [isRefreshingLobby, setIsRefreshingLobby] = useState(true);
   const [room, setRoom] = useState<Room | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [secretInput, setSecretInput] = useState('');
@@ -332,14 +347,18 @@ export function useGameController() {
 
     // 1. Bind event listeners FIRST so no server events are missed
     socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
-      setLobbyRooms(roomsList);
+      setLobbyRooms((prev) => (isSameLobbyRooms(prev, roomsList) ? prev : roomsList));
       setIsRefreshingLobby(false);
     });
 
     socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
       console.log('Successfully reconnected to active room:', reconnectedRoom.roomId);
-      setRoom(reconnectedRoom);
-      setErrorMsg(null);
+      if (reconnectedRoom && reconnectedRoom.state !== 'FINISHED') {
+        setRoom(reconnectedRoom);
+        setErrorMsg(null);
+      } else {
+        setRoom(null);
+      }
       setIsReconnecting(false);
     });
 
@@ -579,6 +598,40 @@ export function useGameController() {
       }
     };
   }, [loadGameProfile, setAuthError, userId]);
+
+  // Instant REST fetch of /api/rooms on mount & dual-sync with 1-second auto-check
+  useEffect(() => {
+    if (room) return;
+    let isMounted = true;
+    const fetchRooms = () => {
+      fetch(getGameApiUrl(`/api/rooms?t=${Date.now()}`), { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data: unknown) => {
+          if (!isMounted) return;
+          if (data && typeof data === 'object' && 'rooms' in data && Array.isArray((data as { rooms: unknown }).rooms)) {
+            const newRooms = (data as { rooms: LobbyRoom[] }).rooms;
+            setLobbyRooms((prev) => (isSameLobbyRooms(prev, newRooms) ? prev : newRooms));
+            setIsRefreshingLobby(false);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchRooms(); // Instant fetch on mount
+
+    const interval = setInterval(() => {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('GET_LOBBY_ROOMS');
+      } else {
+        fetchRooms();
+      }
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [room]);
 
   const myPlayerIndex = useMemo(
     () => (room && user ? room.players.findIndex((player) => player.userId === user.id) : -1),

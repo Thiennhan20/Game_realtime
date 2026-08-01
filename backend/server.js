@@ -208,12 +208,10 @@ function persistRoomToRedis(roomId, room) {
   );
 }
 
-// Delete room from Redis
+// Delete room from Redis (Immediate deletion, bypass queue)
 function deleteRoomFromRedis(roomId) {
-  enqueueRoomPersistence(
-    roomId,
-    () => redis.del(`${REDIS_KEY_PREFIX}${roomId}`)
-  )
+  roomPersistenceQueues.delete(roomId);
+  redis.del(`${REDIS_KEY_PREFIX}${roomId}`)
     .then(() => console.log(`[Redis] Deleted room ${roomId}`))
     .catch(err => console.error(`[Redis] Failed to delete room ${roomId}:`, err.message));
 }
