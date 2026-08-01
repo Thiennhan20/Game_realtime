@@ -1861,27 +1861,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Helper to extract lobby-safe room summary from a full room object
-function toLobbySummary(room) {
-  return {
-    roomId: room.roomId,
-    hostName: room.players[0]?.username || 'Host',
-    hostAvatar: room.players[0]?.avatar || '',
-    playerCount: room.players.length,
-    maxPlayers: 2,
-    state: room.state,
-    createdAt: room.createdAt || Date.now()
-  };
-}
-
-// Check if a room qualifies as joinable for the lobby view
-function isJoinableRoom(room) {
-  if (!room || room.isAiRoom || room.state === 'FINISHED') return false;
-  if (!room.players || room.players.length === 0 || room.players.length >= 2) return false;
-  return room.players.some(player => !player.hasLeft);
-}
-
-// Helper to get rooms waiting for players from in-memory Map (Lobby view)
+// Helper to get rooms waiting for players (Lobby view)
 // NOTE: We intentionally do NOT filter out rooms whose host has a temporary
 // disconnectedAt timestamp (tab switch, mobile network hiccup). As long as
 // the host hasn't explicitly left (hasLeft), the room stays visible so other
@@ -1889,61 +1869,30 @@ function isJoinableRoom(room) {
 function getJoinableRooms() {
   const list = [];
   rooms.forEach((room) => {
-    if (isJoinableRoom(room)) {
-      list.push(toLobbySummary(room));
+    const hasActiveHost = room.players?.some(
+      player => !player.hasLeft
+    );
+    if (
+      !room.isAiRoom
+      && room.state !== 'FINISHED'
+      && room.players
+      && room.players.length > 0
+      && room.players.length < 2
+      && hasActiveHost
+    ) {
+      list.push({
+        roomId: room.roomId,
+        hostName: room.players[0]?.username || 'Host',
+        hostAvatar: room.players[0]?.avatar || '',
+        playerCount: room.players.length,
+        maxPlayers: 2,
+        state: room.state,
+        createdAt: room.createdAt || Date.now()
+      });
     }
   });
   list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return list;
-}
-
-// Enhanced version: merge in-memory rooms with Redis-backed rooms.
-// This guarantees ALL rooms are visible even if there is a desync between
-// the in-memory Map and Redis (e.g. after a deploy, reconnect, or race condition).
-async function getJoinableRoomsFromRedis() {
-  try {
-    // 1. Start with in-memory rooms (fastest, most up-to-date for this instance)
-    const list = getJoinableRooms();
-    const knownRoomIds = new Set(list.map(r => r.roomId));
-
-    // 2. Scan Redis for any rooms we might not have in memory
-    if (!process.env.UPSTASH_REDIS_REST_URL) return list;
-
-    let cursor = '0';
-    let allKeys = [];
-    do {
-      const result = await redis.scan(cursor, { match: `${REDIS_KEY_PREFIX}*`, count: 100 });
-      cursor = String(result[0]);
-      allKeys = allKeys.concat(result[1]);
-    } while (cursor !== '0');
-
-    // 3. For each Redis room not in memory, check if it's joinable
-    for (const key of allKeys) {
-      const roomId = key.replace(REDIS_KEY_PREFIX, '');
-      if (knownRoomIds.has(roomId)) continue;
-
-      try {
-        const data = await redis.get(key);
-        if (!data) continue;
-        const room = typeof data === 'string' ? JSON.parse(data) : data;
-
-        if (isJoinableRoom(room)) {
-          list.push(toLobbySummary(room));
-          // Also restore this room into memory so socket events work for it
-          rooms.set(roomId, room);
-          console.log(`[Redis→RAM] Restored joinable room ${roomId} from Redis into memory.`);
-        }
-      } catch (parseErr) {
-        console.warn(`[Redis] Could not parse room ${roomId}:`, parseErr.message);
-      }
-    }
-
-    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    return list;
-  } catch (err) {
-    console.error('[Redis] getJoinableRoomsFromRedis failed, falling back to memory:', err.message);
-    return getJoinableRooms();
-  }
 }
 
 app.get('/api/game-profile', async (req, res) => {
@@ -2120,14 +2069,8 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
-app.get('/api/rooms', async (req, res) => {
-  try {
-    const rooms = await getJoinableRoomsFromRedis();
-    res.json({ rooms });
-  } catch (err) {
-    console.error('[API] /api/rooms error:', err.message);
-    res.json({ rooms: getJoinableRooms() });
-  }
+app.get('/api/rooms', (req, res) => {
+  res.json({ rooms: getJoinableRooms() });
 });
 
 app.get('/', (req, res) => {

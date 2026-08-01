@@ -275,35 +275,6 @@ export function useGameController() {
     };
   }, []);
 
-  // --- Automatic Lobby Polling (every 5s) ---
-  // Ensures rooms always show up even if socket events are missed or delayed.
-  // Polling stops automatically when the user enters a room.
-  useEffect(() => {
-    if (room) return; // Don't poll when user is inside a room
-
-    let active = true;
-    const pollRooms = async () => {
-      try {
-        const response = await fetch(getGameApiUrl('/api/rooms'));
-        if (response.ok) {
-          const data = await response.json();
-          if (active && Array.isArray(data?.rooms)) {
-            setLobbyRooms(data.rooms);
-            setIsRefreshingLobby(false);
-          }
-        }
-      } catch {
-        // Ignore polling error
-      }
-    };
-
-    const interval = setInterval(pollRooms, 5000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [room]);
-
   const userId = user?.id;
 
   useEffect(() => {
