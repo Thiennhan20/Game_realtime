@@ -8,7 +8,19 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const { Redis } = require('@upstash/redis');
+const User = require('./models/User');
 const GameHistory = require('./models/GameHistory');
+const GameProfile = require('./models/GameProfile');
+const {
+  getGameProfileSummary,
+  settlePvpMatch
+} = require('./services/matchSettlement');
+const {
+  settleAbandonedPvpMatch
+} = require('./services/abandonedMatchSettlement');
+const { getRank } = require('./services/rating');
+const { settleAiMatch } = require('./services/aiMatchSettlement');
+const { calculateUserAchievements } = require('./services/achievements');
 const { getNextAiGuess } = require('./aiSolver');
 
 const app = express();
@@ -40,6 +52,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const GAME_SECRET_KEY = process.env.GAME_SECRET_KEY;
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.FLY_APP_NAME;
 const MOVIE_API_URL = process.env.MOVIE_API_URL || (isProduction ? 'https://server-nextjs-firm.onrender.com/api' : 'http://localhost:3001/api');
+let progressionReady = false;
 
 // --- Cryptography Utils (AES-256-GCM) ---
 function encryptSecret(text) {
@@ -109,31 +122,212 @@ const redis = new Redis({
 const REDIS_KEY_PREFIX = 'game:room:';
 const ROOM_TTL_SECONDS = 30 * 60; // 30 minutes
 
+// --- Redis Cache Layer (Leaderboard & GameProfile) ---
+const LEADERBOARD_CACHE_PREFIX = 'game:cache:leaderboard:';
+const PROFILE_CACHE_PREFIX = 'game:cache:profile:';
+const LEADERBOARD_CACHE_TTL = 60; // 60 seconds
+const PROFILE_CACHE_TTL = 120; // 120 seconds
+
+async function getCachedJson(key) {
+  try {
+    if (!process.env.UPSTASH_REDIS_REST_URL) return null;
+    const raw = await redis.get(key);
+    if (!raw) return null;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch (err) {
+    console.error(`[Redis Cache GET Error] ${key}:`, err.message);
+    return null;
+  }
+}
+
+async function setCachedJson(key, value, ttlSeconds) {
+  try {
+    if (!process.env.UPSTASH_REDIS_REST_URL) return;
+    await redis.set(key, JSON.stringify(value), { ex: ttlSeconds });
+  } catch (err) {
+    console.error(`[Redis Cache SET Error] ${key}:`, err.message);
+  }
+}
+
+async function invalidateUserAndLeaderboardCache(userId) {
+  try {
+    if (!process.env.UPSTASH_REDIS_REST_URL) return;
+    const deletePromises = [
+      redis.del(`${LEADERBOARD_CACHE_PREFIX}3`),
+      redis.del(`${LEADERBOARD_CACHE_PREFIX}4`),
+      redis.del(`${LEADERBOARD_CACHE_PREFIX}50`),
+      redis.del(`${LEADERBOARD_CACHE_PREFIX}100`),
+    ];
+    if (userId) {
+      deletePromises.push(redis.del(`${PROFILE_CACHE_PREFIX}${userId}`));
+    }
+    await Promise.all(deletePromises);
+  } catch (err) {
+    console.error(`[Redis Cache Invalidate Error]`, err.message);
+  }
+}
+
 // --- Game Rooms State (Hybrid: RAM + Redis) ---
 // roomId -> RoomObject (in-memory for speed)
 const rooms = new Map();
+const roomPersistenceQueues = new Map();
+const abandonedSettlementPromises = new Map();
+
+function enqueueRoomPersistence(roomId, operation) {
+  const previous = roomPersistenceQueues.get(roomId) || Promise.resolve();
+  const queued = previous
+    .catch(() => undefined)
+    .then(operation);
+
+  roomPersistenceQueues.set(roomId, queued);
+  const cleanup = () => {
+    if (roomPersistenceQueues.get(roomId) === queued) {
+      roomPersistenceQueues.delete(roomId);
+    }
+  };
+  queued.then(cleanup, cleanup);
+  return queued;
+}
 
 // Sync room data to Redis (background, non-blocking)
 function syncRoomToRedis(roomId, room) {
-  redis.set(`${REDIS_KEY_PREFIX}${roomId}`, JSON.stringify(room), { ex: ROOM_TTL_SECONDS })
+  const snapshot = JSON.stringify(room);
+  enqueueRoomPersistence(
+    roomId,
+    () => redis.set(`${REDIS_KEY_PREFIX}${roomId}`, snapshot, { ex: ROOM_TTL_SECONDS })
+  )
     .then(() => console.log(`[Redis] Synced room ${roomId}`))
     .catch(err => console.error(`[Redis] Failed to sync room ${roomId}:`, err.message));
 }
 
+function persistRoomToRedis(roomId, room) {
+  const snapshot = JSON.stringify(room);
+  return enqueueRoomPersistence(
+    roomId,
+    () => redis.set(`${REDIS_KEY_PREFIX}${roomId}`, snapshot, { ex: ROOM_TTL_SECONDS })
+  );
+}
+
 // Delete room from Redis
 function deleteRoomFromRedis(roomId) {
-  redis.del(`${REDIS_KEY_PREFIX}${roomId}`)
+  enqueueRoomPersistence(
+    roomId,
+    () => redis.del(`${REDIS_KEY_PREFIX}${roomId}`)
+  )
     .then(() => console.log(`[Redis] Deleted room ${roomId}`))
     .catch(err => console.error(`[Redis] Failed to delete room ${roomId}:`, err.message));
 }
 
 // Refresh TTL for active rooms (reset 30-min timer)
 function refreshRoomTTL(roomId) {
-  redis.expire(`${REDIS_KEY_PREFIX}${roomId}`, ROOM_TTL_SECONDS)
+  enqueueRoomPersistence(
+    roomId,
+    () => redis.expire(`${REDIS_KEY_PREFIX}${roomId}`, ROOM_TTL_SECONDS)
+  )
     .catch(err => console.error(`[Redis] Failed to refresh TTL for ${roomId}:`, err.message));
 }
 
 // Load all rooms from Redis into RAM on server startup
+function getAbandonedHistoryReason(room) {
+  return room.abandonReason || 'both_players_disconnect_timeout';
+}
+
+async function settleAbandonedRoomHistory(room) {
+  if (!room?.matchId) {
+    throw new Error('Abandoned PvP history requires a stable matchId.');
+  }
+
+  const matchId = room.matchId;
+  const existingPromise = abandonedSettlementPromises.get(matchId);
+  if (existingPromise) return existingPromise;
+
+  const settlementPromise = settleAbandonedPvpMatch(room, {
+    status: 'abandoned',
+    endReason: getAbandonedHistoryReason(room)
+  }).finally(() => {
+    if (abandonedSettlementPromises.get(matchId) === settlementPromise) {
+      abandonedSettlementPromises.delete(matchId);
+    }
+  });
+
+  abandonedSettlementPromises.set(matchId, settlementPromise);
+  return settlementPromise;
+}
+
+function scheduleAbandonedSettlementRetry(room, attempt = 1) {
+  const delayMs = Math.min(5000 * (2 ** (attempt - 1)), 60 * 1000);
+  const retryTimer = setTimeout(async () => {
+    try {
+      await settleAbandonedRoomHistory(room);
+      deleteRoomFromRedis(room.roomId);
+      console.log(`[XP] Archived abandoned match ${room.matchId} after retry ${attempt}.`);
+    } catch (error) {
+      console.error(
+        `[XP] Abandoned match ${room.matchId} retry ${attempt} failed:`,
+        error.message
+      );
+      syncRoomToRedis(room.roomId, room);
+      if (attempt < 5) {
+        scheduleAbandonedSettlementRetry(room, attempt + 1);
+      }
+    }
+  }, delayMs);
+  if (typeof retryTimer.unref === 'function') {
+    retryTimer.unref();
+  }
+}
+
+async function archiveAbandonedPvpRoom(
+  room,
+  abandonReason = 'both_players_disconnect_timeout'
+) {
+  if (
+    !room
+    || room.isAiRoom
+    || room.state !== 'PLAYING'
+    || room.players?.length !== 2
+    || !room.matchId
+  ) {
+    return false;
+  }
+
+  const roomId = room.roomId;
+  rooms.delete(roomId);
+  room.state = 'FINISHED';
+  room.winnerIndex = -1;
+  room.finishedAt = new Date().toISOString();
+  room.endReason = 'ABANDONED';
+  room.abandonReason = abandonReason;
+  room.forfeitReason = null;
+  room.forfeitedPlayerId = null;
+  room.xpSettlement = null;
+  room.resultFinalized = false;
+  room.saved = false;
+
+  try {
+    await persistRoomToRedis(roomId, room);
+  } catch (error) {
+    console.error(
+      `[Redis] Failed to persist abandoned room ${roomId}:`,
+      error.message
+    );
+  }
+
+  try {
+    room.xpSettlement = await settleAbandonedRoomHistory(room);
+    room.saved = true;
+    room.resultFinalized = true;
+    deleteRoomFromRedis(roomId);
+    console.log(`[Game] Archived abandoned room ${roomId}; both players receive 0 XP.`);
+    return true;
+  } catch (error) {
+    console.error(`[XP] Failed to archive abandoned match ${room.matchId}:`, error.message);
+    syncRoomToRedis(roomId, room);
+    scheduleAbandonedSettlementRetry(room);
+    return false;
+  }
+}
+
 async function loadRoomsFromRedis() {
   try {
     // Scan for all game room keys
@@ -158,7 +352,56 @@ async function loadRoomsFromRedis() {
         if (room.isAiRoom) {
           deleteRoomFromRedis(room.roomId);
         } else {
+          if (!room.matchId && room.state !== 'WAITING_FOR_PLAYERS') {
+            room.matchId = buildStableRestoredMatchId(room);
+            try {
+              await persistRoomToRedis(room.roomId, room);
+              console.log(`[XP] Assigned stable matchId ${room.matchId} to restored room.`);
+            } catch (error) {
+              console.error(
+                `[Redis] Could not persist restored matchId for ${room.roomId}:`,
+                error.message
+              );
+            }
+          }
+
+          if (
+            room.state === 'FINISHED'
+            && room.endReason === 'ABANDONED'
+            && room.players?.length === 2
+          ) {
+            try {
+              await settleAbandonedRoomHistory(room);
+              deleteRoomFromRedis(room.roomId);
+              console.log(`[XP] Restored abandoned match ${room.matchId} was archived.`);
+            } catch (error) {
+              console.error(
+                `[XP] Could not archive restored abandoned room ${room.roomId}:`,
+                error.message
+              );
+              syncRoomToRedis(room.roomId, room);
+              scheduleAbandonedSettlementRetry(room);
+            }
+            continue;
+          }
+
           rooms.set(room.roomId, room);
+          prepareRestoredRoomForReconnect(room);
+          if (
+            room.state === 'FINISHED'
+            && room.players?.length === 2
+            && (!room.saved || !room.resultFinalized)
+          ) {
+            try {
+              await finalizePendingTerminalRoom(room);
+              console.log(`[XP] Restored and settled match ${room.matchId}.`);
+            } catch (error) {
+              console.error(
+                `[XP] Could not settle restored room ${room.roomId}:`,
+                error.message
+              );
+            }
+          }
           restored++;
         }
       }
@@ -167,6 +410,20 @@ async function loadRoomsFromRedis() {
   } catch (err) {
     console.error('[Redis] Failed to load rooms from Redis:', err.message);
   }
+}
+
+function buildStableRestoredMatchId(room) {
+  const stableIdentity = JSON.stringify({
+    roomId: room.roomId || '',
+    startedAt: room.startedAt || room.createdAt || '',
+    roundNumber: room.roundNumber || 1,
+    players: (room.players || []).map(player => String(player.userId || ''))
+  });
+  const digest = crypto
+    .createHash('sha256')
+    .update(stableIdentity)
+    .digest('hex');
+  return `restored-${digest}`;
 }
 
 // Generate random 6-digit room ID
@@ -190,7 +447,7 @@ function generate4DigitCode() {
 function handleAiTurn(room) {
   if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
 
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
 
@@ -235,7 +492,6 @@ function handleAiTurn(room) {
         room.state = 'FINISHED';
         room.winnerIndex = 1;
         room.finishedAt = new Date().toISOString();
-        syncRoomToRedis(room.roomId, room);
 
         const winnerGuesses = room.guesses.filter(g => g.playerIndex === 1);
         const loserGuesses = room.guesses.filter(g => g.playerIndex === 0);
@@ -244,6 +500,27 @@ function handleAiTurn(room) {
 
         const winnerSecretDecrypted = decryptSecret(room.players[1].secretNumber);
         const loserSecretDecrypted = decryptSecret(room.players[0].secretNumber);
+
+        // Settle AI match for human player (loss)
+        let aiSettlement = null;
+        try {
+          const humanPlayer = room.players[0];
+          if (humanPlayer && humanPlayer.userId) {
+            const settlementResult = await settleAiMatch({
+              userId: humanPlayer.userId,
+              aiDifficulty: room.aiDifficulty || 'medium',
+              isUserWinner: false,
+              room
+            });
+            aiSettlement = { xpResults: [settlementResult] };
+            room.xpSettlement = aiSettlement;
+            void invalidateUserAndLeaderboardCache(humanPlayer.userId);
+          }
+        } catch (err) {
+          console.error(`[AI Settlement] Failed to settle AI loss for room ${room.roomId}:`, err.message);
+        }
+
+        syncRoomToRedis(room.roomId, room);
 
         const matchStats = {
           duration: durationSec,
@@ -254,7 +531,8 @@ function handleAiTurn(room) {
           winnerSecret: winnerSecretDecrypted,
           loserSecret: loserSecretDecrypted,
           startedAt: room.startedAt,
-          finishedAt: room.finishedAt
+          finishedAt: room.finishedAt,
+          xpResults: aiSettlement?.xpResults || null
         };
 
         io.to(room.roomId).emit('GAME_OVER', {
@@ -349,6 +627,339 @@ io.use((socket, next) => {
 
 // --- Disconnect grace period timers ---
 const disconnectTimers = new Map(); // odisconnectTimers: odisconnectKey -> timerId
+const settlementPromises = new Map(); // matchId -> in-flight MongoDB settlement
+const restoredRoomTimers = new Map(); // roomId -> restart recovery timer
+
+function getPlayerGuessCounts(room) {
+  return room.players.map((_, playerIndex) =>
+    room.guesses.filter(guess => guess.playerIndex === playerIndex).length
+  );
+}
+
+function createFailedSettlement(room) {
+  return {
+    xpEligible: false,
+    xpEligibilityReason: 'SETTLEMENT_FAILED',
+    ratingApplied: false,
+    ratingReason: 'settlement_failed',
+    xpResults: room.players.map(player => ({
+      userId: player.userId,
+      xpEarned: 0,
+      ratingBefore: 1000,
+      ratingDelta: 0,
+      ratingAfter: 1000,
+      highestRating: 1000,
+      rankBefore: 'Đồng',
+      rankAfter: 'Đồng'
+    }))
+  };
+}
+
+async function settleRoomProgress(room, {
+  endReason = 'COMPLETED',
+  forfeitedPlayerId = null
+} = {}) {
+  if (!room || room.isAiRoom || room.players.length !== 2) return null;
+
+  if (!room.matchId) {
+    throw new Error('PvP settlement requires a persisted matchId.');
+  }
+  const settlingMatchId = room.matchId;
+  if (room.saved && room.xpSettlement) return room.xpSettlement;
+
+  const existingPromise = settlementPromises.get(settlingMatchId);
+  if (existingPromise) return existingPromise;
+
+  const settlementPromise = settlePvpMatch(room, {
+    endReason,
+    forfeitedPlayerId
+  }).then(result => {
+    if (rooms.get(room.roomId) === room && room.matchId === settlingMatchId) {
+      room.saved = true;
+      room.xpSettlement = result;
+      syncRoomToRedis(room.roomId, room);
+    }
+    room.players?.forEach(p => {
+      if (p?.userId) void invalidateUserAndLeaderboardCache(p.userId);
+    });
+    return result;
+  }).finally(() => {
+    settlementPromises.delete(settlingMatchId);
+  });
+
+  settlementPromises.set(settlingMatchId, settlementPromise);
+  return settlementPromise;
+}
+
+async function finalizePendingTerminalRoom(room, broadcaster = null) {
+  if (
+    !room
+    || room.isAiRoom
+    || room.state !== 'FINISHED'
+    || room.players?.length !== 2
+  ) {
+    return false;
+  }
+
+  const terminalMatchId = room.matchId;
+  await settleRoomProgress(room, {
+    endReason: room.endReason === 'FORFEIT'
+      ? (room.forfeitReason || 'disconnect_timeout')
+      : 'correct_guess',
+    forfeitedPlayerId: room.forfeitedPlayerId || null
+  });
+
+  if (
+    rooms.get(room.roomId) !== room
+    || room.matchId !== terminalMatchId
+    || room.state !== 'FINISHED'
+  ) {
+    return false;
+  }
+
+  room.resultFinalized = true;
+  syncRoomToRedis(room.roomId, room);
+  if (broadcaster) {
+    emitFinishedPvpRoom(room, broadcaster);
+  }
+  return true;
+}
+
+function buildMatchStats(room, {
+  winnerSecret = null,
+  loserSecret = null,
+  settlement = room.xpSettlement || null
+} = {}) {
+  const winnerIndex = room.winnerIndex;
+  const loserIndex = winnerIndex === 0 ? 1 : 0;
+  const guessCounts = getPlayerGuessCounts(room);
+  const durationMs = room.startedAt && room.finishedAt
+    ? new Date(room.finishedAt) - new Date(room.startedAt)
+    : 0;
+
+  return {
+    matchId: room.matchId,
+    duration: Math.max(0, Math.floor(durationMs / 1000)),
+    totalGuesses: room.guesses.length,
+    winnerGuessCount: guessCounts[winnerIndex] || 0,
+    loserGuessCount: guessCounts[loserIndex] || 0,
+    rpsWinnerIndex: room.rpsWinnerIndex,
+    winnerSecret,
+    loserSecret,
+    startedAt: room.startedAt,
+    finishedAt: room.finishedAt,
+    endReason: room.endReason || 'COMPLETED',
+    forfeitReason: room.forfeitReason || null,
+    forfeitedPlayerId: room.forfeitedPlayerId || null,
+    xpEligible: settlement?.xpEligible || false,
+    xpEligibilityReason: settlement?.xpEligibilityReason || 'SETTLEMENT_FAILED',
+    ratingApplied: settlement?.ratingApplied || false,
+    ratingReason: settlement?.ratingReason || 'settlement_failed',
+    xpResults: settlement?.xpResults || []
+  };
+}
+
+function emitFinishedPvpRoom(room, broadcaster, winningGuess = null) {
+  const winnerIndex = room.winnerIndex;
+  const loserIndex = winnerIndex === 0 ? 1 : 0;
+  const winnerSecret = decryptSecret(room.players[winnerIndex]?.secretNumber);
+  const loserSecret = decryptSecret(room.players[loserIndex]?.secretNumber);
+
+  broadcaster.emit('GAME_OVER', {
+    winnerIndex,
+    winningGuess,
+    roomState: room,
+    opponentSecret: loserSecret,
+    matchStats: buildMatchStats(room, { winnerSecret, loserSecret })
+  });
+}
+
+async function finishPvpByForfeit(room, forfeitedPlayerId, forfeitReason, broadcaster) {
+  if (!room || room.isAiRoom || room.state !== 'PLAYING' || room.players.length !== 2) {
+    return false;
+  }
+
+  const forfeitedPlayerIndex = room.players.findIndex(
+    player => player.userId === forfeitedPlayerId
+  );
+  if (forfeitedPlayerIndex === -1) return false;
+
+  const forfeitingMatchId = room.matchId;
+  room.state = 'FINISHED';
+  room.winnerIndex = forfeitedPlayerIndex === 0 ? 1 : 0;
+  room.finishedAt = new Date().toISOString();
+  room.endReason = 'FORFEIT';
+  room.forfeitReason = forfeitReason;
+  room.forfeitedPlayerId = forfeitedPlayerId;
+
+  try {
+    await persistRoomToRedis(room.roomId, room);
+  } catch (error) {
+    console.error(
+      `[Redis] Failed to persist terminal forfeit snapshot ${room.roomId}:`,
+      error.message
+    );
+  }
+
+  try {
+    await settleRoomProgress(room, {
+      endReason: forfeitReason,
+      forfeitedPlayerId
+    });
+  } catch (error) {
+    console.error(`[XP] Failed to settle forfeited match ${room.matchId}:`, error.message);
+    room.xpSettlement = createFailedSettlement(room);
+  }
+
+  if (
+    rooms.get(room.roomId) !== room
+    || room.matchId !== forfeitingMatchId
+    || room.state !== 'FINISHED'
+  ) {
+    return false;
+  }
+
+  const forfeitedPlayer = room.players[forfeitedPlayerIndex];
+  forfeitedPlayer.hasLeft = true;
+  forfeitedPlayer.socketId = null;
+  room.resultFinalized = true;
+  if (rooms.get(room.roomId) === room) {
+    syncRoomToRedis(room.roomId, room);
+    emitFinishedPvpRoom(room, broadcaster);
+  }
+  console.log(
+    `[Game] Room ${room.roomId} ended by forfeit. Winner: ${room.players[room.winnerIndex].username}.`
+  );
+
+  if (room.players.every(player => player.hasLeft)) {
+    rooms.delete(room.roomId);
+    deleteRoomFromRedis(room.roomId);
+    console.log(`[Game] Room ${room.roomId} deleted because both players left.`);
+  }
+  return true;
+}
+
+function findActiveRoomForUser(userId) {
+  for (const room of rooms.values()) {
+    const player = room.players?.find(
+      candidate => candidate.userId === userId && !candidate.hasLeft
+    );
+    if (player) return room;
+  }
+  return null;
+}
+
+function prepareRestoredRoomForReconnect(room) {
+  const restoredAt = Date.now();
+  room.players?.forEach(player => {
+    if (!player.hasLeft) {
+      player.socketId = null;
+      player.disconnectedAt = restoredAt;
+    }
+  });
+
+  const existingTimer = restoredRoomTimers.get(room.roomId);
+  if (existingTimer) clearTimeout(existingTimer);
+
+  const timer = setTimeout(async () => {
+    restoredRoomTimers.delete(room.roomId);
+    const currentRoom = rooms.get(room.roomId);
+    if (currentRoom !== room) return;
+
+    const stalePlayers = currentRoom.players.filter(
+      player => !player.hasLeft && player.disconnectedAt === restoredAt
+    );
+    if (stalePlayers.length === 0) return;
+
+    const connectedPlayers = currentRoom.players.filter(
+      player => !player.hasLeft && !player.disconnectedAt
+    );
+    if (connectedPlayers.length === 0) {
+      if (currentRoom.state === 'PLAYING' && currentRoom.players.length === 2) {
+        await archiveAbandonedPvpRoom(
+          currentRoom,
+          'both_players_disconnect_timeout'
+        );
+        io.emit('LOBBY_ROOMS', getJoinableRooms());
+        return;
+      }
+
+      rooms.delete(room.roomId);
+      if (currentRoom.state === 'FINISHED' && !currentRoom.saved) {
+        syncRoomToRedis(room.roomId, currentRoom);
+        console.log(
+          `[XP] Pending terminal room ${room.roomId} kept in Redis for a later settlement retry.`
+        );
+      } else {
+        deleteRoomFromRedis(room.roomId);
+        console.log(`[Game] Restored room ${room.roomId} expired without reconnects.`);
+      }
+      io.emit('LOBBY_ROOMS', getJoinableRooms());
+      return;
+    }
+
+    if (
+      currentRoom.state === 'PLAYING'
+      && stalePlayers.length === 1
+      && currentRoom.players.length === 2
+    ) {
+      await finishPvpByForfeit(
+        currentRoom,
+        stalePlayers[0].userId,
+        'disconnect_timeout',
+        io.to(room.roomId)
+      );
+      io.emit('LOBBY_ROOMS', getJoinableRooms());
+      return;
+    }
+
+    if (currentRoom.state === 'FINISHED') {
+      stalePlayers.forEach(player => {
+        player.hasLeft = true;
+        player.socketId = null;
+      });
+      if (currentRoom.players.every(player => player.hasLeft)) {
+        rooms.delete(room.roomId);
+        deleteRoomFromRedis(room.roomId);
+      } else {
+        syncRoomToRedis(room.roomId, currentRoom);
+        if (currentRoom.xpSettlement) {
+          emitFinishedPvpRoom(currentRoom, io.to(room.roomId));
+        }
+      }
+      return;
+    }
+
+    currentRoom.players = connectedPlayers;
+    currentRoom.state = 'WAITING_FOR_PLAYERS';
+    currentRoom.guesses = [];
+    currentRoom.matchId = null;
+    currentRoom.rpsWinnerIndex = -1;
+    currentRoom.activeTurnIndex = -1;
+    currentRoom.winnerIndex = -1;
+    currentRoom.startedAt = null;
+    currentRoom.finishedAt = null;
+    currentRoom.endReason = null;
+    currentRoom.forfeitReason = null;
+    currentRoom.forfeitedPlayerId = null;
+    currentRoom.xpSettlement = null;
+    currentRoom.saved = false;
+    currentRoom.resultFinalized = false;
+    connectedPlayers.forEach(player => {
+      player.secretNumber = null;
+      player.rpsChoice = null;
+      player.ready = false;
+    });
+    syncRoomToRedis(room.roomId, currentRoom);
+    io.to(room.roomId).emit('PLAYER_DISCONNECTED', {
+      username: stalePlayers.map(player => player.username).join(', '),
+      roomState: currentRoom
+    });
+    io.emit('LOBBY_ROOMS', getJoinableRooms());
+  }, 60 * 1000);
+
+  restoredRoomTimers.set(room.roomId, timer);
+}
 
 io.on('connection', (socket) => {
   console.log(`[Game] User connected: ${socket.username} (${socket.userId})`);
@@ -357,7 +968,7 @@ io.on('connection', (socket) => {
   // Check if this user was temporarily disconnected from any room
   rooms.forEach((room, roomId) => {
     const player = room.players.find(p => p.userId === socket.userId);
-    if (player && player.disconnectedAt) {
+    if (player && player.disconnectedAt && !player.hasLeft) {
       // Cancel the disconnect timer
       const timerKey = `${roomId}:${socket.userId}`;
       const timerId = disconnectTimers.get(timerKey);
@@ -370,10 +981,23 @@ io.on('connection', (socket) => {
       player.disconnectedAt = null;
       player.socketId = socket.id;
       socket.join(roomId);
+      socket.currentRoomId = roomId;
       
       // Sync and notify
       syncRoomToRedis(roomId, room);
       socket.emit('RECONNECTED_TO_ROOM', room);
+      if (room.state === 'FINISHED' && !room.isAiRoom) {
+        void finalizePendingTerminalRoom(room, socket).catch(error => {
+          console.error(
+            `[XP] Could not finalize reconnected room ${roomId}:`,
+            error.message
+          );
+          socket.emit(
+            'GAME_ERROR',
+            'Match result could not be recorded yet. Please reconnect shortly.'
+          );
+        });
+      }
       socket.to(roomId).emit('OPPONENT_RECONNECTED', { username: socket.username, roomState: room });
       console.log(`[Game] User ${socket.username} reconnected to room ${roomId}`);
     }
@@ -389,6 +1013,16 @@ io.on('connection', (socket) => {
 
   // --- CREATE ROOM ---
   socket.on('CREATE_ROOM', () => {
+    if (!progressionReady) {
+      socket.emit('GAME_ERROR', 'PvP progression is temporarily unavailable.');
+      return;
+    }
+    const activeRoom = findActiveRoomForUser(socket.userId);
+    if (activeRoom) {
+      socket.emit('GAME_ERROR', 'You are already in an active room.');
+      return;
+    }
+
     const roomId = generateRoomId();
     const room = {
       roomId,
@@ -405,16 +1039,24 @@ io.on('connection', (socket) => {
       ],
       state: 'WAITING_FOR_PLAYERS',
       guesses: [],
+      matchId: null,
       rpsWinnerIndex: -1,
       activeTurnIndex: -1,
       winnerIndex: -1,
       startedAt: null,
+      finishedAt: null,
+      endReason: null,
+      forfeitedPlayerId: null,
+      xpSettlement: null,
+      resultFinalized: false,
+      roundNumber: 0,
       createdAt: Date.now(),
       saved: false
     };
     rooms.set(roomId, room);
     syncRoomToRedis(roomId, room);
     socket.join(roomId);
+    socket.currentRoomId = roomId;
     
     socket.emit('ROOM_CREATED', room);
     io.emit('LOBBY_ROOMS', getJoinableRooms());
@@ -423,6 +1065,12 @@ io.on('connection', (socket) => {
 
   // --- CREATE AI ROOM ---
   socket.on('CREATE_AI_ROOM', (data) => {
+    const activeRoom = findActiveRoomForUser(socket.userId);
+    if (activeRoom) {
+      socket.emit('GAME_ERROR', 'You are already in an active room.');
+      return;
+    }
+
     const difficulty = (data && data.difficulty) ? data.difficulty : 'medium';
     const roomId = generateRoomId();
     const aiSecret = generate4DigitCode();
@@ -467,6 +1115,7 @@ io.on('connection', (socket) => {
     };
     rooms.set(roomId, room);
     socket.join(roomId);
+    socket.currentRoomId = roomId;
     socket.emit('ROOM_CREATED', room);
     socket.emit('GAME_START', room);
     console.log(`[Game] AI Room created (${difficulty}): ${roomId} by ${socket.username}`);
@@ -474,6 +1123,16 @@ io.on('connection', (socket) => {
 
   // --- JOIN ROOM ---
   socket.on('JOIN_ROOM', (roomId) => {
+    if (!progressionReady) {
+      socket.emit('GAME_ERROR', 'PvP progression is temporarily unavailable.');
+      return;
+    }
+    const activeRoom = findActiveRoomForUser(socket.userId);
+    if (activeRoom) {
+      socket.emit('GAME_ERROR', 'You are already in an active room.');
+      return;
+    }
+
     const room = rooms.get(roomId);
     if (!room) {
       socket.emit('GAME_ERROR', 'Room not found.');
@@ -481,6 +1140,10 @@ io.on('connection', (socket) => {
     }
     if (room.state !== 'WAITING_FOR_PLAYERS') {
       socket.emit('GAME_ERROR', 'Room is already full or in play.');
+      return;
+    }
+    if (room.players.some(player => player.disconnectedAt || player.hasLeft)) {
+      socket.emit('GAME_ERROR', 'Room host is reconnecting. Please try again shortly.');
       return;
     }
     // Prevent duplicate joining
@@ -500,8 +1163,16 @@ io.on('connection', (socket) => {
     });
     
     socket.join(roomId);
+    socket.currentRoomId = roomId;
     room.state = 'SETTING_SECRET'; // Advance to setting secret state
     room.startedAt = new Date().toISOString(); // Record game start time
+    room.matchId = crypto.randomUUID();
+    room.finishedAt = null;
+    room.endReason = null;
+    room.forfeitedPlayerId = null;
+    room.xpSettlement = null;
+    room.resultFinalized = false;
+    room.roundNumber = (room.roundNumber || 0) + 1;
     room.saved = false;
     syncRoomToRedis(roomId, room);
     
@@ -606,6 +1277,7 @@ io.on('connection', (socket) => {
         room.rpsWinnerIndex = winnerIdx;
         room.activeTurnIndex = winnerIdx; // Winner plays first
         room.state = 'PLAYING';
+        room.players.forEach(p => p.ready = false);
         syncRoomToRedis(roomId, room);
         
         io.to(roomId).emit('RPS_RESULT', {
@@ -629,7 +1301,7 @@ io.on('connection', (socket) => {
   });
 
   // --- SUBMIT GUESS ---
-  socket.on('SUBMIT_GUESS', ({ roomId, guess }) => {
+  socket.on('SUBMIT_GUESS', async ({ roomId, guess }) => {
     const room = rooms.get(roomId);
     if (!room || room.state !== 'PLAYING') {
       socket.emit('GAME_ERROR', 'Invalid action or room state.');
@@ -673,34 +1345,75 @@ io.on('connection', (socket) => {
       room.state = 'FINISHED';
       room.winnerIndex = playerIdx;
       room.finishedAt = new Date().toISOString();
-      syncRoomToRedis(roomId, room);
-      
-      // Calculate match statistics
-      const winnerGuesses = room.guesses.filter(g => g.playerIndex === playerIdx);
-      const loserGuesses = room.guesses.filter(g => g.playerIndex === opponentIdx);
-      const durationMs = room.startedAt ? (new Date(room.finishedAt) - new Date(room.startedAt)) : 0;
-      const durationSec = Math.floor(durationMs / 1000);
-      
-      // Decrypt winner's secret for reveal
-      const winnerSecret = decryptSecret(room.players[playerIdx].secretNumber);
-      
-      io.to(roomId).emit('GAME_OVER', {
-        winnerIndex: playerIdx,
-        winningGuess: guessRecord,
-        roomState: room,
-        opponentSecret: decryptedSecret, // Reveal loser's code to winner
-        matchStats: {
-          duration: durationSec,
-          totalGuesses: room.guesses.length,
-          winnerGuessCount: winnerGuesses.length,
-          loserGuessCount: loserGuesses.length,
-          rpsWinnerIndex: room.rpsWinnerIndex,
-          winnerSecret: winnerSecret,
-          loserSecret: decryptedSecret,
-          startedAt: room.startedAt,
-          finishedAt: room.finishedAt
+      const finishingMatchId = room.matchId;
+      room.endReason = 'COMPLETED';
+      room.forfeitReason = null;
+      room.forfeitedPlayerId = null;
+
+      if (!room.isAiRoom) {
+        try {
+          await persistRoomToRedis(roomId, room);
+        } catch (error) {
+          console.error(
+            `[Redis] Failed to persist terminal completed snapshot ${roomId}:`,
+            error.message
+          );
         }
-      });
+
+        try {
+          await settleRoomProgress(room, { endReason: 'correct_guess' });
+        } catch (error) {
+          console.error(`[XP] Failed to settle completed match ${room.matchId}:`, error.message);
+          room.xpSettlement = createFailedSettlement(room);
+        }
+
+        if (
+          rooms.get(roomId) !== room
+          || room.matchId !== finishingMatchId
+          || room.state !== 'FINISHED'
+        ) {
+          return;
+        }
+
+        room.resultFinalized = true;
+        syncRoomToRedis(roomId, room);
+        emitFinishedPvpRoom(room, io.to(roomId), guessRecord);
+      } else {
+        const winnerSecret = decryptSecret(room.players[playerIdx].secretNumber);
+        room.resultFinalized = true;
+
+        // Settle AI match for human player (win: +5 Easy, +10 Medium, +20 Hard)
+        let aiSettlement = null;
+        try {
+          const humanPlayer = room.players[0];
+          if (humanPlayer && humanPlayer.userId) {
+            const settlementResult = await settleAiMatch({
+              userId: humanPlayer.userId,
+              aiDifficulty: room.aiDifficulty || 'medium',
+              isUserWinner: true,
+              room
+            });
+            aiSettlement = { xpResults: [settlementResult] };
+            room.xpSettlement = aiSettlement;
+            void invalidateUserAndLeaderboardCache(humanPlayer.userId);
+          }
+        } catch (err) {
+          console.error(`[AI Settlement] Failed to settle AI win for room ${roomId}:`, err.message);
+        }
+
+        syncRoomToRedis(roomId, room);
+        io.to(roomId).emit('GAME_OVER', {
+          winnerIndex: playerIdx,
+          winningGuess: guessRecord,
+          roomState: room,
+          opponentSecret: decryptedSecret,
+          matchStats: buildMatchStats(room, {
+            winnerSecret,
+            loserSecret: decryptedSecret,
+            settlement: aiSettlement
+          })
+        });
+      }
       console.log(`[Game] Room ${roomId} finished. Winner: ${room.players[playerIdx].username}.`);
     } else {
       // Toggle active turn
@@ -719,10 +1432,30 @@ io.on('connection', (socket) => {
   });
 
   // --- PLAY AGAIN ---
-  socket.on('PLAY_AGAIN', (roomId) => {
+  socket.on('PLAY_AGAIN', async (roomId) => {
     const room = rooms.get(roomId);
     if (!room || room.state !== 'FINISHED') {
       socket.emit('GAME_ERROR', 'Invalid action.');
+      return;
+    }
+    if (
+      !room.isAiRoom
+      && (!room.saved || !room.xpSettlement || !room.resultFinalized)
+    ) {
+      try {
+        const finalized = await finalizePendingTerminalRoom(room, socket);
+        if (!finalized) return;
+      } catch (error) {
+        console.error(`[XP] Rematch blocked while settling ${room.matchId}:`, error.message);
+        socket.emit(
+          'GAME_ERROR',
+          'Match settlement is still pending. Please try again shortly.'
+        );
+        return;
+      }
+    }
+    if (room.endReason === 'FORFEIT') {
+      socket.emit('GAME_ERROR', 'Rematch is unavailable after a player forfeits.');
       return;
     }
 
@@ -749,11 +1482,19 @@ io.on('connection', (socket) => {
       }
 
       room.guesses = [];
+      room.matchId = crypto.randomUUID();
       room.state = 'SETTING_SECRET';
       room.rpsWinnerIndex = -1;
       room.activeTurnIndex = -1;
       room.winnerIndex = -1;
       room.startedAt = new Date().toISOString();
+      room.finishedAt = null;
+      room.endReason = null;
+      room.forfeitReason = null;
+      room.forfeitedPlayerId = null;
+      room.xpSettlement = null;
+      room.resultFinalized = false;
+      room.roundNumber = (room.roundNumber || 0) + 1;
       room.saved = false;
       syncRoomToRedis(roomId, room);
 
@@ -762,48 +1503,6 @@ io.on('connection', (socket) => {
     } else {
       syncRoomToRedis(roomId, room);
       socket.to(roomId).emit('OPPONENT_WANTS_PLAY_AGAIN');
-    }
-  });
-
-  // --- MATCH RESULT VIEWED (Client confirms they saw the end screen) ---
-  socket.on('MATCH_RESULT_VIEWED', async (roomId) => {
-    const room = rooms.get(roomId);
-    if (!room || room.state !== 'FINISHED' || room.saved) return;
-    
-    // Mark as saved to prevent duplicate saves
-    room.saved = true;
-    syncRoomToRedis(roomId, room);
-    
-    try {
-      const winnerIdx = room.winnerIndex;
-      const loserIdx = winnerIdx === 0 ? 1 : 0;
-      const winnerGuesses = room.guesses.filter(g => g.playerIndex === winnerIdx);
-      const loserGuesses = room.guesses.filter(g => g.playerIndex === loserIdx);
-      const durationMs = room.startedAt && room.finishedAt 
-        ? (new Date(room.finishedAt) - new Date(room.startedAt)) 
-        : 0;
-      
-      const history = new GameHistory({
-        roomId: room.roomId,
-        players: room.players.map(p => ({
-          userId: p.userId,
-          username: p.username,
-          avatar: p.avatar || ''
-        })),
-        winnerId: room.players[winnerIdx].userId,
-        winnerIndex: winnerIdx,
-        totalGuesses: room.guesses.length,
-        winnerGuessCount: winnerGuesses.length,
-        loserGuessCount: loserGuesses.length,
-        rpsWinnerIndex: room.rpsWinnerIndex,
-        duration: Math.floor(durationMs / 1000),
-        finishedAt: room.finishedAt || new Date()
-      });
-      
-      await history.save();
-      console.log(`[MongoDB] Game history saved for room ${room.roomId}`);
-    } catch (err) {
-      console.error(`[MongoDB] Failed to save game history for room ${room.roomId}:`, err.message);
     }
   });
 
@@ -819,58 +1518,133 @@ io.on('connection', (socket) => {
   });
 
   // --- LEAVE ROOM (Intentional - button click) ---
-  // Immediate removal, no grace period, no save
-  const handleIntentionalLeave = (socket) => {
-    rooms.forEach((room, roomId) => {
-      const pIdx = room.players.findIndex(p => p.userId === socket.userId);
-      if (pIdx !== -1) {
-        console.log(`[Game] User ${socket.username} intentionally left room ${roomId}`);
-        
-        // Cancel any pending disconnect timer for this user
-        const timerKey = `${roomId}:${socket.userId}`;
-        const timerId = disconnectTimers.get(timerKey);
-        if (timerId) {
-          clearTimeout(timerId);
-          disconnectTimers.delete(timerKey);
+  const handleIntentionalLeave = async (socket) => {
+    const targetEntries = socket.currentRoomId && rooms.has(socket.currentRoomId)
+      ? [[socket.currentRoomId, rooms.get(socket.currentRoomId)]]
+      : [...rooms.entries()].filter(([, candidateRoom]) =>
+          candidateRoom.players?.some(
+            player => player.userId === socket.userId && player.socketId === socket.id
+          )
+        );
+
+    for (const [roomId, room] of targetEntries) {
+      const pIdx = room.players.findIndex(
+        player =>
+          player.userId === socket.userId
+          && player.socketId === socket.id
+          && !player.hasLeft
+      );
+      if (pIdx === -1) continue;
+
+      console.log(`[Game] User ${socket.username} intentionally left room ${roomId}`);
+
+      const timerKey = `${roomId}:${socket.userId}`;
+      const timerId = disconnectTimers.get(timerKey);
+      if (timerId) {
+        clearTimeout(timerId);
+        disconnectTimers.delete(timerKey);
+      }
+
+      if (room.isAiRoom) {
+        rooms.delete(roomId);
+        deleteRoomFromRedis(roomId);
+        socket.leave(roomId);
+        console.log(`[Game] AI Room ${roomId} destroyed immediately because human left.`);
+      } else if (room.state === 'PLAYING' && room.players.length === 2) {
+        await finishPvpByForfeit(
+          room,
+          socket.userId,
+          'intentional_leave',
+          socket.to(roomId)
+        );
+        socket.leave(roomId);
+      } else if (room.state === 'FINISHED' && !room.saved) {
+        // A result may already be settling while a client closes/leaves.
+        // Keep the immutable two-player snapshot intact until settlement and
+        // exclude the leaving socket from the pending GAME_OVER broadcast.
+        socket.leave(roomId);
+        room.players[pIdx].hasLeft = true;
+        room.players[pIdx].socketId = null;
+        try {
+          await settleRoomProgress(room, {
+            endReason: room.endReason === 'FORFEIT'
+              ? (room.forfeitReason || 'disconnect_timeout')
+              : 'correct_guess',
+            forfeitedPlayerId: room.forfeitedPlayerId || null
+          });
+        } catch (error) {
+          console.error(`[XP] Pending settlement failed while leaving ${roomId}:`, error.message);
         }
-        
-        if (room.isAiRoom) {
+        if (
+          room.saved
+          && room.players.every(player => player.hasLeft)
+          && rooms.get(roomId) === room
+        ) {
           rooms.delete(roomId);
           deleteRoomFromRedis(roomId);
-          socket.leave(roomId);
-          console.log(`[Game] AI Room ${roomId} destroyed immediately because human left.`);
-        } else {
-          // Remove player from room immediately
-          room.players.splice(pIdx, 1);
-          socket.leave(roomId);
-          
-          if (room.players.length === 0) {
-            rooms.delete(roomId);
-            deleteRoomFromRedis(roomId);
-            console.log(`[Game] Room ${roomId} deleted as it became empty.`);
-          } else {
-            room.state = 'WAITING_FOR_PLAYERS';
-            room.guesses = [];
-            room.players.forEach(p => {
-              p.secretNumber = null;
-              p.rpsChoice = null;
-              p.ready = false;
-            });
-            syncRoomToRedis(roomId, room);
-            io.to(roomId).emit('PLAYER_LEFT', {
-              username: socket.username,
-              roomState: room
-            });
-          }
+          console.log(`[Game] Settled room ${roomId} deleted because both players left.`);
         }
-        
-        io.emit('LOBBY_ROOMS', getJoinableRooms());
+      } else if (
+        room.state === 'FINISHED'
+        && (room.endReason === 'FORFEIT' || room.players.some(player => player.hasLeft))
+      ) {
+        rooms.delete(roomId);
+        deleteRoomFromRedis(roomId);
+        socket.leave(roomId);
+        console.log(`[Game] Forfeited room ${roomId} closed after the remaining player left.`);
+      } else {
+        room.players.splice(pIdx, 1);
+        socket.leave(roomId);
+
+        if (room.players.length === 0) {
+          rooms.delete(roomId);
+          deleteRoomFromRedis(roomId);
+          console.log(`[Game] Room ${roomId} deleted as it became empty.`);
+        } else {
+          room.state = 'WAITING_FOR_PLAYERS';
+          room.guesses = [];
+          room.matchId = null;
+          room.winnerIndex = -1;
+          room.finishedAt = null;
+          room.endReason = null;
+          room.forfeitReason = null;
+          room.forfeitedPlayerId = null;
+          room.xpSettlement = null;
+          room.resultFinalized = false;
+          room.saved = false;
+          room.players.forEach(player => {
+            player.secretNumber = null;
+            player.rpsChoice = null;
+            player.ready = false;
+            player.disconnectedAt = null;
+            player.hasLeft = false;
+          });
+          syncRoomToRedis(roomId, room);
+          io.to(roomId).emit('PLAYER_LEFT', {
+            username: socket.username,
+            roomState: room
+          });
+        }
       }
-    });
+
+      socket.currentRoomId = null;
+      io.emit('LOBBY_ROOMS', getJoinableRooms());
+      return;
+    }
   };
 
-  socket.on('LEAVE_ROOM', () => {
-    handleIntentionalLeave(socket);
+  socket.on('LEAVE_ROOM', async (acknowledge) => {
+    try {
+      await handleIntentionalLeave(socket);
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: true });
+      }
+    } catch (error) {
+      console.error(`[Game] Failed to leave room for ${socket.userId}:`, error.message);
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false });
+      }
+    }
   });
 
   // --- DISCONNECT (Unintentional - lost connection, closed tab) ---
@@ -879,7 +1653,10 @@ io.on('connection', (socket) => {
     console.log(`[Game] User disconnected: ${socket.username} (${socket.userId})`);
     
     rooms.forEach((room, roomId) => {
-      const player = room.players.find(p => p.userId === socket.userId);
+      if (socket.currentRoomId && roomId !== socket.currentRoomId) return;
+      const player = room.players.find(
+        p => p.userId === socket.userId && p.socketId === socket.id && !p.hasLeft
+      );
       if (player) {
         if (room.isAiRoom) {
           rooms.delete(roomId);
@@ -902,14 +1679,133 @@ io.on('connection', (socket) => {
         
         // Set 60-second timer
         const timerKey = `${roomId}:${socket.userId}`;
-        const timerId = setTimeout(() => {
+        const previousTimer = disconnectTimers.get(timerKey);
+        if (previousTimer) {
+          clearTimeout(previousTimer);
+          disconnectTimers.delete(timerKey);
+        }
+
+        const handleDisconnectTimeout = async () => {
           disconnectTimers.delete(timerKey);
           
           // Check if player is still disconnected
           const currentRoom = rooms.get(roomId);
           if (!currentRoom) return;
           const currentPlayer = currentRoom.players.find(p => p.userId === socket.userId);
-          if (!currentPlayer || !currentPlayer.disconnectedAt) return;
+          if (
+            !currentPlayer
+            || !currentPlayer.disconnectedAt
+            || currentPlayer.socketId !== socket.id
+          ) {
+            return;
+          }
+
+          const disconnectedOpponent = currentRoom.players.find(
+            candidate =>
+              candidate.userId !== socket.userId
+              && !candidate.hasLeft
+              && candidate.disconnectedAt
+          );
+          if (
+            disconnectedOpponent
+            && currentRoom.state !== 'FINISHED'
+          ) {
+            const opponentGraceRemaining = Math.max(
+              0,
+              (60 * 1000) - (Date.now() - disconnectedOpponent.disconnectedAt)
+            );
+            if (opponentGraceRemaining > 0) {
+              const retryTimer = setTimeout(
+                handleDisconnectTimeout,
+                opponentGraceRemaining + 50
+              );
+              disconnectTimers.set(timerKey, retryTimer);
+              return;
+            }
+
+            await archiveAbandonedPvpRoom(
+              currentRoom,
+              'both_players_disconnect_timeout'
+            );
+            io.emit('LOBBY_ROOMS', getJoinableRooms());
+            return;
+          }
+
+          if (
+            currentRoom.state === 'FINISHED'
+            && (!currentRoom.saved || !currentRoom.resultFinalized)
+          ) {
+            const pendingMatchId = currentRoom.matchId;
+            const pendingSettlement = pendingMatchId
+              ? settlementPromises.get(pendingMatchId)
+              : null;
+            if (pendingSettlement) {
+              try {
+                await pendingSettlement;
+              } catch (error) {
+                console.error(
+                  `[XP] Terminal match ${pendingMatchId} is still pending after disconnect:`,
+                  error.message
+                );
+              }
+            }
+
+            if (
+              rooms.get(roomId) !== currentRoom
+              || currentRoom.matchId !== pendingMatchId
+            ) {
+              return;
+            }
+
+            if (!currentRoom.saved || !currentRoom.resultFinalized) {
+              currentPlayer.hasLeft = true;
+              currentPlayer.socketId = null;
+              try {
+                await persistRoomToRedis(roomId, currentRoom);
+              } catch (error) {
+                console.error(`[Redis] Failed to preserve pending terminal room ${roomId}:`, error.message);
+              }
+              console.log(`[XP] Room ${roomId} kept terminal for a later settlement retry.`);
+              return;
+            }
+          }
+
+          if (currentRoom.state === 'PLAYING' && currentRoom.players.length === 2) {
+            await finishPvpByForfeit(
+              currentRoom,
+              socket.userId,
+              'disconnect_timeout',
+              io.to(roomId)
+            );
+            io.emit('LOBBY_ROOMS', getJoinableRooms());
+            return;
+          }
+
+          if (
+            currentRoom.state === 'FINISHED'
+            && currentRoom.endReason === 'FORFEIT'
+          ) {
+            const settlingMatchId = currentRoom.matchId;
+            const pendingSettlement = settlingMatchId
+              ? settlementPromises.get(settlingMatchId)
+              : null;
+            if (pendingSettlement) {
+              try {
+                await pendingSettlement;
+              } catch (error) {
+                console.error(
+                  '[XP] Pending settlement failed before room cleanup:',
+                  error.message
+                );
+              }
+            }
+            if (rooms.get(roomId) !== currentRoom) return;
+            rooms.delete(roomId);
+            deleteRoomFromRedis(roomId);
+            console.log(`[Game] Forfeited room ${roomId} deleted after disconnect timeout.`);
+            io.emit('LOBBY_ROOMS', getJoinableRooms());
+            return;
+          }
           
           console.log(`[Game] User ${socket.username} did not reconnect within 60s. Removing from room ${roomId}.`);
           
@@ -924,10 +1820,21 @@ io.on('connection', (socket) => {
           } else {
             currentRoom.state = 'WAITING_FOR_PLAYERS';
             currentRoom.guesses = [];
-            currentRoom.players.forEach(p => {
-              p.secretNumber = null;
-              p.rpsChoice = null;
-              p.ready = false;
+            currentRoom.matchId = null;
+            currentRoom.winnerIndex = -1;
+            currentRoom.finishedAt = null;
+            currentRoom.endReason = null;
+            currentRoom.forfeitReason = null;
+            currentRoom.forfeitedPlayerId = null;
+            currentRoom.xpSettlement = null;
+            currentRoom.resultFinalized = false;
+            currentRoom.saved = false;
+            currentRoom.players.forEach(remainingPlayer => {
+              remainingPlayer.secretNumber = null;
+              remainingPlayer.rpsChoice = null;
+              remainingPlayer.ready = false;
+              remainingPlayer.disconnectedAt = null;
+              remainingPlayer.hasLeft = false;
             });
             syncRoomToRedis(roomId, currentRoom);
             io.to(roomId).emit('PLAYER_DISCONNECTED', {
@@ -937,7 +1844,9 @@ io.on('connection', (socket) => {
           }
           
           io.emit('LOBBY_ROOMS', getJoinableRooms());
-        }, 60 * 1000); // 60 seconds
+        };
+
+        const timerId = setTimeout(handleDisconnectTimeout, 60 * 1000);
         
         disconnectTimers.set(timerKey, timerId);
       }
@@ -949,7 +1858,17 @@ io.on('connection', (socket) => {
 function getJoinableRooms() {
   const list = [];
   rooms.forEach((room) => {
-    if (!room.isAiRoom && room.state !== 'FINISHED' && room.players && room.players.length > 0 && room.players.length < 2) {
+    const hasOnlyConnectedPlayers = room.players?.every(
+      player => !player.disconnectedAt && !player.hasLeft
+    );
+    if (
+      !room.isAiRoom
+      && room.state !== 'FINISHED'
+      && room.players
+      && room.players.length > 0
+      && room.players.length < 2
+      && hasOnlyConnectedPlayers
+    ) {
       list.push({
         roomId: room.roomId,
         hostName: room.players[0]?.username || 'Host',
@@ -965,6 +1884,36 @@ function getJoinableRooms() {
   return list;
 }
 
+app.get('/api/game-profile', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const cacheKey = `${PROFILE_CACHE_PREFIX}${decoded.userId}`;
+
+    const cachedProfile = await getCachedJson(cacheKey);
+    if (cachedProfile) {
+      return res.json({ profile: cachedProfile, cached: true });
+    }
+
+    const profile = await getGameProfileSummary(decoded.userId);
+    if (profile) {
+      void setCachedJson(cacheKey, profile, PROFILE_CACHE_TTL);
+    }
+    return res.json({ profile });
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+    console.error('[MongoDB] Failed to load game profile:', error.message);
+    return res.status(500).json({ error: 'Failed to load game profile' });
+  }
+});
+
 app.get('/api/history', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -975,14 +1924,137 @@ app.get('/api/history', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     const userId = decoded.userId;
     
-    // Find histories where players contains the user ID
-    const history = await GameHistory.find({ 'players.userId': userId })
-      .sort({ finishedAt: -1 })
-      .limit(15);
-      
-    res.json({ history });
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 10000)
+      : 1;
+    const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 50)
+      : 15;
+    const mode = String(req.query.mode || req.query.type || 'all').toLowerCase();
+    const filter = { 'players.userId': userId };
+    if (mode === 'pvp') {
+      filter.isAiRoom = { $ne: true };
+    } else if (mode === 'ai' || mode === 'pve') {
+      filter.isAiRoom = true;
+    }
+    const [history, total] = await Promise.all([
+      GameHistory.find(filter)
+        .sort({ finishedAt: -1, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      GameHistory.countDocuments(filter)
+    ]);
+
+    res.json({
+      history,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/achievements', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.userId;
+
+    const [profile, historyList] = await Promise.all([
+      GameProfile.findOne({ userId }).lean(),
+      GameHistory.find({ 'players.userId': userId }).sort({ finishedAt: -1 }).limit(100).lean()
+    ]);
+
+    const result = calculateUserAchievements(profile, historyList);
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 50;
+
+    const cacheKey = `${LEADERBOARD_CACHE_PREFIX}${limit}`;
+    const cachedData = await getCachedJson(cacheKey);
+    if (cachedData) {
+      return res.json({ ...cachedData, cached: true });
+    }
+
+    const rawProfiles = await GameProfile.find({})
+      .populate('userId', 'name avatar')
+      .lean();
+
+    const sortedProfiles = rawProfiles
+      .map(profile => ({
+        ...profile,
+        rating: typeof profile.rating === 'number' && Number.isFinite(profile.rating) ? profile.rating : 1000,
+        wins: profile.wins || 0,
+        losses: profile.losses || 0
+      }))
+      .sort((a, b) => {
+        if (b.rating !== a.rating) return b.rating - a.rating;
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        return a.losses - b.losses;
+      })
+      .slice(0, limit);
+
+    const leaderboard = sortedProfiles.map((profile, index) => {
+      const userObj = profile.userId || {};
+      const wins = profile.wins;
+      const losses = profile.losses;
+      const totalMatches = wins + losses;
+      const winRate = totalMatches > 0 ? Number(((wins / totalMatches) * 100).toFixed(1)) : 0;
+      const rating = profile.rating;
+      const highestRating = Math.max(rating, profile.highestRating ?? rating);
+      const rankInfo = getRank(rating);
+
+      return {
+        rank: index + 1,
+        userId: String(userObj._id || profile.userId),
+        username: userObj.name || 'Player',
+        avatar: userObj.avatar || '',
+        rating,
+        highestRating,
+        rankTier: rankInfo.key,
+        rankNameVi: rankInfo.nameVi,
+        rankNameEn: rankInfo.nameEn,
+        wins,
+        losses,
+        totalMatches,
+        winRate,
+        currentWinStreak: profile.currentWinStreak || 0,
+        bestWinStreak: profile.bestWinStreak || 0
+      };
+    });
+
+    const responsePayload = { leaderboard };
+    void setCachedJson(cacheKey, responsePayload, LEADERBOARD_CACHE_TTL);
+    res.json(responsePayload);
+  } catch (err) {
+    console.error('[MongoDB] Failed to fetch leaderboard:', err.message);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
 
@@ -996,8 +2068,12 @@ async function startServer() {
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 10000
     });
+    await Promise.all([GameHistory.init(), GameProfile.init()]);
+    progressionReady = true;
+    console.log('[MongoDB] XP/history indexes are ready.');
     console.log('[MongoDB] Connected to MongoDB Atlas successfully.');
   } catch (err) {
+    progressionReady = false;
     console.error('[MongoDB] Failed to connect to MongoDB Atlas:', err.message);
     console.warn('[MongoDB] Server will start without MongoDB. Game history will NOT be saved.');
   }

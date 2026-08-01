@@ -24,6 +24,32 @@ export function getSocketUrl() {
   return typeof window !== 'undefined' ? window.location.origin : '';
 }
 
+export function getGameApiUrl(path: string) {
+  const baseUrl = getSocketUrl().replace(/\/$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
+}
+
+export function calculateLevelProgress(totalXp: number) {
+  const safeTotalXp = Number.isFinite(totalXp)
+    ? Math.max(0, Math.floor(totalXp))
+    : 0;
+  let level = Math.floor(
+    (Math.sqrt(1 + (4 * safeTotalXp) / 25) - 1) / 2,
+  );
+
+  const cumulativeXpAtLevel = (value: number) => 25 * value * (value + 1);
+  while (cumulativeXpAtLevel(level + 1) <= safeTotalXp) level += 1;
+  while (level > 0 && cumulativeXpAtLevel(level) > safeTotalXp) level -= 1;
+
+  return {
+    totalXp: safeTotalXp,
+    level,
+    currentXp: safeTotalXp - cumulativeXpAtLevel(level),
+    xpForNextLevel: 50 * (level + 1),
+  };
+}
+
 export function getMainSiteUrl(path = '', locale?: Locale) {
   const baseUrl = isLocalHost() ? 'http://localhost:3000' : 'https://moviesaw.vercel.app';
   const url = `${baseUrl}${path}`;

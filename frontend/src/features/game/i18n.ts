@@ -26,8 +26,8 @@ export const translations = {
     copied: 'Copied Room ID',
     setupSecret: 'Setup Secret Code',
     setupSecretDesc:
-      'Choose 4 unique digits (e.g. 1984). Opponents must guess these in exact positions.',
-    secretPlaceholder: 'e.g. 1234',
+      'Choose 4 unique digits (example: 1984). Opponents must guess these in exact positions.',
+    secretPlaceholder: 'Example: 1234',
     lockSecret: 'Lock Secret',
     secretLocked: 'Your secret is locked in!',
     waitingOpponentSubmitSecret: 'Waiting for opponent to submit...',
@@ -83,6 +83,13 @@ export const translations = {
     opponentReconnecting: '{username} lost connection. Waiting 60s...',
     opponentReconnected: '{username} reconnected!',
     playerLeft: '{username} left the room.',
+    rating: 'Rating',
+    highestRating: 'Highest Rating',
+    rank: 'Rank',
+    promoted: 'Promoted: {rank}',
+    demoted: 'Demoted: {rank}',
+    earlyForfeitRatingDesc: 'Early forfeit: stayer gains no rating, quitter is penalized.',
+    ratingUnrecorded: 'Rating could not be recorded.',
   },
   vi: {
     title: 'ĐẤU TRƯỜNG ĐOÁN SỐ',
@@ -166,6 +173,13 @@ export const translations = {
     opponentReconnecting: '{username} mất kết nối. Chờ 60 giây...',
     opponentReconnected: '{username} đã kết nối lại!',
     playerLeft: '{username} đã rời khỏi phòng.',
+    rating: 'Điểm Rating',
+    highestRating: 'Rating cao nhất',
+    rank: 'Bậc hạng',
+    promoted: 'Thăng hạng: {rank}',
+    demoted: 'Giáng hạng: {rank}',
+    earlyForfeitRatingDesc: 'Thoát quá sớm: người ở lại không được cộng điểm, người thoát bị phạt.',
+    ratingUnrecorded: 'Chưa thể ghi nhận điểm đấu.',
   },
 } as const;
 
@@ -177,6 +191,44 @@ export function createTranslator(locale: Locale): Translator {
 }
 
 export function translateBackendError(message: string, locale: Locale) {
+  const progressionErrors: Record<Locale, Record<string, string>> = {
+    en: {
+      'PvP progression is temporarily unavailable.':
+        'PvP progression is temporarily unavailable. Please try again shortly.',
+      'You are already in an active room.':
+        'You are already in an active room.',
+      'Room host is reconnecting. Please try again shortly.':
+        'The room host is reconnecting. Please try again shortly.',
+      'Match settlement is still pending. Please try again shortly.':
+        'The match result is still being recorded. Please try again shortly.',
+      'Match result could not be recorded yet. Please reconnect shortly.':
+        'The match result could not be recorded yet. Please reconnect shortly.',
+      'Match settlement is still pending.':
+        'The match result is still being recorded. Please wait a moment.',
+      'Rematch is unavailable after a player forfeits.':
+        'A rematch is unavailable because a player left the match.',
+    },
+    vi: {
+      'PvP progression is temporarily unavailable.':
+        'H\u1ec7 th\u1ed1ng XP PvP \u0111ang t\u1ea1m th\u1eddi gi\u00e1n \u0111o\u1ea1n. Vui l\u00f2ng th\u1eed l\u1ea1i sau \u00edt ph\u00fat.',
+      'You are already in an active room.':
+        'B\u1ea1n \u0111ang \u1edf trong m\u1ed9t ph\u00f2ng kh\u00e1c.',
+      'Room host is reconnecting. Please try again shortly.':
+        'Ch\u1ee7 ph\u00f2ng \u0111ang k\u1ebft n\u1ed1i l\u1ea1i. Vui l\u00f2ng th\u1eed l\u1ea1i sau gi\u00e2y l\u00e1t.',
+      'Match settlement is still pending. Please try again shortly.':
+        'K\u1ebft qu\u1ea3 tr\u1eadn \u0111\u1ea5u \u0111ang \u0111\u01b0\u1ee3c ghi nh\u1eadn. Vui l\u00f2ng th\u1eed l\u1ea1i sau gi\u00e2y l\u00e1t.',
+      'Match result could not be recorded yet. Please reconnect shortly.':
+        'Ch\u01b0a th\u1ec3 ghi nh\u1eadn k\u1ebft qu\u1ea3 tr\u1eadn \u0111\u1ea5u. Vui l\u00f2ng k\u1ebft n\u1ed1i l\u1ea1i sau gi\u00e2y l\u00e1t.',
+      'Match settlement is still pending.':
+        'K\u1ebft qu\u1ea3 tr\u1eadn \u0111\u1ea5u \u0111ang \u0111\u01b0\u1ee3c ghi nh\u1eadn. Vui l\u00f2ng ch\u1edd m\u1ed9t ch\u00fat.',
+      'Rematch is unavailable after a player forfeits.':
+        'Kh\u00f4ng th\u1ec3 t\u00e1i \u0111\u1ea5u v\u00ec m\u1ed9t ng\u01b0\u1eddi ch\u01a1i \u0111\u00e3 r\u1eddi tr\u1eadn.',
+    },
+  };
+
+  const progressionMessage = progressionErrors[locale][message];
+  if (progressionMessage) return progressionMessage;
+
   if (locale !== 'vi') return message;
 
   const errors: Record<string, string> = {

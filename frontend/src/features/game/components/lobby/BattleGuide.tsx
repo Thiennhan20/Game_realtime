@@ -14,7 +14,7 @@ export function BattleGuide({ locale }: { locale: Locale }) {
           ],
           [
             'Kết thúc & Lưu lịch sử',
-            'Ai đạt 4 🎯 trước sẽ thắng. Bấm "Rời phòng" hoặc offline quá 60s sẽ hủy ván.',
+            'Ai đạt 4 🎯 trước sẽ thắng. Rời phòng hoặc offline quá 60s sẽ kết thúc ván; người rời nhận +0 XP. XP chỉ được xét khi mỗi người có ít nhất 3 lượt đoán.',
           ],
         ]
       : [
@@ -26,28 +26,31 @@ export function BattleGuide({ locale }: { locale: Locale }) {
             'Guess & Read Hints',
             'Guess 4 digits. Get hints: 🟢 (Correct digits, wrong spot) and 🎯 (Correct digits in the right spot).',
           ],
-          ['Finish & Save History', 'First to 4 🎯 wins. Leaving or offline >60s cancels save.'],
+          [
+            'Finish & Save History',
+            'First to 4 🎯 wins. Leaving or staying offline for over 60s ends the match; the leaver gets +0 XP. XP requires at least 3 guesses from each player.',
+          ],
         ];
 
   return (
-    <div className="hidden lg:flex flex-col flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl shadow-xl justify-between">
-      <div className="space-y-5">
-        <h3 className="text-sm font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
+    <div className="hidden lg:flex flex-col flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl shadow-xl justify-between">
+      <div className="space-y-4">
+        <h3 className="text-xs font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
           {locale === 'vi' ? '📖 Hướng Dẫn: Đối Chiến' : '📖 Guide: Battle'}
         </h3>
         {steps.map(([title, description], index) => (
-          <div key={title} className="space-y-1.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs text-white">
+          <div key={title} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center font-bold text-[11px] text-white shrink-0">
                 {index + 3}
               </div>
-              <h4 className="font-bold text-sm text-slate-200">{title}</h4>
+              <h4 className="font-bold text-xs text-slate-200">{title}</h4>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed pl-8">{description}</p>
+            <p className="text-[11px] text-slate-400 leading-relaxed pl-7">{description}</p>
           </div>
         ))}
       </div>
-      <div className="border-t border-slate-805 pt-4 mt-6 text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-right">
+      <div className="border-t border-slate-805 pt-3 mt-4 text-[9px] text-slate-500 font-semibold uppercase tracking-wider text-right">
         {locale === 'vi' ? 'Chế độ chơi thời gian thực' : 'Realtime Game Arena'}
       </div>
     </div>

@@ -29,15 +29,15 @@ export function RoomChat({
   onSubmit,
 }: RoomChatProps) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
-  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
   const [showNewMessageButton, setShowNewMessageButton] = useState(false);
+  const isUserAtBottomRef = useRef(true);
   const prevMessagesLengthRef = useRef(messages.length);
 
   const handleScroll = () => {
     if (!messagesRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = messagesRef.current;
     const atBottom = scrollHeight - scrollTop - clientHeight < 60;
-    setIsUserAtBottom(atBottom);
+    isUserAtBottomRef.current = atBottom;
     if (atBottom) {
       setShowNewMessageButton(false);
     }
@@ -49,11 +49,12 @@ export function RoomChat({
         top: messagesRef.current.scrollHeight,
         behavior: 'smooth',
       });
+      isUserAtBottomRef.current = true;
       setShowNewMessageButton(false);
-      setIsUserAtBottom(true);
     }
   };
 
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
     const isNew = messages.length > prevMessagesLengthRef.current;
     prevMessagesLengthRef.current = messages.length;
@@ -63,19 +64,20 @@ export function RoomChat({
     const lastMessage = messages[messages.length - 1];
     const sentByMe = lastMessage?.username === currentUsername;
 
-    if (sentByMe || isUserAtBottom) {
+    if (sentByMe || isUserAtBottomRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
       setShowNewMessageButton(false);
     } else if (isNew) {
       setShowNewMessageButton(true);
     }
-  }, [messages, currentUsername, isUserAtBottom]);
+  }, [messages, currentUsername]);
 
+  // Scroll to bottom when tab becomes active
   useEffect(() => {
-    if (isActive && messagesRef.current && isUserAtBottom) {
+    if (isActive && messagesRef.current && isUserAtBottomRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
-  }, [isActive, isUserAtBottom]);
+  }, [isActive]);
 
   return (
     <div
@@ -155,9 +157,10 @@ export function RoomChat({
         <button
           type="submit"
           disabled={!input.trim()}
-          className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer"
+          aria-label="Send message"
+          className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
-          <Send size={16} />
+          <Send size={16} aria-hidden="true" />
         </button>
       </form>
     </div>

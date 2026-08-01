@@ -62,6 +62,7 @@ export default function GameClient() {
         onOpenProfile={() => navigateTopWindow(getMainSiteUrl('/profile'))}
         onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
         onOpenLeaderboard={() => router.push(`/leaderboard?locale=${game.locale}`)}
+        onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
       />
 
       <NotificationStack
@@ -74,8 +75,7 @@ export default function GameClient() {
         onDismissOpponent={() => game.setOpponentTempDisconnected(null)}
       />
 
-
-      <main className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0">
+      <main className="flex-1 max-w-[1700px] w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0">
         {game.room && (
           <MobileRoomTabs
             activeTab={activeMobileTab}
@@ -101,11 +101,15 @@ export default function GameClient() {
               locale={game.locale}
               t={game.t}
               roomId={roomId}
+              gameProfile={game.gameProfile}
+              isLoadingGameProfile={game.isLoadingGameProfile}
+              gameProfileError={game.gameProfileError}
               onCreateRoom={game.handleCreateRoom}
               onCreateAiRoom={() => setShowAiDifficultyModal(true)}
               onJoinRoom={game.handleJoinRoom}
               onRoomIdChange={setRoomId}
               onRefresh={game.handleRefreshLobby}
+              onRefreshGameProfile={game.loadGameProfile}
               onViewAllRooms={() => setShowAllRoomsModal(true)}
               onViewLeaderboard={() =>
                 router.push(`/leaderboard?locale=${game.locale}`)
@@ -126,6 +130,7 @@ export default function GameClient() {
               opponentWantsPlayAgain={game.opponentWantsPlayAgain}
               copied={game.copied}
               matchStats={game.matchStats}
+              matchXpResult={game.matchXpResult}
               secretReveal={game.secretReveal}
               showMatchModal={game.showMatchModal}
               showGuessHistoryModal={game.showGuessHistoryModal}

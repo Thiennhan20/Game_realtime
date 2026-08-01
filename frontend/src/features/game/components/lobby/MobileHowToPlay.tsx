@@ -15,14 +15,14 @@ export function MobileHowToPlay({ locale }: { locale: Locale }) {
           ['Cài mật mã', 'Chọn 4 chữ số khác nhau làm mật mã của bạn (giữ bí mật!).'],
           ['Oẳn tù tì', 'Kéo - Búa - Bao để phân định người được quyền đoán trước.'],
           ['Đoán số & gợi ý', 'Lần lượt đoán số. Gợi ý: 🟢 (đúng số) và 🎯 (đúng số và đúng vị trí).'],
-          ['Kết thúc & Lưu', 'Đạt 4 🎯 trước sẽ thắng.'],
+          ['Kết thúc & Lưu', 'Đạt 4 🎯 trước sẽ thắng. Mỗi người cần ít nhất 3 lượt đoán để xét XP; người rời trận nhận +0 XP.'],
         ]
       : [
           ['Create/Join Room', 'Create room, copy ID to share, or join from Lobby Rooms list.'],
           ['Lock Secret', 'Choose 4 unique digits as your secret (keep it hidden!).'],
           ['RPS Duel', 'Play Rock-Paper-Scissors to decide who gets first turn.'],
           ['Guess & Clues', 'Take turns guessing. Hints: 🟢 (correct digit) and 🎯 (correct digit & spot).'],
-          ['Finish & Save', 'First to 4 🎯 wins.'],
+          ['Finish & Save', 'First to 4 🎯 wins. XP requires at least 3 guesses from each player; the leaver gets +0 XP.'],
         ];
 
   return (

@@ -8,6 +8,7 @@ import type {
   Locale,
   MatchStats,
   Player,
+  PlayerXpResult,
   Room,
   RpsChoice,
 } from '../../types';
@@ -37,6 +38,7 @@ interface ActiveRoomProps {
   opponentWantsPlayAgain: boolean;
   copied: boolean;
   matchStats: MatchStats | null;
+  matchXpResult: PlayerXpResult | null;
   secretReveal: string | null;
   showMatchModal: boolean;
   showGuessHistoryModal: boolean;
@@ -72,6 +74,7 @@ export function ActiveRoom({
   opponentWantsPlayAgain,
   copied,
   matchStats,
+  matchXpResult,
   secretReveal,
   showMatchModal,
   showGuessHistoryModal,
@@ -94,13 +97,20 @@ export function ActiveRoom({
 }: ActiveRoomProps) {
   const isMyTurn = room.activeTurnIndex === myPlayerIndex;
   const isWinner = room.winnerIndex === myPlayerIndex;
+  const normalizedEndReason = matchStats?.endReason?.toLowerCase() || '';
+  const canPlayAgain =
+    room.players.length === 2 &&
+    !opponent?.hasLeft &&
+    !['forfeit', 'leave', 'disconnect'].some((reason) =>
+      normalizedEndReason.includes(reason),
+    );
   const storedSecret =
     typeof window === 'undefined'
       ? secretInput
       : localStorage.getItem(`secret:${room.roomId}`) || secretInput;
 
   return (
-    <div className="flex-1 flex flex-col gap-4 pb-24 sm:pb-0 min-h-0 [overflow-anchor:none]">
+    <div className="flex-1 flex flex-col gap-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-0 min-h-0 [overflow-anchor:none]">
       <ActiveRoomHeader
         room={room}
         me={me}
@@ -174,6 +184,7 @@ export function ActiveRoom({
             opponentWantsPlayAgain={opponentWantsPlayAgain}
             locale={locale}
             t={t}
+            canPlayAgain={canPlayAgain}
             onOpenSummary={() => onShowMatchModalChange(true)}
             onOpenGuessHistory={() => onShowGuessHistoryModalChange(true)}
             onPlayAgain={onPlayAgain}
@@ -186,6 +197,7 @@ export function ActiveRoom({
         isOpen={showMatchModal}
         room={room}
         stats={matchStats}
+        xpResult={matchXpResult}
         user={user}
         me={me}
         opponent={opponent}

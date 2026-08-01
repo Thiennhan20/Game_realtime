@@ -48,7 +48,11 @@ export function SecretSetupPanel({
                 placeholder={t('secretPlaceholder')}
                 value={secretInput}
                 onChange={(event) => onSecretInputChange(event.target.value.replace(/\D/g, ''))}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-4 py-3.5 sm:py-4 rounded-xl text-center text-xl sm:text-2xl font-mono font-bold tracking-[0.5em] placeholder:tracking-normal placeholder:text-xs sm:placeholder:text-sm placeholder:font-sans placeholder:font-medium placeholder-slate-600 transition-colors"
+                className={`w-full bg-slate-950 border px-4 py-3.5 sm:py-4 rounded-xl text-center text-xl sm:text-2xl font-mono font-bold tracking-[0.5em] placeholder:tracking-normal placeholder:text-base sm:placeholder:text-lg md:placeholder:text-xl placeholder:font-sans placeholder:font-semibold placeholder-slate-400 transition-all duration-300 ${
+                  !secretInput || secretInput.length < 4
+                    ? 'border-purple-500/70 shadow-[0_0_22px_rgba(168,85,247,0.35)] ring-2 ring-purple-500/35 animate-pulse hover:border-purple-400'
+                    : 'border-purple-500/90 shadow-[0_0_20px_rgba(168,85,247,0.3)] ring-2 ring-purple-500/50'
+                } focus:border-purple-400 focus:ring-2 focus:ring-purple-400/60 focus:outline-none`}
               />
               <button
                 type="submit"

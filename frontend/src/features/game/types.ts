@@ -18,11 +18,12 @@ export interface Player {
   userId: string;
   username: string;
   avatar: string;
-  socketId: string;
+  socketId: string | null;
   secretNumber: string | null;
   rpsChoice: RpsChoice | null;
   ready: boolean;
   disconnectedAt?: number | null;
+  hasLeft?: boolean;
 }
 
 export interface Guess {
@@ -32,6 +33,43 @@ export interface Guess {
   correctPosition: number;
   timestamp: string;
 }
+
+export interface GameProfile {
+  totalXp: number;
+  level: number;
+  currentXp: number;
+  xpForNextLevel: number;
+  wins: number;
+  losses: number;
+  currentWinStreak: number;
+  bestWinStreak: number;
+  rating: number;
+  highestRating: number;
+  rank: string;
+  rankEn?: string;
+  rankKey?: string;
+  ratingToNextRank?: number | null;
+}
+
+export interface PlayerXpResult extends GameProfile {
+  userId: string;
+  xpEarned: number;
+  ratingBefore?: number;
+  ratingDelta?: number;
+  ratingAfter?: number;
+  rankBefore?: string;
+  rankAfter?: string;
+  rankBeforeEn?: string;
+  rankAfterEn?: string;
+  rankKeyBefore?: string;
+  rankKeyAfter?: string;
+}
+
+export type PlayerXpSettlement = Pick<
+  PlayerXpResult,
+  'userId' | 'xpEarned'
+> &
+  Partial<PlayerXpResult>;
 
 export interface MatchStats {
   duration: number;
@@ -43,6 +81,15 @@ export interface MatchStats {
   loserSecret: string;
   startedAt: string;
   finishedAt: string;
+  status?: string;
+  endReason?: string;
+  forfeitReason?: string | null;
+  forfeitedPlayerId?: string | null;
+  xpEligible?: boolean;
+  xpEligibilityReason?: string;
+  ratingApplied?: boolean;
+  ratingReason?: string;
+  xpResults?: PlayerXpSettlement[];
 }
 
 export interface Room {
@@ -71,4 +118,22 @@ export interface ChatMessage {
   username: string;
   content: string;
   timestamp: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  avatar: string;
+  rating: number;
+  highestRating: number;
+  rankTier: string;
+  rankNameVi: string;
+  rankNameEn: string;
+  wins: number;
+  losses: number;
+  totalMatches: number;
+  winRate: number;
+  currentWinStreak: number;
+  bestWinStreak: number;
 }

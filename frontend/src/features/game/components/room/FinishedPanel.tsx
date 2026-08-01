@@ -8,6 +8,7 @@ interface FinishedPanelProps {
   isWinner: boolean;
   opponentName: string;
   opponentWantsPlayAgain: boolean;
+  canPlayAgain: boolean;
   locale: Locale;
   t: Translator;
   onOpenSummary: () => void;
@@ -20,6 +21,7 @@ export function FinishedPanel({
   isWinner,
   opponentName,
   opponentWantsPlayAgain,
+  canPlayAgain,
   locale,
   t,
   onOpenSummary,
@@ -67,10 +69,17 @@ export function FinishedPanel({
         <div className="flex flex-row gap-2.5 w-full">
           <button
             onClick={onPlayAgain}
-            className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm"
+            disabled={!canPlayAgain}
+            className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-800 disabled:text-slate-500 disabled:shadow-none"
           >
             <RefreshCw size={16} />
-            <span>{t('playAgain')}</span>
+            <span>
+              {canPlayAgain
+                ? t('playAgain')
+                : locale === 'vi'
+                  ? 'Đối thủ đã rời'
+                  : 'Opponent left'}
+            </span>
           </button>
           <button
             onClick={onLeaveRoom}
@@ -82,7 +91,7 @@ export function FinishedPanel({
         </div>
 
         <div className="min-h-[18px] mt-2">
-          {opponentWantsPlayAgain && (
+          {opponentWantsPlayAgain && canPlayAgain && (
             <p className="text-xs text-green-400 font-semibold">
               {t('rematchRequest').replace('{username}', opponentName || t('enemy'))}
             </p>

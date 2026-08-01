@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { io } from 'socket.io-client';
 import type { Socket } from 'socket.io-client';
@@ -9,15 +9,60 @@ import { createTranslator, translateBackendError } from '../i18n';
 import type {
   AiDifficulty,
   ChatMessage,
+  GameProfile,
   LobbyRoom,
   MatchStats,
   Player,
+  PlayerXpResult,
   Room,
   RpsChoice,
 } from '../types';
-import { getSocketUrl, isUniqueFourDigitCode, normalizeRoomId } from '../utils';
+import {
+  calculateLevelProgress,
+  getGameApiUrl,
+  getSocketUrl,
+  isUniqueFourDigitCode,
+  normalizeRoomId,
+} from '../utils';
 import { useAuthProfile } from './useAuthProfile';
 import { useGameLocale } from './useGameLocale';
+
+function toNonNegativeInteger(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : fallback;
+}
+
+function normalizeGameProfile(value: unknown): GameProfile {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid game profile payload');
+  }
+
+  const candidate = value as Partial<GameProfile>;
+  const levelProgress = calculateLevelProgress(toNonNegativeInteger(candidate.totalXp));
+  const rating = toNonNegativeInteger(candidate.rating, 1000);
+  const highestRating = Math.max(rating, toNonNegativeInteger(candidate.highestRating, 1000));
+
+  return {
+    totalXp: levelProgress.totalXp,
+    level: toNonNegativeInteger(candidate.level, levelProgress.level),
+    currentXp: toNonNegativeInteger(candidate.currentXp, levelProgress.currentXp),
+    xpForNextLevel: Math.max(
+      1,
+      toNonNegativeInteger(candidate.xpForNextLevel, levelProgress.xpForNextLevel),
+    ),
+    wins: toNonNegativeInteger(candidate.wins),
+    losses: toNonNegativeInteger(candidate.losses),
+    currentWinStreak: toNonNegativeInteger(candidate.currentWinStreak),
+    bestWinStreak: toNonNegativeInteger(candidate.bestWinStreak),
+    rating,
+    highestRating,
+    rank: candidate.rank || 'Đồng',
+    rankEn: candidate.rankEn || 'Bronze',
+    rankKey: candidate.rankKey || 'bronze',
+    ratingToNextRank: candidate.ratingToNextRank !== undefined ? candidate.ratingToNextRank : null,
+  };
+}
 
 export function useGameController() {
   const { locale, mounted, t, toggleLocale } = useGameLocale();
@@ -38,7 +83,10 @@ export function useGameController() {
   const [secretReveal, setSecretReveal] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [matchStats, setMatchStats] = useState<MatchStats | null>(null);
-  const [matchResultSent, setMatchResultSent] = useState(false);
+  const [matchXpResult, setMatchXpResult] = useState<PlayerXpResult | null>(null);
+  const [gameProfile, setGameProfile] = useState<GameProfile | null>(null);
+  const [isLoadingGameProfile, setIsLoadingGameProfile] = useState(true);
+  const [gameProfileError, setGameProfileError] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [opponentTempDisconnected, setOpponentTempDisconnected] = useState<string | null>(
     null,
@@ -53,6 +101,73 @@ export function useGameController() {
   const localeRef = useRef(locale);
   const userRef = useRef(user);
   const previousRoomStateRef = useRef<string | null>(null);
+  const gameProfileRequestIdRef = useRef(0);
+  const gameProfileRef = useRef<GameProfile | null>(null);
+
+  const loadGameProfile = useCallback(async () => {
+    const requestId = ++gameProfileRequestIdRef.current;
+
+    // Stale-While-Revalidate: Instant 0ms cache preload from localStorage
+    try {
+      const cached = localStorage.getItem('game_profile_cache');
+      if (cached && !gameProfileRef.current) {
+        const parsed: unknown = JSON.parse(cached);
+        const cachedProfile = normalizeGameProfile(parsed);
+        gameProfileRef.current = cachedProfile;
+        setGameProfile(cachedProfile);
+        setIsLoadingGameProfile(false);
+      } else if (!gameProfileRef.current) {
+        setIsLoadingGameProfile(true);
+      }
+    } catch {
+      if (!gameProfileRef.current) {
+        setIsLoadingGameProfile(true);
+      }
+    }
+
+    setGameProfileError(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Missing authentication token');
+
+      const response = await fetch(getGameApiUrl('/api/game-profile'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Game profile request failed with status ${response.status}`);
+      }
+
+      const data: unknown = await response.json();
+      const profilePayload =
+        data && typeof data === 'object' && 'profile' in data
+          ? (data as { profile: unknown }).profile
+          : null;
+      const nextProfile = normalizeGameProfile(profilePayload);
+
+      if (gameProfileRequestIdRef.current === requestId) {
+        gameProfileRef.current = nextProfile;
+        setGameProfile(nextProfile);
+        setGameProfileError(null);
+        try {
+          localStorage.setItem('game_profile_cache', JSON.stringify(nextProfile));
+        } catch {
+          // Ignore storage quota error
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load game profile:', error);
+      if (gameProfileRequestIdRef.current === requestId && !gameProfileRef.current) {
+        setGameProfileError('LOAD_FAILED');
+      }
+    } finally {
+      if (gameProfileRequestIdRef.current === requestId) {
+        setIsLoadingGameProfile(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     localeRef.current = locale;
@@ -61,6 +176,14 @@ export function useGameController() {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const timeoutId = window.setTimeout(() => {
+      void loadGameProfile();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadGameProfile, user]);
 
   const roomState = room?.state;
 
@@ -108,15 +231,17 @@ export function useGameController() {
     return () => window.clearTimeout(timeoutId);
   }, [room, user]);
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     const token = localStorage.getItem('token');
     const socket = io(getSocketUrl(), {
       auth: {
         token,
-        username: user.name,
-        avatar: user.avatar,
+        username: userRef.current?.name || '',
+        avatar: userRef.current?.avatar || '',
       },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -160,6 +285,8 @@ export function useGameController() {
     socket.on('ROOM_CREATED', (createdRoom: Room) => {
       setRoom(createdRoom);
       setChatMessages([]);
+      setMatchStats(null);
+      setMatchXpResult(null);
       setErrorMsg(null);
     });
 
@@ -173,7 +300,7 @@ export function useGameController() {
       setGuessInput('');
       setSecretReveal(null);
       setMatchStats(null);
-      setMatchResultSent(false);
+      setMatchXpResult(null);
       setShowMatchModal(false);
       setShowGuessHistoryModal(false);
       setOpponentTempDisconnected(null);
@@ -184,7 +311,7 @@ export function useGameController() {
       setRoom((previousRoom) => {
         if (!previousRoom) return null;
         const players = [...previousRoom.players];
-        const playerIndex = players.findIndex((player) => player.userId === user.id);
+        const playerIndex = players.findIndex((player) => player.userId === userRef.current?.id);
         if (playerIndex !== -1 && players[playerIndex]) {
           players[playerIndex] = { ...players[playerIndex], ready: true };
         }
@@ -230,8 +357,45 @@ export function useGameController() {
       (data: { roomState: Room; opponentSecret: string; matchStats: MatchStats }) => {
         setRoom(data.roomState);
         setSecretReveal(data.opponentSecret);
-        setMatchStats(data.matchStats);
+        setMatchStats(data.matchStats ?? null);
+
+        const rawXpResult = data.matchStats?.xpResults?.find(
+          (result) => String(result.userId) === String(userRef.current?.id),
+        );
+        if (rawXpResult) {
+          const totalXpSnapshot = rawXpResult.totalXp;
+          const hasProfileSnapshot =
+            typeof totalXpSnapshot === 'number' && totalXpSnapshot >= 0;
+          const updatedProfile =
+            hasProfileSnapshot
+              ? normalizeGameProfile(rawXpResult)
+              : gameProfileRef.current || normalizeGameProfile(rawXpResult);
+          setMatchXpResult({
+            ...updatedProfile,
+            userId: rawXpResult.userId,
+            xpEarned: toNonNegativeInteger(rawXpResult.xpEarned),
+            ratingBefore: rawXpResult.ratingBefore,
+            ratingDelta: rawXpResult.ratingDelta,
+            ratingAfter: rawXpResult.ratingAfter,
+            rankBefore: rawXpResult.rankBefore,
+            rankAfter: rawXpResult.rankAfter,
+          });
+          if (hasProfileSnapshot) {
+            gameProfileRequestIdRef.current += 1;
+            gameProfileRef.current = updatedProfile;
+            setGameProfile(updatedProfile);
+            setGameProfileError(null);
+            setIsLoadingGameProfile(false);
+          } else {
+            void loadGameProfile();
+          }
+        } else {
+          setMatchXpResult(null);
+          void loadGameProfile();
+        }
+
         setShowMatchModal(true);
+        setOpponentTempDisconnected(null);
         setErrorMsg(null);
       },
     );
@@ -302,21 +466,22 @@ export function useGameController() {
       setTimeout(() => setErrorMsg(null), 4000);
     });
 
+    // Refresh lobby when browser tab regains focus (handles mobile tab switching)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socket.connected) {
+        socket.emit('GET_LOBBY_ROOMS');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.disconnect();
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
     };
-  }, [setAuthError, user]);
-
-  useEffect(() => {
-    if (room?.state === 'FINISHED' && showMatchModal && !matchResultSent && socketRef.current) {
-      socketRef.current.emit('MATCH_RESULT_VIEWED', room.roomId);
-      setMatchResultSent(true);
-      console.log('[Game] MATCH_RESULT_VIEWED emitted for room', room.roomId);
-    }
-  }, [matchResultSent, room?.roomId, room?.state, showMatchModal]);
+  }, [loadGameProfile, setAuthError, userId]);
 
   const myPlayerIndex = useMemo(
     () => (room && user ? room.players.findIndex((player) => player.userId === user.id) : -1),
@@ -349,7 +514,7 @@ export function useGameController() {
       setErrorMsg(
         locale === 'vi'
           ? 'ID phòng không đúng định dạng (Ví dụ: G-123456).'
-          : 'Invalid Room ID format (e.g. G-123456).',
+          : 'Invalid Room ID format (example: G-123456).',
       );
       return;
     }
@@ -410,11 +575,13 @@ export function useGameController() {
   };
 
   const handleLeaveRoom = () => {
-    socketRef.current?.emit('LEAVE_ROOM');
+    socketRef.current?.emit('LEAVE_ROOM', () => {
+      void loadGameProfile();
+    });
     setRoom(null);
     setChatMessages([]);
     setMatchStats(null);
-    setMatchResultSent(false);
+    setMatchXpResult(null);
     setShowMatchModal(false);
     setShowGuessHistoryModal(false);
     setOpponentTempDisconnected(null);
@@ -465,6 +632,10 @@ export function useGameController() {
     secretReveal,
     copied,
     matchStats,
+    matchXpResult,
+    gameProfile,
+    isLoadingGameProfile,
+    gameProfileError,
     isReconnecting,
     opponentTempDisconnected,
     setOpponentTempDisconnected,
@@ -484,6 +655,7 @@ export function useGameController() {
     handleStartAiMatch,
     handleJoinRoom,
     handleRefreshLobby,
+    loadGameProfile,
     handleSetSecret,
     handleRpsChoice,
     handleSendGuess,
