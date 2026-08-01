@@ -236,6 +236,25 @@ export function useGameController() {
   // --- Fast REST Pre-fetch for Instant Room List Display ---
   useEffect(() => {
     let active = true;
+
+    // 1. Check URL query params for ?preRooms=... (0ms instant display from Web Phim)
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const preRoomsRaw = urlParams.get('preRooms');
+        if (preRoomsRaw) {
+          const parsed = JSON.parse(decodeURIComponent(preRoomsRaw));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLobbyRooms(parsed);
+            setIsRefreshingLobby(false);
+          }
+        }
+      } catch {
+        // Ignore URL parse error
+      }
+    }
+
+    // 2. Fetch fresh rooms from /api/rooms
     const prefetchRooms = async () => {
       try {
         const response = await fetch(getGameApiUrl('/api/rooms'));
