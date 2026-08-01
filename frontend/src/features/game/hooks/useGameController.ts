@@ -238,10 +238,33 @@ export function useGameController() {
   useEffect(() => {
     if (!userId) return;
 
-    const token = localStorage.getItem('token');
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        token = urlParams.get('token');
+      } catch {
+        // Ignore URL parse error
+      }
+    }
+    if (!token) {
+      try {
+        token = localStorage.getItem('token');
+      } catch {
+        // Ignore storage error
+      }
+    }
+    if (token) {
+      try {
+        localStorage.setItem('token', token);
+      } catch {
+        // Ignore storage quota error
+      }
+    }
+
     const socket = io(getSocketUrl(), {
       auth: {
-        token,
+        token: token || '',
         username: userRef.current?.name || '',
         avatar: userRef.current?.avatar || '',
       },

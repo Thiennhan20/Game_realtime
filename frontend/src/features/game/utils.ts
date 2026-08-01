@@ -15,13 +15,17 @@ export function getAuthApiBaseUrl() {
 }
 
 export function getSocketUrl() {
-  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
-    return process.env.NEXT_PUBLIC_SOCKET_URL;
+  let url = process.env.NEXT_PUBLIC_SOCKET_URL || '';
+  if (!url) {
+    if (isLocalHost()) {
+      return 'http://localhost:8080';
+    }
+    url = typeof window !== 'undefined' ? window.location.origin : '';
   }
-  if (isLocalHost()) {
-    return 'http://localhost:8080';
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
   }
-  return typeof window !== 'undefined' ? window.location.origin : '';
+  return url;
 }
 
 export function getGameApiUrl(path: string) {
