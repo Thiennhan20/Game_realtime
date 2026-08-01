@@ -118,6 +118,7 @@ export function useGameController() {
   const previousRoomStateRef = useRef<string | null>(null);
   const gameProfileRequestIdRef = useRef(0);
   const gameProfileRef = useRef<GameProfile | null>(null);
+  const lastRestFetchTimeRef = useRef<number>(0);
 
   const loadGameProfile = useCallback(async () => {
     const requestId = ++gameProfileRequestIdRef.current;
@@ -348,7 +349,16 @@ export function useGameController() {
     // 1. Bind event listeners FIRST so no server events are missed
     socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
       if (Array.isArray(roomsList)) {
-        setLobbyRooms((prev) => (isSameLobbyRooms(prev, roomsList) ? prev : roomsList));
+        setLobbyRooms((prev) => {
+          // If socket sends empty list right after REST API fetched valid rooms, protect the valid rooms
+          if (roomsList.length === 0 && prev.length > 0 && Date.now() - lastRestFetchTimeRef.current < 4000) {
+            return prev;
+          }
+          if (isSameLobbyRooms(prev, roomsList)) {
+            return prev;
+          }
+          return roomsList;
+        });
       }
       setIsRefreshingLobby(false);
     });
@@ -612,6 +622,9 @@ export function useGameController() {
           if (!isMounted) return;
           if (data && typeof data === 'object' && 'rooms' in data && Array.isArray((data as { rooms: unknown }).rooms)) {
             const newRooms = (data as { rooms: LobbyRoom[] }).rooms;
+            if (newRooms.length > 0) {
+              lastRestFetchTimeRef.current = Date.now();
+            }
             setLobbyRooms((prev) => (isSameLobbyRooms(prev, newRooms) ? prev : newRooms));
             setIsRefreshingLobby(false);
           }
