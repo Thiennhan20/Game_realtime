@@ -965,10 +965,10 @@ io.on('connection', (socket) => {
   console.log(`[Game] User connected: ${socket.username} (${socket.userId})`);
   
   // --- RECONNECT DETECTION ---
-  // Check if this user was temporarily disconnected from any room
+  // Check if this user belongs to any active room and reconnect them automatically
   rooms.forEach((room, roomId) => {
     const player = room.players.find(p => p.userId === socket.userId);
-    if (player && player.disconnectedAt && !player.hasLeft) {
+    if (player && !player.hasLeft) {
       // Cancel the disconnect timer
       const timerKey = `${roomId}:${socket.userId}`;
       const timerId = disconnectTimers.get(timerKey);
@@ -1009,6 +1009,13 @@ io.on('connection', (socket) => {
   // Handle manual request for joinable rooms
   socket.on('GET_LOBBY_ROOMS', () => {
     socket.emit('LOBBY_ROOMS', getJoinableRooms());
+  });
+
+  socket.on('CHECK_ACTIVE_ROOM', () => {
+    const activeRoom = findActiveRoomForUser(socket.userId);
+    if (activeRoom) {
+      socket.emit('RECONNECTED_TO_ROOM', activeRoom);
+    }
   });
 
   // --- CREATE ROOM ---

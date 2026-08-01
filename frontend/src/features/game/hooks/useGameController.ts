@@ -203,6 +203,8 @@ export function useGameController() {
             if (countdownInterval) clearInterval(countdownInterval);
             setShowStartCountdown(false);
             return 0;
+
+
           }
           return previousValue - 1;
         });
@@ -260,6 +262,7 @@ export function useGameController() {
       setErrorMsg(null);
       setIsReconnecting(false);
       socket.emit('GET_LOBBY_ROOMS');
+      socket.emit('CHECK_ACTIVE_ROOM');
     });
 
     socket.on('connect_error', (error) => {
@@ -280,6 +283,13 @@ export function useGameController() {
 
     socket.on('LOBBY_ROOMS', (roomsList: LobbyRoom[]) => {
       setLobbyRooms(roomsList);
+    });
+
+    socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
+      console.log('Successfully reconnected to active room:', reconnectedRoom.roomId);
+      setRoom(reconnectedRoom);
+      setErrorMsg(null);
+      setIsReconnecting(false);
     });
 
     socket.on('ROOM_CREATED', (createdRoom: Room) => {

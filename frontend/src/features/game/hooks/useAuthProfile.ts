@@ -27,6 +27,22 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+function getTokenFromLocationOrStorage(searchParams: ReturnType<typeof useSearchParams>): string | null {
+  const fromParams = searchParams.get('token');
+  if (fromParams) return fromParams;
+  if (typeof window !== 'undefined') {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromUrl = urlParams.get('token');
+      if (fromUrl) return fromUrl;
+    } catch {
+      // Ignore URL parse error
+    }
+    return localStorage.getItem('token');
+  }
+  return null;
+}
+
 export function useAuthProfile() {
   const searchParams = useSearchParams();
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -47,34 +63,43 @@ export function useAuthProfile() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     const validateToken = async () => {
-      const token = searchParams.get('token') || localStorage.getItem('token');
+      const token = getTokenFromLocationOrStorage(searchParams);
       if (!token) {
-        setAuthError('NO_TOKEN');
-        setLoadingUser(false);
+        if (active) {
+          setUser(null);
+          setAuthError('NO_TOKEN');
+          setLoadingUser(false);
+        }
         return;
       }
 
-      // --- Fast path: decode JWT locally for instant lobby access ---
+      // Fast path: decode JWT locally IF user has valid name
       const payload = decodeJwtPayload(token);
+      let fastPathSuccess = false;
       if (payload && typeof payload.userId === 'string') {
         const userId = payload.userId;
         const jwtName =
           (typeof payload.name === 'string' ? payload.name : null) ??
           (typeof payload.username === 'string' ? payload.username : null);
 
-        setUser((prev) => {
-          if (prev && prev.name && prev.name.toLowerCase() !== 'player') return prev;
-          if (jwtName && jwtName.toLowerCase() !== 'player') {
-            return { id: userId, name: jwtName, avatar: '' };
+        if (jwtName && jwtName.toLowerCase() !== 'player') {
+          if (active) {
+            setUser({ id: userId, name: jwtName, avatar: '' });
+            setLoadingUser(false);
+            fastPathSuccess = true;
           }
-          return prev;
-        });
-        setLoadingUser(false);
-        localStorage.setItem('token', token);
+          localStorage.setItem('token', token);
+        }
       }
 
-      // --- Background verification: fetch full profile from auth server ---
+      if (!fastPathSuccess && active) {
+        setLoadingUser(true);
+      }
+
+      // Background verification: fetch full profile from auth server
       try {
         const response = await fetch(`${getAuthApiBaseUrl()}/auth/profile`, {
           headers: {
@@ -91,24 +116,37 @@ export function useAuthProfile() {
           name: data.user.name || data.user.username || '',
           avatar: data.user.avatar || '',
         };
-        setUser(fetchedUser);
+        if (active) {
+          setUser(fetchedUser);
+          setAuthError(null);
+          setLoadingUser(false);
+        }
         try {
           localStorage.setItem('auth_user_cache', JSON.stringify(fetchedUser));
           localStorage.setItem('token', token);
         } catch {
           // Ignore storage quota error
         }
-        setAuthError(null);
       } catch (error) {
         console.error('Token validation failed:', error);
-        setAuthError('INVALID_TOKEN');
-        setUser(null);
-      } finally {
-        setLoadingUser(false);
+        if (active) {
+          setAuthError('INVALID_TOKEN');
+          setUser(null);
+          setLoadingUser(false);
+          try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('auth_user_cache');
+          } catch {
+            // Ignore storage error
+          }
+        }
       }
     };
 
     void validateToken();
+    return () => {
+      active = false;
+    };
   }, [searchParams]);
 
   return { user, loadingUser, authError, setAuthError };
