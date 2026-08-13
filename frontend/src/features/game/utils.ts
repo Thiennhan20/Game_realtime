@@ -10,7 +10,8 @@ export function isLocalHost() {
 export function getAuthApiBaseUrl() {
   return (
     process.env.NEXT_PUBLIC_API_URL ||
-    (isLocalHost() ? 'http://localhost:3001/api' : 'https://server-nextjs-firm.onrender.com/api')
+    // (isLocalHost() ? 'http://localhost:3001/api' : 'https://server-nextjs-firm.onrender.com/api') // Old US Oregon
+    (isLocalHost() ? 'http://localhost:3001/api' : 'https://server-nextjs-film.onrender.com/api') // New Singapore
   );
 }
 

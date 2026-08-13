@@ -51,7 +51,8 @@ const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET;
 const GAME_SECRET_KEY = process.env.GAME_SECRET_KEY;
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.FLY_APP_NAME;
-const MOVIE_API_URL = process.env.MOVIE_API_URL || (isProduction ? 'https://server-nextjs-firm.onrender.com/api' : 'http://localhost:3001/api');
+// const MOVIE_API_URL = process.env.MOVIE_API_URL || (isProduction ? 'https://server-nextjs-firm.onrender.com/api' : 'http://localhost:3001/api'); // Old US Oregon
+const MOVIE_API_URL = process.env.MOVIE_API_URL || (isProduction ? 'https://server-nextjs-film.onrender.com/api' : 'http://localhost:3001/api'); // New Singapore
 let progressionReady = false;
 
 // --- Cryptography Utils (AES-256-GCM) ---

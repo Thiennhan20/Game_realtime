@@ -186,7 +186,8 @@ function HistoryPageContent() {
 
       try {
         const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1');
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || (isLocal ? 'http://localhost:3001/api' : 'https://server-nextjs-firm.onrender.com/api');
+        // const apiBase = process.env.NEXT_PUBLIC_API_URL || (isLocal ? 'http://localhost:3001/api' : 'https://server-nextjs-firm.onrender.com/api'); // Old US Oregon
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || (isLocal ? 'http://localhost:3001/api' : 'https://server-nextjs-film.onrender.com/api'); // New Singapore
         
         const profileRes = await fetch(`${apiBase}/auth/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
