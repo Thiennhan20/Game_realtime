@@ -7,6 +7,9 @@ app = 'ntngame'
 primary_region = 'sin'
 
 [build]
+ 
+[deploy]
+  strategy = 'immediate'
 
 [http_service]
   internal_port = 8080

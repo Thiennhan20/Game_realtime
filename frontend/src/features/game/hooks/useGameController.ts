@@ -602,7 +602,7 @@ export function useGameController() {
     };
   }, [loadGameProfile, setAuthError, userId]);
 
-  // Unified single-source lobby sync (Socket primary, REST fallback)
+  // Unified single-source lobby sync (Socket primary with 3s silent polling, REST fallback)
   useEffect(() => {
     if (room) return;
     let isMounted = true;
@@ -630,17 +630,25 @@ export function useGameController() {
       }
     }, 300);
 
-    // Backup check only when socket is disconnected
-    const interval = setInterval(() => {
-      if (!socketRef.current?.connected) {
+    // Polling while in lobby:
+    // - If socket is connected: silently emit GET_LOBBY_ROOMS every 3s
+    // - If socket is disconnected: fallback to REST fetch every 2s
+    const pollInterval = setInterval(() => {
+      if (!isMounted) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return; // Pause polling when tab is hidden to conserve mobile battery
+      }
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('GET_LOBBY_ROOMS');
+      } else {
         fetchRestRooms();
       }
-    }, 1000);
+    }, 3000);
 
     return () => {
       isMounted = false;
       clearTimeout(restTimer);
-      clearInterval(interval);
+      clearInterval(pollInterval);
     };
   }, [room]);
 
