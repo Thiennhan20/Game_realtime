@@ -33,8 +33,8 @@ const io = new Server(server, {
     origin: [
       "http://localhost:3002", 
       "http://localhost:3000",
-      "https://ntngame.fly.dev",
-      "https://ntngame.fly.dev/",
+      "https://p01--game-app--znbny2j8c2gp.code.run",
+      "https://p01--game-app--znbny2j8c2gp.code.run/",
       "https://moviesaw.vercel.app",
       "https://moviesaw.vercel.app/",
       "https://www.enterntn.duckdns.org",
