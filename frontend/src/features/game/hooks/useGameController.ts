@@ -9,11 +9,13 @@ import { createTranslator, translateBackendError } from '../i18n';
 import type {
   AiDifficulty,
   ChatMessage,
+  FloatingEmote,
   GameProfile,
   LobbyRoom,
   MatchStats,
   Player,
   PlayerXpResult,
+  QuickEmote,
   Room,
   RpsChoice,
 } from '../types';
@@ -114,6 +116,7 @@ export function useGameController() {
   const [showNumPad, setShowNumPad] = useState(false);
   const [isSpectator, setIsSpectator] = useState(false);
   const [spectatorCount, setSpectatorCount] = useState(0);
+  const [floatingEmotes, setFloatingEmotes] = useState<FloatingEmote[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
   const localeRef = useRef(locale);
@@ -650,6 +653,29 @@ export function useGameController() {
       triggerHaptic([40, 40]);
     });
 
+    socket.on('EMOTE_REACTION', (data: FloatingEmote) => {
+      sound.playEmoteSound(data.emoji);
+      triggerHaptic(25);
+      setFloatingEmotes((prev) => [...prev.slice(-8), data]);
+      setTimeout(() => {
+        setFloatingEmotes((prev) => prev.filter((e) => e.id !== data.id));
+      }, 2200);
+
+      const reactionMessage: ChatMessage = {
+        username: data.username,
+        content: String(data.emoji),
+        timestamp: new Date(data.timestamp || Date.now()).toISOString(),
+        isSpectator: data.isSpectator,
+        type: 'reaction',
+        emoji: String(data.emoji),
+      };
+
+      setChatMessages((messages) => [...messages, reactionMessage]);
+      if (userRef.current && data.username !== userRef.current.name) {
+        setUnreadChatCount((count) => count + 1);
+      }
+    });
+
     socket.on('GAME_RESET', (resetRoom: Room) => {
       setRoom(resetRoom);
       setOpponentSecretSet(false);
@@ -958,6 +984,7 @@ export function useGameController() {
     setShowMatchModal(false);
     setShowGuessHistoryModal(false);
     setOpponentTempDisconnected(null);
+    setFloatingEmotes([]);
   };
 
   const handleSendChat = (event: FormEvent<HTMLFormElement>) => {
@@ -968,6 +995,14 @@ export function useGameController() {
       message: chatInput,
     });
     setChatInput('');
+  };
+
+  const handleSendReaction = (emoji: QuickEmote | string) => {
+    if (!room) return;
+    socketRef.current?.emit('SEND_REACTION', {
+      roomId: room.roomId,
+      emoji,
+    });
   };
 
   const copyRoomId = () => {
@@ -1041,6 +1076,8 @@ export function useGameController() {
     handlePlayAgain,
     handleLeaveRoom,
     handleSendChat,
+    handleSendReaction,
+    floatingEmotes,
     copyRoomId,
   };
 }

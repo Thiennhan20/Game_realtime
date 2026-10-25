@@ -122,6 +122,35 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   isSpectator?: boolean;
+  type?: 'text' | 'reaction';
+  emoji?: string;
+}
+
+export type QuickEmote =
+  | '😎'
+  | '🔥'
+  | '😱'
+  | '🤔'
+  | '💀'
+  | '👏'
+  | '😂'
+  | '🥳'
+  | '🤫'
+  | '🥶'
+  | '🧠'
+  | '🎯'
+  | '💣'
+  | '🤡'
+  | '🤝'
+  | '💔';
+
+export interface FloatingEmote {
+  id: string;
+  userId: string;
+  username: string;
+  emoji: QuickEmote | string;
+  timestamp: number;
+  isSpectator?: boolean;
 }
 
 export interface LeaderboardEntry {

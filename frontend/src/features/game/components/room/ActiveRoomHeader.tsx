@@ -33,7 +33,7 @@ export function ActiveRoomHeader({
   const effectiveSpectatorCount = spectatorCount || room.spectatorCount || 0;
 
   return (
-    <div className="flex items-center justify-between p-3 sm:p-4 bg-slate-900/70 border border-slate-800/80 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
+    <div className="flex items-center justify-between p-3 sm:p-4 bg-slate-900/70 border border-slate-800/80 rounded-xl sm:rounded-2xl shadow-lg shrink-0 gap-2">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="hidden xs:block text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -85,10 +85,10 @@ export function ActiveRoomHeader({
         )}
       </div>
 
-      <div className="flex items-center space-x-2.5 sm:space-x-6">
-        <div className="w-[110px] sm:w-[270px] flex items-center justify-center space-x-1.5 sm:space-x-2.5 shrink-0">
+      <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+        <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
           <div className="hidden sm:block text-right">
-            <p className="text-xs font-bold max-w-[90px] sm:max-w-[130px] truncate text-slate-200" title={me?.username}>
+            <p className="text-xs font-bold max-w-[75px] sm:max-w-[100px] truncate text-slate-200" title={me?.username}>
               {me?.username}
             </p>
             {!isSpectator && (
@@ -109,7 +109,7 @@ export function ActiveRoomHeader({
             </div>
           )}
 
-          <span className="text-slate-700 font-bold text-xs sm:text-sm">VS</span>
+          <span className="text-slate-700 font-bold text-xs sm:text-sm px-0.5">VS</span>
 
           {opponent ? (
             <>
@@ -125,7 +125,7 @@ export function ActiveRoomHeader({
                 </div>
               )}
               <div className="hidden sm:block text-left">
-                <p className="text-xs font-bold max-w-[90px] sm:max-w-[130px] truncate text-slate-200" title={opponent.username}>
+                <p className="text-xs font-bold max-w-[75px] sm:max-w-[100px] truncate text-slate-200" title={opponent.username}>
                   {opponent.username}
                 </p>
                 {!isSpectator && (
@@ -149,7 +149,7 @@ export function ActiveRoomHeader({
 
         <button
           onClick={onLeaveRoom}
-          className="p-1.5 sm:p-2 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/30 hover:border-rose-500 rounded-lg sm:rounded-xl text-rose-400 hover:text-white shadow-md shadow-rose-950/20 transition-colors duration-200 cursor-pointer"
+          className="p-1.5 sm:p-2 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/30 hover:border-rose-500 rounded-lg sm:rounded-xl text-rose-400 hover:text-white shadow-md shadow-rose-950/20 transition-colors duration-200 cursor-pointer shrink-0"
           title={isSpectator ? (locale === 'vi' ? 'Thoát chế độ xem' : 'Exit Spectate') : t('backToLobby')}
         >
           <LogOut size={14} className="sm:w-[16px] sm:h-[16px]" />

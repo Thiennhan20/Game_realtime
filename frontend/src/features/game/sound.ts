@@ -459,6 +459,105 @@ class SoundManager {
   public playError(): void {
     this.playTone(240, 'sawtooth', 0.2, 0.14, 0, 150);
   }
+
+  // ==========================================
+  // 8. QUICK EMOTE REACTION SOUNDS
+  // ==========================================
+
+  /**
+   * Distinct cheerful and expressive acoustic identity for each reaction.
+   */
+  public playEmoteSound(emoji: string): void {
+    if (this.isMuted) return;
+
+    switch (emoji) {
+      case '😎': // Cool - smooth major two-tone
+        this.playTone(523.25, 'triangle', 0.1, 0.14, 0); // C5
+        this.playTone(659.25, 'triangle', 0.18, 0.16, 0.08); // E5
+        break;
+
+      case '😱': // Shock - double high alert ping
+        this.playTone(880, 'sawtooth', 0.08, 0.12, 0, 1050);
+        this.playTone(1174.66, 'sine', 0.18, 0.16, 0.06, 1318.51);
+        break;
+
+      case '🤔': // Thinking - cute questioning upward slide (boing)
+        this.playTone(320, 'sine', 0.22, 0.16, 0, 580);
+        break;
+
+      case '🔥': // Fire - energetic bright swoop
+        this.playTone(260, 'sawtooth', 0.12, 0.14, 0, 720);
+        this.playTone(720, 'triangle', 0.16, 0.16, 0.05);
+        break;
+
+      case '💀': // Skull - playful cartoon bonk
+        this.playTone(360, 'sine', 0.14, 0.2, 0, 130);
+        this.playTone(180, 'triangle', 0.16, 0.16, 0.04, 90);
+        break;
+
+      case '👏': // Clap - snappy double pop
+        this.playTone(800, 'triangle', 0.05, 0.16, 0, 600);
+        this.playTone(950, 'triangle', 0.08, 0.18, 0.07, 700);
+        break;
+
+      case '😂': // Laugh - triple cheerful bouncy pips
+        this.playTone(600, 'sine', 0.06, 0.14, 0);
+        this.playTone(750, 'sine', 0.06, 0.14, 0.07);
+        this.playTone(900, 'sine', 0.12, 0.16, 0.14);
+        break;
+
+      case '🥳': // Party - ascending fanfare
+        this.playTone(523.25, 'triangle', 0.08, 0.15, 0); // C5
+        this.playTone(659.25, 'triangle', 0.08, 0.15, 0.06); // E5
+        this.playTone(783.99, 'triangle', 0.08, 0.15, 0.12); // G5
+        this.playTone(1046.5, 'sine', 0.2, 0.2, 0.18); // C6
+        break;
+
+      case '🤫': // Shh - soft mysterious glide
+        this.playTone(400, 'sine', 0.2, 0.12, 0, 250);
+        break;
+
+      case '🥶': // Cold - shivering wobble
+        this.playTone(900, 'sine', 0.08, 0.14, 0, 850);
+        this.playTone(820, 'sine', 0.08, 0.14, 0.07, 880);
+        this.playTone(850, 'sine', 0.15, 0.14, 0.14, 760);
+        break;
+
+      case '🧠': // Big brain - bright crystal harmonic
+        this.playTone(659.25, 'sine', 0.12, 0.16, 0); // E5
+        this.playTone(1046.5, 'triangle', 0.22, 0.18, 0.08); // C6
+        break;
+
+      case '🎯': // Target - crisp high bullseye ding
+        this.playTone(1200, 'sine', 0.05, 0.14, 0, 1600);
+        this.playTone(1600, 'triangle', 0.18, 0.2, 0.04);
+        break;
+
+      case '💣': // Bomb - deep punchy thud
+        this.playTone(180, 'sawtooth', 0.15, 0.2, 0, 60);
+        this.playTone(100, 'triangle', 0.25, 0.22, 0.05, 40);
+        break;
+
+      case '🤡': // Clown - cartoon boing
+        this.playTone(300, 'sawtooth', 0.1, 0.16, 0, 520);
+        this.playTone(480, 'sine', 0.16, 0.16, 0.08, 300);
+        break;
+
+      case '🤝': // Handshake - warm dual chord
+        this.playTone(440, 'triangle', 0.18, 0.16, 0); // A4
+        this.playTone(554.37, 'sine', 0.2, 0.18, 0.04); // C#5
+        break;
+
+      case '💔': // Broken - descending sad minor slide
+        this.playTone(493.88, 'sine', 0.12, 0.16, 0); // B4
+        this.playTone(415.3, 'sine', 0.22, 0.18, 0.08, 320); // G#4
+        break;
+
+      default: // Generic pleasant bubble pop
+        this.playTone(580, 'sine', 0.1, 0.14, 0, 780);
+        break;
+    }
+  }
 }
 
 export const sound = new SoundManager();

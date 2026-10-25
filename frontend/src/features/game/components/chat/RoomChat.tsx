@@ -2,20 +2,25 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowDown, MessageSquare, Send } from 'lucide-react';
+import { ArrowDown, MessageSquare, Send, Smile } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
-import type { ChatMessage } from '../../types';
+import type { ChatMessage, FloatingEmote, Locale, QuickEmote } from '../../types';
+import { FloatingEmoteOverlay } from '../common/FloatingEmoteOverlay';
+import { QuickEmotePicker } from '../common/QuickEmotePicker';
 
 interface RoomChatProps {
   messages: ChatMessage[];
   currentUsername: string;
   input: string;
   t: Translator;
+  locale?: Locale;
   className?: string;
   isActive: boolean;
+  floatingEmotes?: FloatingEmote[];
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSendReaction?: (emoji: QuickEmote) => void;
 }
 
 export function RoomChat({
@@ -23,11 +28,15 @@ export function RoomChat({
   currentUsername,
   input,
   t,
+  locale = 'vi',
   className = '',
   isActive,
+  floatingEmotes = [],
   onInputChange,
   onSubmit,
+  onSendReaction,
 }: RoomChatProps) {
+  const [showEmotePicker, setShowEmotePicker] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const [showNewMessageButton, setShowNewMessageButton] = useState(false);
   const isUserAtBottomRef = useRef(true);
@@ -97,6 +106,7 @@ export function RoomChat({
       >
         {messages.map((message, index) => {
           const isMe = message.username === currentUsername;
+          const isReaction = message.type === 'reaction';
           return (
             <div
               key={`${message.timestamp}-${index}`}
@@ -118,15 +128,38 @@ export function RoomChat({
                   })}
                 </span>
               </div>
-              <div
-                className={`px-3 py-2 rounded-xl text-sm max-w-[85%] break-words ${
-                  isMe
-                    ? 'bg-purple-600 text-white rounded-tr-none'
-                    : 'bg-slate-800 text-slate-200 rounded-tl-none'
-                }`}
-              >
-                {message.content}
-              </div>
+              {isReaction ? (
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border backdrop-blur-sm shadow-sm select-none transition-transform hover:scale-105 ${
+                    isMe
+                      ? 'bg-purple-600/20 border-purple-500/40 text-purple-200 rounded-tr-none'
+                      : 'bg-slate-800/90 border-slate-700/70 text-slate-300 rounded-tl-none'
+                  }`}
+                >
+                  <span className="text-lg leading-none filter drop-shadow-sm">
+                    {message.emoji || message.content}
+                  </span>
+                  <span className="text-[10px] font-medium opacity-85">
+                    {locale === 'vi'
+                      ? isMe
+                        ? 'Đã thả'
+                        : 'Vừa thả'
+                      : isMe
+                        ? 'Sent'
+                        : 'Dropped'}
+                  </span>
+                </div>
+              ) : (
+                <div
+                  className={`px-3 py-2 rounded-xl text-sm max-w-[85%] break-words ${
+                    isMe
+                      ? 'bg-purple-600 text-white rounded-tr-none'
+                      : 'bg-slate-800 text-slate-200 rounded-tl-none'
+                  }`}
+                >
+                  {message.content}
+                </div>
+              )}
             </div>
           );
         })}
@@ -150,8 +183,41 @@ export function RoomChat({
 
       <form
         onSubmit={onSubmit}
-        className="p-3 border-t border-slate-800 flex gap-2 shrink-0 bg-slate-950/20"
+        className="relative p-3 border-t border-slate-800 flex items-center gap-2 shrink-0 bg-slate-950/20"
       >
+        {onSendReaction && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowEmotePicker((prev) => !prev)}
+              aria-label={locale === 'vi' ? 'Mở bảng biểu cảm' : 'Toggle quick emotes'}
+              title={locale === 'vi' ? 'Biểu cảm nhanh' : 'Quick Emotes'}
+              className={`p-2 border rounded-xl transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                showEmotePicker
+                  ? 'bg-purple-600 border-purple-400 text-white shadow-md shadow-purple-500/25 ring-2 ring-purple-500/30'
+                  : 'bg-slate-800/80 hover:bg-purple-600/20 border-slate-700/60 hover:border-purple-500/40 text-purple-300 hover:text-white'
+              }`}
+            >
+              <Smile size={18} aria-hidden="true" />
+            </button>
+
+            <FloatingEmoteOverlay emotes={floatingEmotes} />
+
+            {showEmotePicker && (
+              <QuickEmotePicker
+                onSelect={(emoji) => {
+                  onSendReaction(emoji);
+                  setShowEmotePicker(false);
+                }}
+                onClose={() => setShowEmotePicker(false)}
+                locale={locale}
+                variant="popover"
+                placement="bottom-left"
+              />
+            )}
+          </div>
+        )}
+
         <input
           type="text"
           placeholder={t('chatPlaceholder')}
@@ -163,7 +229,7 @@ export function RoomChat({
           type="submit"
           disabled={!input.trim()}
           aria-label="Send message"
-          className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
         >
           <Send size={16} aria-hidden="true" />
         </button>

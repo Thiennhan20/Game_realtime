@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { RoomChat } from './components/chat/RoomChat';
@@ -27,6 +27,14 @@ export default function GameClient() {
   const [showAllRoomsModal, setShowAllRoomsModal] = useState(false);
   const [showAiDifficultyModal, setShowAiDifficultyModal] = useState(false);
   const [roomId, setRoomId] = useState('');
+
+  const isAiMatch = Boolean(game.room?.isAiRoom);
+
+  useEffect(() => {
+    if (isAiMatch && activeMobileTab !== 'arena') {
+      setActiveMobileTab('arena');
+    }
+  }, [isAiMatch, activeMobileTab]);
 
   if (!game.mounted) {
     return <LoadingScreen />;
@@ -75,8 +83,12 @@ export default function GameClient() {
         onDismissOpponent={() => game.setOpponentTempDisconnected(null)}
       />
 
-      <main className="flex-1 max-w-[1700px] w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0">
-        {game.room && (
+      <main
+        className={`flex-1 w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0 ${
+          isAiMatch ? 'max-w-5xl justify-center' : 'max-w-[1700px]'
+        }`}
+      >
+        {game.room && !isAiMatch && (
           <MobileRoomTabs
             activeTab={activeMobileTab}
             unreadCount={activeMobileTab === 'arena' ? game.unreadChatCount : 0}
@@ -91,7 +103,7 @@ export default function GameClient() {
         )}
         <div
           className={`flex-1 flex flex-col min-w-0 min-h-0 ${
-            game.room && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'
+            game.room && !isAiMatch && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'
           }`}
         >
           {!game.room ? (
@@ -157,15 +169,18 @@ export default function GameClient() {
           )}
         </div>
 
-        {game.room && (
+        {game.room && !isAiMatch && (
           <RoomChat
             messages={game.chatMessages}
             currentUsername={user.name}
             input={game.chatInput}
+            locale={game.locale}
             t={game.t}
             isActive={activeMobileTab === 'chat'}
+            floatingEmotes={game.floatingEmotes}
             onInputChange={game.setChatInput}
             onSubmit={game.handleSendChat}
+            onSendReaction={game.handleSendReaction}
             className={activeMobileTab !== 'chat' ? 'hidden lg:flex' : 'flex'}
           />
         )}

@@ -767,6 +767,80 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       });
     });
 
+    // --- QUICK EMOTE REACTION ---
+    const VALID_EMOTES = [
+      '😎', '🔥', '😱', '🤔', '💀', '👏',
+      '😂', '🥳', '🤫', '🥶', '🧠', '🎯',
+      '💣', '🤡', '🤝', '💔'
+    ];
+    socket.on('SEND_REACTION', ({ roomId, emoji }) => {
+      if (!roomId || !emoji || !VALID_EMOTES.includes(emoji)) return;
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const isPlayer = room.players?.some(p => p.userId === socket.userId && !p.hasLeft);
+      const isSpectator = room.spectators?.some(s => s.userId === socket.userId);
+      if (!isPlayer && !isSpectator) return;
+
+      const now = Date.now();
+      if (socket.lastReactionAt && now - socket.lastReactionAt < 400) {
+        return; // debounce / anti-spam (max 2-3 per second)
+      }
+      socket.lastReactionAt = now;
+
+      const reactionPayload = {
+        id: `${socket.userId}_${now}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: socket.userId,
+        username: socket.username,
+        emoji,
+        isSpectator: Boolean(isSpectator),
+        timestamp: now
+      };
+
+      io.to(roomId).emit('EMOTE_REACTION', reactionPayload);
+
+      // Playful AI Bot reaction in solo mode
+      if (room.isAiRoom) {
+        const aiBot = room.players?.find(p => p.userId.startsWith('ai_bot_'));
+        if (aiBot) {
+          const aiDelay = 750 + Math.floor(Math.random() * 850);
+          setTimeout(() => {
+            const currentRoom = rooms.get(roomId);
+            if (!currentRoom || currentRoom.state === 'FINISHED') return;
+            const botResponses = {
+              '😎': ['🔥', '🧠', '🎯', '👏'],
+              '🔥': ['😎', '😱', '💣', '🥳'],
+              '😱': ['😂', '🥶', '💀', '🤡'],
+              '🤔': ['🧠', '🤫', '😎', '🎯'],
+              '💀': ['😂', '🤡', '💔', '👏'],
+              '👏': ['🤝', '🥳', '🔥', '😎'],
+              '😂': ['🤡', '💀', '😂', '😎'],
+              '🥳': ['🔥', '👏', '🤝', '🥳'],
+              '🤫': ['🤔', '🧠', '😎', '🤫'],
+              '🥶': ['😱', '💀', '💔', '🥶'],
+              '🧠': ['🤔', '🎯', '😎', '🔥'],
+              '🎯': ['👏', '🔥', '🧠', '😎'],
+              '💣': ['😱', '🔥', '💀', '🥳'],
+              '🤡': ['😂', '💀', '🤡', '👏'],
+              '🤝': ['👏', '😎', '🤝', '🥳'],
+              '💔': ['😂', '💀', '🤡', '🤝'],
+            };
+            const pool = botResponses[emoji] || VALID_EMOTES;
+            const botEmoji = pool[Math.floor(Math.random() * pool.length)] || '😎';
+
+            io.to(roomId).emit('EMOTE_REACTION', {
+              id: `${aiBot.userId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              userId: aiBot.userId,
+              username: aiBot.username,
+              emoji: botEmoji,
+              isSpectator: false,
+              timestamp: Date.now()
+            });
+          }, aiDelay);
+        }
+      }
+    });
+
     // --- LEAVE ROOM (Intentional) ---
     const handleIntentionalLeave = async (sock) => {
       if (sock.isSpectator) {
