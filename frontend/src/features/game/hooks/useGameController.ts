@@ -24,6 +24,7 @@ import {
   isUniqueFourDigitCode,
   normalizeRoomId,
 } from '../utils';
+import { sound, triggerHaptic } from '../sound';
 import { useAuthProfile } from './useAuthProfile';
 import { useGameLocale } from './useGameLocale';
 
@@ -111,6 +112,8 @@ export function useGameController() {
   const [showStartCountdown, setShowStartCountdown] = useState(false);
   const [countdownVal, setCountdownVal] = useState(3);
   const [showNumPad, setShowNumPad] = useState(false);
+  const [isSpectator, setIsSpectator] = useState(false);
+  const [spectatorCount, setSpectatorCount] = useState(0);
 
   const socketRef = useRef<Socket | null>(null);
   const localeRef = useRef(locale);
@@ -213,16 +216,21 @@ export function useGameController() {
     if (roomState === 'PLAYING' && previousRoomStateRef.current === 'RPS_DECISION') {
       setShowStartCountdown(true);
       setCountdownVal(3);
+      sound.playCountdownTick(3);
+      triggerHaptic([30]);
       countdownInterval = setInterval(() => {
         setCountdownVal((previousValue) => {
           if (previousValue <= 1) {
             if (countdownInterval) clearInterval(countdownInterval);
             setShowStartCountdown(false);
+            sound.playBattleStart();
+            triggerHaptic([60, 40, 100]);
             return 0;
-
-
           }
-          return previousValue - 1;
+          const nextVal = previousValue - 1;
+          sound.playCountdownTick(nextVal);
+          triggerHaptic([30]);
+          return nextVal;
         });
       }, 1000);
     }
@@ -236,6 +244,8 @@ export function useGameController() {
     };
   }, [roomState]);
 
+  const previousTurnRef = useRef<{ state?: string; turn?: number }>({});
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       if (room?.state === 'PLAYING' && user) {
@@ -248,6 +258,30 @@ export function useGameController() {
 
     return () => window.clearTimeout(timeoutId);
   }, [room, user]);
+
+  useEffect(() => {
+    if (!room || !user) {
+      previousTurnRef.current = {};
+      return;
+    }
+    if (room.state === 'PLAYING') {
+      const myPlayerIndex = room.players.findIndex((player) => player.userId === user.id);
+      const isMyTurn = myPlayerIndex !== -1 && room.activeTurnIndex === myPlayerIndex;
+      const prev = previousTurnRef.current;
+
+      if (prev.state === 'PLAYING' && prev.turn !== undefined && prev.turn !== room.activeTurnIndex) {
+        if (isMyTurn) {
+          sound.playTurnAlert();
+          triggerHaptic([40, 60]);
+        } else {
+          sound.playOpponentTurn();
+        }
+      }
+      previousTurnRef.current = { state: room.state, turn: room.activeTurnIndex };
+    } else {
+      previousTurnRef.current = { state: room.state, turn: room.activeTurnIndex };
+    }
+  }, [room?.state, room?.activeTurnIndex, room?.players, user]);
 
   // --- Fast REST Pre-fetch for Instant Room List Display ---
   useEffect(() => {
@@ -400,6 +434,8 @@ export function useGameController() {
 
     socket.on('ROOM_CREATED', (createdRoom: Room) => {
       setRoom(createdRoom);
+      setIsSpectator(false);
+      setSpectatorCount(0);
       setChatMessages([]);
       setMatchStats(null);
       setMatchXpResult(null);
@@ -408,6 +444,8 @@ export function useGameController() {
 
     socket.on('GAME_START', (startRoom: Room) => {
       setRoom(startRoom);
+      setIsSpectator(false);
+      setSpectatorCount(0);
       setErrorMsg(null);
       setOpponentSecretSet(false);
       setOpponentRpsSubmitted(false);
@@ -420,6 +458,29 @@ export function useGameController() {
       setShowMatchModal(false);
       setShowGuessHistoryModal(false);
       setOpponentTempDisconnected(null);
+      sound.playOpponentJoined();
+      triggerHaptic([50]);
+    });
+
+    socket.on('SPECTATOR_JOINED', (data: { room: Room; spectatorCount: number }) => {
+      setRoom(data.room);
+      setIsSpectator(true);
+      setSpectatorCount(data.spectatorCount || 0);
+      setChatMessages([]);
+      setMatchStats(null);
+      setMatchXpResult(null);
+      setErrorMsg(null);
+    });
+
+    socket.on('SPECTATOR_COUNT_CHANGED', (data: { count: number }) => {
+      setSpectatorCount(data.count || 0);
+    });
+
+    socket.on('SPECTATOR_LEFT', () => {
+      setIsSpectator(false);
+      setRoom(null);
+      setSpectatorCount(0);
+      setChatMessages([]);
     });
 
     socket.on('SECRET_ACCEPTED', () => {
@@ -437,6 +498,7 @@ export function useGameController() {
 
     socket.on('OPPONENT_SECRET_SET', () => {
       setOpponentSecretSet(true);
+      sound.playOpponentSecretReady();
     });
 
     socket.on('RPS_PHASE', (rpsRoom: Room) => {
@@ -453,6 +515,8 @@ export function useGameController() {
       setRoom((previousRoom) =>
         previousRoom ? { ...previousRoom, players: data.players } : null,
       );
+      sound.playRpsTie();
+      triggerHaptic([50, 50]);
       setErrorMsg(translate()('drawChooseAgain'));
       setTimeout(() => setErrorMsg(null), 3000);
     });
@@ -460,12 +524,39 @@ export function useGameController() {
     socket.on('RPS_RESULT', (data: { roomState: Room }) => {
       setRoom(data.roomState);
       setErrorMsg(null);
+      const myIndex = data.roomState.players.findIndex(
+        (player) => String(player.userId) === String(userRef.current?.id),
+      );
+      if (data.roomState.activeTurnIndex === myIndex) {
+        sound.playRpsWin();
+        triggerHaptic([60, 40, 100]);
+      } else {
+        sound.playRpsLose();
+        triggerHaptic([40]);
+      }
     });
 
     socket.on('GUESS_RESULT', (data: { roomState: Room }) => {
       setRoom(data.roomState);
       setGuessInput('');
       setErrorMsg(null);
+      const latestGuess = data.roomState.guesses?.[data.roomState.guesses.length - 1];
+      if (latestGuess) {
+        const myIndex = data.roomState.players.findIndex(
+          (player) => String(player.userId) === String(userRef.current?.id),
+        );
+        if (latestGuess.playerIndex === myIndex) {
+          sound.playMyGuessResult(latestGuess.correctNumbers, latestGuess.correctPosition);
+          triggerHaptic(latestGuess.correctNumbers > 0 ? [35] : [60]);
+        } else {
+          sound.playOpponentGuessResult(latestGuess.correctNumbers, latestGuess.correctPosition);
+          triggerHaptic(
+            latestGuess.correctNumbers >= 3 || latestGuess.correctPosition >= 2
+              ? [80, 40, 80]
+              : [30]
+          );
+        }
+      }
     });
 
     socket.on(
@@ -513,11 +604,28 @@ export function useGameController() {
         setShowMatchModal(true);
         setOpponentTempDisconnected(null);
         setErrorMsg(null);
+
+        const myIndex = data.roomState.players.findIndex(
+          (player) => String(player.userId) === String(userRef.current?.id),
+        );
+        if (data.roomState.winnerIndex === myIndex) {
+          if (rawXpResult?.rankAfter && rawXpResult?.rankBefore && rawXpResult.rankAfter !== rawXpResult.rankBefore) {
+            sound.playLevelUp();
+          } else {
+            sound.playVictory();
+          }
+          triggerHaptic([100, 50, 100, 50, 200]);
+        } else {
+          sound.playDefeat();
+          triggerHaptic([180]);
+        }
       },
     );
 
     socket.on('OPPONENT_WANTS_PLAY_AGAIN', () => {
       setOpponentWantsPlayAgain(true);
+      sound.playRematchRequest();
+      triggerHaptic([40, 40]);
     });
 
     socket.on('PLAYER_DISCONNECTED', (data: { username: string; roomState: Room }) => {
@@ -531,25 +639,20 @@ export function useGameController() {
       setTimeout(() => setErrorMsg(null), 5000);
     });
 
-    socket.on('PLAYER_LEFT', (data: { username: string; roomState: Room }) => {
-      setRoom(data.roomState);
-      setErrorMsg(translate()('playerLeft').replace('{username}', data.username));
-      setSecretReveal(null);
-      setOpponentWantsPlayAgain(true);
-    });
-
-    socket.on('PLAYER_DISCONNECTED', (data: { username: string; roomState: Room }) => {
-      setRoom(data.roomState);
-      setErrorMsg(translate()('opponentLeft').replace('{username}', data.username));
-      setSecretReveal(null);
-      setOpponentWantsPlayAgain(false);
-      setOpponentTempDisconnected(null);
+    socket.on('ROOM_LEFT', () => {
+      setRoom(null);
+      setChatMessages([]);
+      setMatchStats(null);
+      setMatchXpResult(null);
       setShowMatchModal(false);
       setShowGuessHistoryModal(false);
-      setTimeout(() => setErrorMsg(null), 5000);
+      setOpponentTempDisconnected(null);
     });
 
     socket.on('PLAYER_LEFT', (data: { username: string; roomState: Room }) => {
+      if (userRef.current?.name && data.username === userRef.current.name) {
+        return;
+      }
       setRoom(data.roomState);
       setErrorMsg(translate()('playerLeft').replace('{username}', data.username));
       setSecretReveal(null);
@@ -563,12 +666,16 @@ export function useGameController() {
     socket.on('PLAYER_TEMPORARILY_DISCONNECTED', (data: { username: string; roomState: Room }) => {
       setRoom(data.roomState);
       setOpponentTempDisconnected(data.username);
+      sound.playOpponentDisconnected();
+      triggerHaptic([70]);
     });
 
     socket.on('OPPONENT_RECONNECTED', (data: { username: string; roomState: Room }) => {
       setRoom(data.roomState);
       setOpponentTempDisconnected(null);
       setErrorMsg(translate()('opponentReconnected').replace('{username}', data.username));
+      sound.playOpponentReconnected();
+      triggerHaptic([35]);
       setTimeout(() => setErrorMsg(null), 3000);
     });
 
@@ -576,10 +683,14 @@ export function useGameController() {
       setChatMessages((messages) => [...messages, message]);
       if (userRef.current && message.username !== userRef.current.name) {
         setUnreadChatCount((count) => count + 1);
+        sound.playChatPop();
+        triggerHaptic(25);
       }
     });
 
     socket.on('GAME_ERROR', (message: string) => {
+      sound.playError();
+      triggerHaptic([60, 40]);
       setErrorMsg(translateBackendError(message, localeRef.current));
       setTimeout(() => setErrorMsg(null), 4000);
     });
@@ -713,17 +824,21 @@ export function useGameController() {
 
   const handleSetSecret = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!room) return;
+    if (!room || isSpectator) return;
     if (!isUniqueFourDigitCode(secretInput)) {
       setErrorMsg(t('invalidCode'));
       return;
     }
+    sound.playSecretLocked();
+    triggerHaptic([60, 30, 80]);
     localStorage.setItem(`secret:${room.roomId}`, secretInput);
     socketRef.current?.emit('SET_SECRET', { roomId: room.roomId, secret: secretInput });
   };
 
   const handleRpsChoice = (choice: RpsChoice) => {
-    if (!room || !user) return;
+    if (!room || !user || isSpectator) return;
+    sound.playRpsSelect();
+    triggerHaptic(25);
     socketRef.current?.emit('SUBMIT_RPS', { roomId: room.roomId, choice });
     setRoom((previousRoom) => {
       if (!previousRoom) return null;
@@ -741,9 +856,19 @@ export function useGameController() {
   };
 
   const handleSendGuess = () => {
-    if (!room) return;
+    if (!room || !user || isSpectator) return;
     if (!isUniqueFourDigitCode(guessInput)) {
       setErrorMsg(t('invalidGuess'));
+      return;
+    }
+    const myPlayerIndex = room.players.findIndex((p) => p.userId === user.id);
+    const isDuplicate = room.guesses?.some(
+      (g) => g.playerIndex === myPlayerIndex && g.guess === guessInput
+    );
+    if (isDuplicate) {
+      sound.playWarning();
+      triggerHaptic([60, 40, 60]);
+      setErrorMsg(t('duplicateGuess'));
       return;
     }
     socketRef.current?.emit('SUBMIT_GUESS', {
@@ -753,11 +878,36 @@ export function useGameController() {
   };
 
   const handlePlayAgain = () => {
-    if (!room) return;
+    if (!room || isSpectator) return;
+    sound.playClick();
+    triggerHaptic(25);
     socketRef.current?.emit('PLAY_AGAIN', room.roomId);
   };
 
+  const handleJoinSpectator = (targetRoomId: string) => {
+    if (!targetRoomId.trim()) return;
+    const normalized = normalizeRoomId(targetRoomId);
+    if (!normalized) return;
+    socketRef.current?.emit('JOIN_SPECTATOR', normalized);
+  };
+
+  const handleLeaveSpectator = () => {
+    if (room) {
+      socketRef.current?.emit('LEAVE_SPECTATOR', room.roomId);
+    }
+    setIsSpectator(false);
+    setRoom(null);
+    setSpectatorCount(0);
+    setChatMessages([]);
+  };
+
   const handleLeaveRoom = () => {
+    if (isSpectator) {
+      handleLeaveSpectator();
+      return;
+    }
+    sound.playLeaveRoom();
+    triggerHaptic(20);
     socketRef.current?.emit('LEAVE_ROOM', () => {
       void loadGameProfile();
     });
@@ -783,6 +933,8 @@ export function useGameController() {
   const copyRoomId = () => {
     if (!room) return;
     void navigator.clipboard.writeText(room.roomId);
+    sound.playCopySuccess();
+    triggerHaptic(20);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -830,6 +982,8 @@ export function useGameController() {
     countdownVal,
     showNumPad,
     setShowNumPad,
+    isSpectator,
+    spectatorCount,
     myPlayerIndex,
     opponentPlayerIndex,
     me,
@@ -837,6 +991,8 @@ export function useGameController() {
     handleCreateRoom,
     handleStartAiMatch,
     handleJoinRoom,
+    handleJoinSpectator,
+    handleLeaveSpectator,
     handleRefreshLobby,
     loadGameProfile,
     handleSetSecret,

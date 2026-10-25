@@ -106,6 +106,11 @@ export function RoomChat({
                 <span className="text-[10px] font-bold text-slate-500">
                   {message.username}
                 </span>
+                {message.isSpectator && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">
+                    {t('spectator')}
+                  </span>
+                )}
                 <span className="text-[9px] text-slate-600">
                   {new Date(message.timestamp).toLocaleTimeString([], {
                     hour: '2-digit',

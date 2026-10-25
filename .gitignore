@@ -30,3 +30,8 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 *.pem
+
+# Tests
+backend/tests/
+**/tests/
+

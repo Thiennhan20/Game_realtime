@@ -1,4 +1,4 @@
-import { Clock, Users } from 'lucide-react';
+import { Clock, Eye, Users } from 'lucide-react';
 
 import type { LobbyRoom, Locale } from '../../types';
 import { formatElapsedTime } from '../../utils';
@@ -7,9 +7,10 @@ interface LobbyRoomCardProps {
   room: LobbyRoom;
   locale: Locale;
   onJoin: (roomId: string) => void;
+  onSpectate?: (roomId: string) => void;
 }
 
-export function LobbyRoomCard({ room, locale, onJoin }: LobbyRoomCardProps) {
+export function LobbyRoomCard({ room, locale, onJoin, onSpectate }: LobbyRoomCardProps) {
   const isFull =
     room.playerCount >= 2 || (Boolean(room.state) && room.state !== 'WAITING_FOR_PLAYERS');
 
@@ -17,7 +18,7 @@ export function LobbyRoomCard({ room, locale, onJoin }: LobbyRoomCardProps) {
     <div
       className={`p-3 sm:p-3.5 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3 ${
         isFull
-          ? 'bg-slate-950/40 border-slate-850 opacity-75'
+          ? 'bg-slate-950/40 border-slate-850 opacity-90'
           : 'bg-slate-950/70 hover:bg-slate-950 border-slate-800/80 hover:border-purple-500/50 shadow-md'
       }`}
     >
@@ -42,12 +43,30 @@ export function LobbyRoomCard({ room, locale, onJoin }: LobbyRoomCardProps) {
             {isFull ? (
               <span className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-md text-[10px] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                {locale === 'vi' ? 'Đã đầy' : 'Full'}
+                {room.state === 'PLAYING'
+                  ? locale === 'vi'
+                    ? 'Đang đấu'
+                    : 'Playing'
+                  : locale === 'vi'
+                    ? 'Đã đầy'
+                    : 'Full'}
               </span>
             ) : (
               <span className="px-2 py-0.5 bg-blue-500/15 border border-blue-500/30 text-blue-300 rounded-md text-[10px] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                 {locale === 'vi' ? 'Đang đợi' : 'Waiting'}
+              </span>
+            )}
+            {typeof room.spectatorCount === 'number' && room.spectatorCount > 0 && (
+              <span
+                className={`px-1.5 py-0.5 border rounded-md text-[10px] font-bold flex items-center gap-1 ${
+                  room.spectatorCount >= 10
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                    : 'bg-purple-500/15 border-purple-500/30 text-purple-300'
+                }`}
+              >
+                <Eye size={10} />
+                <span>{room.spectatorCount}/10</span>
               </span>
             )}
           </div>
@@ -58,7 +77,7 @@ export function LobbyRoomCard({ room, locale, onJoin }: LobbyRoomCardProps) {
             </p>
             <div className="flex items-center space-x-3 text-[11px] text-slate-400">
               <span className="flex items-center space-x-1 shrink-0">
-                <Users size={11} className="text-slate-500" />
+                <Users size={11} className="text-purple-400" />
                 <span>{room.playerCount}/2</span>
               </span>
               <span className="flex items-center space-x-1 shrink-0">
@@ -78,6 +97,24 @@ export function LobbyRoomCard({ room, locale, onJoin }: LobbyRoomCardProps) {
           >
             {locale === 'vi' ? 'Tham gia' : 'Join'}
           </button>
+        ) : onSpectate ? (
+          (room.spectatorCount || 0) >= 10 ? (
+            <button
+              disabled
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs sm:text-sm rounded-xl cursor-not-allowed opacity-60 flex items-center gap-1.5"
+            >
+              <Eye size={13} />
+              <span>{locale === 'vi' ? 'Đầy người xem' : 'Full (10/10)'}</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => onSpectate(room.roomId)}
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-500/60 text-blue-300 font-bold text-xs sm:text-sm rounded-xl shadow-md transition duration-200 cursor-pointer flex items-center gap-1.5"
+            >
+              <Eye size={13} />
+              <span>{locale === 'vi' ? 'Xem trận' : 'Spectate'}</span>
+            </button>
+          )
         ) : (
           <button
             disabled

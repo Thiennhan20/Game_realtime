@@ -1,12 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 
+import { sound, triggerHaptic } from '../../sound';
 import type { Locale } from '../../types';
 
 interface NumberPadModalProps {
   isOpen: boolean;
   value: string;
   locale: Locale;
+  pastGuesses?: string[];
   onChange: (value: string) => void;
   onSubmit: () => void;
   onClose: () => void;
@@ -16,13 +18,24 @@ export function NumberPadModal({
   isOpen,
   value,
   locale,
+  pastGuesses = [],
   onChange,
   onSubmit,
   onClose,
 }: NumberPadModalProps) {
+  const isDuplicate = value.length === 4 && pastGuesses.includes(value);
+
   const appendDigit = (digit: string) => {
     if (value.length < 4 && !value.includes(digit)) {
-      onChange(`${value}${digit}`);
+      const nextValue = `${value}${digit}`;
+      onChange(nextValue);
+      if (nextValue.length === 4 && pastGuesses.includes(nextValue)) {
+        sound.playWarning();
+        triggerHaptic([60, 40, 60]);
+      } else {
+        sound.playDigitKey(nextValue.length);
+        triggerHaptic(20);
+      }
     }
   };
 
@@ -112,7 +125,11 @@ export function NumberPadModal({
               })}
 
               <button
-                onClick={() => onChange('')}
+                onClick={() => {
+                  sound.playDigitClear();
+                  triggerHaptic(15);
+                  onChange('');
+                }}
                 disabled={value.length === 0}
                 className="py-3.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center bg-slate-950/40 border border-slate-900 hover:bg-red-500/15 hover:border-red-500/35 hover:text-red-400 text-slate-500 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-20 disabled:pointer-events-none"
               >
@@ -132,7 +149,11 @@ export function NumberPadModal({
               </button>
 
               <button
-                onClick={() => onChange(value.slice(0, -1))}
+                onClick={() => {
+                  sound.playDigitDelete();
+                  triggerHaptic(15);
+                  onChange(value.slice(0, -1));
+                }}
                 disabled={value.length === 0}
                 className="py-3.5 rounded-2xl text-base sm:text-lg font-bold flex items-center justify-center bg-slate-950/40 border border-slate-900 hover:bg-amber-500/15 hover:border-amber-500/35 hover:text-amber-400 text-slate-500 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-20 disabled:pointer-events-none"
                 title="Backspace"
@@ -141,16 +162,46 @@ export function NumberPadModal({
               </button>
             </div>
 
+            {isDuplicate && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className="flex items-center justify-center gap-2 text-xs font-bold text-amber-300 bg-amber-500/15 border border-amber-500/40 rounded-xl py-2 px-3 text-center shadow-lg shadow-amber-500/10 z-10"
+              >
+                <AlertTriangle size={15} className="text-amber-400 shrink-0" />
+                <span>
+                  {locale === 'vi'
+                    ? 'Bạn đã từng đoán dãy số này trong trận rồi!'
+                    : 'You already guessed this code in this match!'}
+                </span>
+              </motion.div>
+            )}
+
             <button
               onClick={() => {
+                if (isDuplicate) return;
+                sound.playSubmitGuess();
+                triggerHaptic(35);
                 onSubmit();
                 onClose();
               }}
-              disabled={value.length !== 4}
-              className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-40 disabled:pointer-events-none text-white text-base font-black rounded-2xl shadow-xl shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.01] active:scale-[0.99] transition duration-200 cursor-pointer flex items-center justify-center gap-2 z-10"
+              disabled={value.length !== 4 || isDuplicate}
+              className={`w-full py-4 text-white text-base font-black rounded-2xl shadow-xl transition-all duration-200 flex items-center justify-center gap-2 z-10 ${
+                isDuplicate
+                  ? 'bg-amber-600/30 border border-amber-500/50 text-amber-300 cursor-not-allowed opacity-75'
+                  : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-40 disabled:pointer-events-none shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
+              }`}
             >
-              <span>🚀</span>
-              <span>{locale === 'vi' ? 'GỬI ĐOÁN MẬT MÃ' : 'SUBMIT GUESS'}</span>
+              <span>{isDuplicate ? '⚠️' : '🚀'}</span>
+              <span>
+                {isDuplicate
+                  ? locale === 'vi'
+                    ? 'ĐÃ ĐOÁN DÃY SỐ NÀY'
+                    : 'ALREADY GUESSED'
+                  : locale === 'vi'
+                    ? 'GỬI ĐOÁN MẬT MÃ'
+                    : 'SUBMIT GUESS'}
+              </span>
             </button>
           </motion.div>
         </motion.div>

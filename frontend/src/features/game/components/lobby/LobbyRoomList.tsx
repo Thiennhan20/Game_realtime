@@ -11,6 +11,7 @@ interface LobbyRoomListProps {
   t: Translator;
   onRefresh: () => void;
   onJoin: (roomId: string) => void;
+  onSpectate?: (roomId: string) => void;
   onViewAll: () => void;
 }
 
@@ -21,6 +22,7 @@ export function LobbyRoomList({
   t,
   onRefresh,
   onJoin,
+  onSpectate,
   onViewAll,
 }: LobbyRoomListProps) {
   return (
@@ -77,7 +79,13 @@ export function LobbyRoomList({
       ) : (
         <div className="space-y-2">
           {rooms.slice(0, 2).map((room) => (
-            <LobbyRoomCard key={room.roomId} room={room} locale={locale} onJoin={onJoin} />
+            <LobbyRoomCard
+              key={room.roomId}
+              room={room}
+              locale={locale}
+              onJoin={onJoin}
+              onSpectate={onSpectate}
+            />
           ))}
           <button
             onClick={onViewAll}

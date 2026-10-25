@@ -2,16 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   Award,
   ChevronDown,
   Clock,
   Gamepad2,
+  Home,
   Trophy,
   Users,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
+import { sound } from '../../sound';
 import type { AuthUser, Locale } from '../../types';
 
 interface GameHeaderProps {
@@ -38,7 +41,17 @@ export function GameHeader({
   onOpenAchievements,
 }: GameHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMuted(sound.getMuted());
+  }, []);
+
+  const toggleSound = () => {
+    const nextMuted = sound.toggleMute();
+    setIsMuted(nextMuted);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,7 +79,7 @@ export function GameHeader({
             className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-300 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             title={locale === 'vi' ? 'Quay lại trang chủ' : 'Back to main site'}
           >
-            <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
+            <Home size={16} className="sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
           </button>
           <div className="hidden xs:block p-2 sm:p-2.5 bg-purple-500/10 text-purple-400 rounded-xl shrink-0">
             <Gamepad2 size={20} className="sm:w-6 sm:h-6" aria-hidden="true" />
@@ -98,10 +111,28 @@ export function GameHeader({
             ))}
           </div>
 
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-label={isMuted ? t('soundOff') : t('soundOn')}
+            title={isMuted ? t('soundOff') : t('soundOn')}
+            className={`p-1.5 sm:p-2 border rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+              isMuted
+                ? 'bg-slate-900/40 border-slate-800 text-slate-500 hover:text-slate-300'
+                : 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:text-purple-300 shadow-sm shadow-purple-500/10'
+            }`}
+          >
+            {isMuted ? (
+              <VolumeX size={16} className="sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
+            ) : (
+              <Volume2 size={16} className="sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
+            )}
+          </button>
+
           {!user || !user.name || user.name.toLowerCase() === 'player' || user.name.toLowerCase() === 'user' ? (
-            <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800/80 p-1 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
+            <div className="flex items-center justify-center bg-slate-900/60 border border-slate-800/80 p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
               <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800/80 rounded-full shrink-0" />
-              <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md" />
+              <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md sm:ml-2" />
             </div>
           ) : (
             <div className="relative" ref={dropdownRef}>
@@ -110,7 +141,7 @@ export function GameHeader({
                 onClick={() => setIsDropdownOpen((isOpen) => !isOpen)}
                 aria-label={user.name}
                 aria-expanded={isDropdownOpen}
-                className="flex items-center space-x-1.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-1 rounded-full sm:px-3 sm:py-1.5 sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="flex items-center justify-center bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 {user.avatar ? (
                   <img
@@ -123,10 +154,12 @@ export function GameHeader({
                     {user.name.slice(0, 2)}
                   </div>
                 )}
-                <span className="hidden sm:inline font-medium text-sm text-slate-200">
-                  {user.name}
-                </span>
-                <ChevronDown size={14} className="hidden sm:inline text-slate-500" />
+                <div className="hidden sm:flex items-center gap-1.5">
+                  <span className="font-medium text-sm text-slate-200">
+                    {user.name}
+                  </span>
+                  <ChevronDown size={14} className="text-slate-500" />
+                </div>
               </button>
 
               {isDropdownOpen && (

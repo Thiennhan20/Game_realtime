@@ -24,6 +24,7 @@ export interface Player {
   ready: boolean;
   disconnectedAt?: number | null;
   hasLeft?: boolean;
+  currentWinStreak?: number;
 }
 
 export interface Guess {
@@ -102,6 +103,7 @@ export interface Room {
   winnerIndex: number;
   isAiRoom?: boolean;
   aiDifficulty?: AiDifficulty;
+  spectatorCount?: number;
 }
 
 export interface LobbyRoom {
@@ -112,12 +114,14 @@ export interface LobbyRoom {
   maxPlayers?: number;
   state?: string;
   createdAt?: number;
+  spectatorCount?: number;
 }
 
 export interface ChatMessage {
   username: string;
   content: string;
   timestamp: string;
+  isSpectator?: boolean;
 }
 
 export interface LeaderboardEntry {

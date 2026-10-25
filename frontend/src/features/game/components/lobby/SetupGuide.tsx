@@ -5,7 +5,7 @@ export function SetupGuide({ locale }: { locale: Locale }) {
     locale === 'vi'
       ? [
           ['Tạo hoặc Vào phòng', 'Nhấp chọn chế độ đấu với Bạn bè hoặc đấu với Máy để tạo phòng chơi.'],
-          ['Thiết lập mật mã', 'Mỗi người chọn 4 chữ số khác nhau (ví dụ: 1357). Bảo mật AES-256 E2E.'],
+          ['Thiết lập mật mã', 'Mỗi người chọn 4 chữ số khác nhau (ví dụ: 1357).'],
           [
             'Oẳn tù tì giành quyền đi trước',
             'Oẳn tù tì (Kéo - Búa - Bao) để chọn người đi trước. Người đoán trước có lợi thế đi trước cực kỳ lớn!',
@@ -21,7 +21,7 @@ export function SetupGuide({ locale }: { locale: Locale }) {
         ]
       : [
           ['Create or Join Room', 'Click to select Play with Friends or Play vs Bot to start playing.'],
-          ['Lock Secret Code', 'Choose 4 unique digits (example: 1357). Protected with AES-256 E2E.'],
+          ['Lock Secret Code', 'Choose 4 unique digits (example: 1357).'],
           [
             'RPS Initiative Duel',
             'Play Rock-Paper-Scissors to decide who goes first. The first turn provides a massive initiative advantage!',

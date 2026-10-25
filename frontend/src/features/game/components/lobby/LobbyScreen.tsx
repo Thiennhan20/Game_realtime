@@ -26,6 +26,7 @@ interface LobbyScreenProps {
   onRefreshGameProfile: () => void;
   onViewAllRooms: () => void;
   onViewLeaderboard: () => void;
+  onSpectateRoom?: (roomId: string) => void;
 }
 
 export function LobbyScreen({
@@ -45,6 +46,7 @@ export function LobbyScreen({
   onRefreshGameProfile,
   onViewAllRooms,
   onViewLeaderboard,
+  onSpectateRoom,
 }: LobbyScreenProps) {
   const statsCard = (className: string) => (
     <PlayerStatsCard
@@ -89,6 +91,7 @@ export function LobbyScreen({
             t={t}
             onRefresh={onRefresh}
             onJoin={onJoinRoom}
+            onSpectate={onSpectateRoom}
             onViewAll={onViewAllRooms}
           />
         </div>

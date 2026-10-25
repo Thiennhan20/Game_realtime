@@ -13,6 +13,7 @@ interface PlayingArenaProps {
   opponentPlayerIndex: number;
   locale: Locale;
   t: Translator;
+  isSpectator?: boolean;
 }
 
 export function PlayingArena({
@@ -22,6 +23,7 @@ export function PlayingArena({
   opponentPlayerIndex,
   locale,
   t,
+  isSpectator = false,
 }: PlayingArenaProps) {
   const [activeTab, setActiveTab] = useState<'mine' | 'opponent'>('mine');
   const myGuesses = useMemo(
@@ -32,13 +34,39 @@ export function PlayingArena({
     () => room.guesses.filter((guess) => guess.playerIndex === opponentPlayerIndex),
     [room.guesses, opponentPlayerIndex],
   );
-  const opponentTitle = room.isAiRoom
+
+  const p0Name = room.players[myPlayerIndex]?.username || 'Player 1';
+  const p1Name = opponent?.username || room.players[opponentPlayerIndex]?.username || 'Player 2';
+
+  const myTitle = isSpectator
     ? locale === 'vi'
-      ? 'LƯỢT BOT ĐOÁN (TÌM MẬT MÃ CỦA BẠN)'
-      : 'AI BOT GUESSES (AT YOUR CODE)'
-    : locale === 'vi'
-      ? 'LƯỢT ĐỐI THỦ ĐOÁN (TÌM MẬT MÃ CỦA BẠN)'
-      : `${opponent.username.toUpperCase()}'S GUESSES`;
+      ? `LƯỢT ${p0Name.toUpperCase()} ĐOÁN`
+      : `${p0Name.toUpperCase()}'S GUESSES`
+    : t('yourOffense');
+
+  const opponentTitle = isSpectator
+    ? locale === 'vi'
+      ? `LƯỢT ${p1Name.toUpperCase()} ĐOÁN`
+      : `${p1Name.toUpperCase()}'S GUESSES`
+    : room.isAiRoom
+      ? locale === 'vi'
+        ? 'LƯỢT BOT ĐOÁN (TÌM MẬT MÃ CỦA BẠN)'
+        : 'AI BOT GUESSES (AT YOUR CODE)'
+      : locale === 'vi'
+        ? 'LƯỢT ĐỐI THỦ ĐOÁN (TÌM MẬT MÃ CỦA BẠN)'
+        : `${opponent.username.toUpperCase()}'S GUESSES`;
+
+  const myEmptyLabel = isSpectator
+    ? locale === 'vi'
+      ? `${p0Name} chưa thực hiện lượt đoán nào`
+      : `${p0Name} has not made any guesses yet`
+    : t('noGuessesYet');
+
+  const opponentEmptyLabel = isSpectator
+    ? locale === 'vi'
+      ? `${p1Name} chưa thực hiện lượt đoán nào`
+      : `${p1Name} has not made any guesses yet`
+    : t('enemyNotGuessedYet');
 
   return (
     <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-h-0">
@@ -51,7 +79,7 @@ export function PlayingArena({
               : 'text-slate-500 hover:text-slate-400'
           }`}
         >
-          {t('yourGuesses')} ({myGuesses.length})
+          {isSpectator ? p0Name : t('yourGuesses')} ({myGuesses.length})
         </button>
         <button
           onClick={() => setActiveTab('opponent')}
@@ -61,15 +89,15 @@ export function PlayingArena({
               : 'text-slate-500 hover:text-slate-400'
           }`}
         >
-          {locale === 'vi' ? 'Đối thủ đoán' : 'Opponent Guesses'} ({opponentGuesses.length})
+          {isSpectator ? p1Name : locale === 'vi' ? 'Đối thủ đoán' : 'Opponent Guesses'} ({opponentGuesses.length})
         </button>
       </div>
 
       <div className="flex-1 flex flex-col md:flex-row gap-3 sm:gap-4 min-h-0">
         <GuessListPanel
           guesses={myGuesses}
-          title={t('yourOffense')}
-          emptyLabel={t('noGuessesYet')}
+          title={myTitle}
+          emptyLabel={myEmptyLabel}
           locale={locale}
           t={t}
           tone="purple"
@@ -78,7 +106,7 @@ export function PlayingArena({
         <GuessListPanel
           guesses={opponentGuesses}
           title={opponentTitle}
-          emptyLabel={t('enemyNotGuessedYet')}
+          emptyLabel={opponentEmptyLabel}
           locale={locale}
           t={t}
           tone="pink"

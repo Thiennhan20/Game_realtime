@@ -2,6 +2,7 @@ import type { FormEvent } from 'react';
 import { KeyRound } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
+import { sound, triggerHaptic } from '../../sound';
 
 interface SecretSetupPanelProps {
   isReady: boolean;
@@ -47,7 +48,17 @@ export function SecretSetupPanel({
                 maxLength={4}
                 placeholder={t('secretPlaceholder')}
                 value={secretInput}
-                onChange={(event) => onSecretInputChange(event.target.value.replace(/\D/g, ''))}
+                onChange={(event) => {
+                  const cleaned = event.target.value.replace(/\D/g, '');
+                  if (cleaned.length > secretInput.length) {
+                    sound.playDigitKey(cleaned.length);
+                    triggerHaptic(20);
+                  } else if (cleaned.length < secretInput.length) {
+                    sound.playDigitDelete();
+                    triggerHaptic(15);
+                  }
+                  onSecretInputChange(cleaned);
+                }}
                 className={`w-full bg-slate-950 border px-4 py-3.5 sm:py-4 rounded-xl text-center text-xl sm:text-2xl font-mono font-bold tracking-[0.5em] placeholder:tracking-normal placeholder:text-base sm:placeholder:text-lg md:placeholder:text-xl placeholder:font-sans placeholder:font-semibold placeholder-slate-400 transition-all duration-300 ${
                   !secretInput || secretInput.length < 4
                     ? 'border-purple-500/70 shadow-[0_0_22px_rgba(168,85,247,0.35)] ring-2 ring-purple-500/35 animate-pulse hover:border-purple-400'

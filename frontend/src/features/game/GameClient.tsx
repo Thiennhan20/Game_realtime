@@ -107,6 +107,7 @@ export default function GameClient() {
               onCreateRoom={game.handleCreateRoom}
               onCreateAiRoom={() => setShowAiDifficultyModal(true)}
               onJoinRoom={game.handleJoinRoom}
+              onSpectateRoom={game.handleJoinSpectator}
               onRoomIdChange={setRoomId}
               onRefresh={game.handleRefreshLobby}
               onRefreshGameProfile={game.loadGameProfile}
@@ -123,6 +124,8 @@ export default function GameClient() {
               opponent={game.opponent}
               myPlayerIndex={game.myPlayerIndex}
               opponentPlayerIndex={game.opponentPlayerIndex}
+              isSpectator={game.isSpectator}
+              spectatorCount={game.spectatorCount}
               secretInput={game.secretInput}
               guessInput={game.guessInput}
               opponentSecretSet={game.opponentSecretSet}
@@ -176,6 +179,7 @@ export default function GameClient() {
         t={game.t}
         onRefresh={game.handleRefreshLobby}
         onJoinRoom={game.handleJoinRoom}
+        onSpectateRoom={game.handleJoinSpectator}
         onClose={() => setShowAllRoomsModal(false)}
       />
 

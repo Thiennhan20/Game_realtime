@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+require('./User');
 
 const gameProfileSchema = new mongoose.Schema({
   userId: {
@@ -36,6 +37,9 @@ const gameProfileSchema = new mongoose.Schema({
   lastAiXpDate: { type: String, default: null },
   dailyAiXpEarned: { type: Number, default: 0, min: 0 }
 }, { timestamps: true });
+
+// Compound index for high-performance Leaderboard queries
+gameProfileSchema.index({ rating: -1, wins: -1, losses: 1 });
 
 const GameProfile = mongoose.model('GameProfile', gameProfileSchema);
 

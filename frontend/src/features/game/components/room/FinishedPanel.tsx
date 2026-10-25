@@ -1,3 +1,5 @@
+'use client';
+
 import { History, LogOut, RefreshCw, Trophy } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
@@ -11,6 +13,8 @@ interface FinishedPanelProps {
   canPlayAgain: boolean;
   locale: Locale;
   t: Translator;
+  isSpectator?: boolean;
+  winnerName?: string;
   onOpenSummary: () => void;
   onOpenGuessHistory: () => void;
   onPlayAgain: () => void;
@@ -24,6 +28,8 @@ export function FinishedPanel({
   canPlayAgain,
   locale,
   t,
+  isSpectator = false,
+  winnerName,
   onOpenSummary,
   onOpenGuessHistory,
   onPlayAgain,
@@ -33,13 +39,27 @@ export function FinishedPanel({
     <div className="flex-1 flex flex-col items-center justify-center py-6 text-center w-full max-w-sm mx-auto">
       {isWinner && <ConfettiCanvas />}
       <div className="space-y-4 w-full">
-        <div className="text-6xl">{isWinner ? '🏆' : '💀'}</div>
+        <div className="text-6xl">{isSpectator ? '🏁' : isWinner ? '🏆' : '💀'}</div>
         <h3
-          className={`text-3xl font-black bg-gradient-to-r ${
-            isWinner ? 'from-yellow-400 to-amber-500' : 'from-red-500 to-pink-500'
+          className={`text-2xl sm:text-3xl font-black bg-gradient-to-r ${
+            isSpectator
+              ? 'from-blue-400 to-indigo-400'
+              : isWinner
+                ? 'from-yellow-400 to-amber-500'
+                : 'from-red-500 to-pink-500'
           } text-transparent bg-clip-text`}
         >
-          {isWinner ? t('victory') : t('defeat')}
+          {isSpectator
+            ? winnerName
+              ? locale === 'vi'
+                ? `${winnerName} CHIẾN THẮNG!`
+                : `${winnerName} WON!`
+              : locale === 'vi'
+                ? 'TRẬN ĐẤU KẾT THÚC'
+                : 'MATCH FINISHED'
+            : isWinner
+              ? t('victory')
+              : t('defeat')}
         </h3>
 
         <div className="space-y-2.5 w-full">
@@ -67,31 +87,39 @@ export function FinishedPanel({
         </div>
 
         <div className="flex flex-row gap-2.5 w-full">
-          <button
-            onClick={onPlayAgain}
-            disabled={!canPlayAgain}
-            className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-800 disabled:text-slate-500 disabled:shadow-none"
-          >
-            <RefreshCw size={16} />
-            <span>
-              {canPlayAgain
-                ? t('playAgain')
-                : locale === 'vi'
-                  ? 'Đối thủ đã rời'
-                  : 'Opponent left'}
-            </span>
-          </button>
+          {!isSpectator && (
+            <button
+              onClick={onPlayAgain}
+              disabled={!canPlayAgain}
+              className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-800 disabled:text-slate-500 disabled:shadow-none"
+            >
+              <RefreshCw size={16} />
+              <span>
+                {canPlayAgain
+                  ? t('playAgain')
+                  : locale === 'vi'
+                    ? 'Đối thủ đã rời'
+                    : 'Opponent left'}
+              </span>
+            </button>
+          )}
           <button
             onClick={onLeaveRoom}
-            className="flex-1 py-3 bg-slate-900/90 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-rose-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm"
+            className={`${isSpectator ? 'w-full' : 'flex-1'} py-3 bg-slate-900/90 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-rose-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm`}
           >
             <LogOut size={16} />
-            <span>{t('backToLobby')}</span>
+            <span>
+              {isSpectator
+                ? locale === 'vi'
+                  ? 'Rời phòng xem'
+                  : 'Exit Spectate'
+                : t('backToLobby')}
+            </span>
           </button>
         </div>
 
         <div className="min-h-[18px] mt-2">
-          {opponentWantsPlayAgain && canPlayAgain && (
+          {!isSpectator && opponentWantsPlayAgain && canPlayAgain && (
             <p className="text-xs text-green-400 font-semibold">
               {t('rematchRequest').replace('{username}', opponentName || t('enemy'))}
             </p>
