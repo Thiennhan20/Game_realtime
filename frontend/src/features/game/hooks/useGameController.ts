@@ -501,14 +501,36 @@ export function useGameController() {
       sound.playOpponentSecretReady();
     });
 
-    socket.on('RPS_PHASE', (rpsRoom: Room) => {
-      setRoom(rpsRoom);
-      setOpponentRpsSubmitted(false);
+    socket.on('PLAYER_READY', (data: { userId: string; username: string }) => {
+      if (data.userId === userRef.current?.id) {
+        setErrorMsg(null);
+        setRoom((previousRoom) => {
+          if (!previousRoom) return null;
+          const players = [...previousRoom.players];
+          const playerIndex = players.findIndex((player) => player.userId === userRef.current?.id);
+          if (playerIndex !== -1 && players[playerIndex]) {
+            players[playerIndex] = { ...players[playerIndex], ready: true };
+          }
+          return { ...previousRoom, players };
+        });
+      } else {
+        setOpponentSecretSet(true);
+        sound.playOpponentSecretReady();
+      }
     });
 
-    socket.on('OPPONENT_RPS_SUBMITTED', () => {
+    const handleRpsPhase = (rpsRoom: Room) => {
+      setRoom(rpsRoom);
+      setOpponentRpsSubmitted(false);
+    };
+    socket.on('RPS_PHASE', handleRpsPhase);
+    socket.on('START_RPS', handleRpsPhase);
+
+    const handleOpponentRpsSubmitted = () => {
       setOpponentRpsSubmitted(true);
-    });
+    };
+    socket.on('OPPONENT_RPS_SUBMITTED', handleOpponentRpsSubmitted);
+    socket.on('OPPONENT_RPS_READY', handleOpponentRpsSubmitted);
 
     socket.on('RPS_TIE', (data: { players: Player[] }) => {
       setOpponentRpsSubmitted(false);
@@ -626,6 +648,24 @@ export function useGameController() {
       setOpponentWantsPlayAgain(true);
       sound.playRematchRequest();
       triggerHaptic([40, 40]);
+    });
+
+    socket.on('GAME_RESET', (resetRoom: Room) => {
+      setRoom(resetRoom);
+      setOpponentSecretSet(false);
+      setOpponentRpsSubmitted(false);
+      setOpponentWantsPlayAgain(false);
+      setSecretInput('');
+      setGuessInput('');
+      setSecretReveal(null);
+      setMatchStats(null);
+      setMatchXpResult(null);
+      setShowMatchModal(false);
+      setShowGuessHistoryModal(false);
+      setOpponentTempDisconnected(null);
+      setErrorMsg(null);
+      sound.playBattleStart();
+      triggerHaptic([50]);
     });
 
     socket.on('PLAYER_DISCONNECTED', (data: { username: string; roomState: Room }) => {

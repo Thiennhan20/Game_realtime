@@ -428,8 +428,11 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         });
         syncRoomToRedis(roomId, room);
         io.to(roomId).emit('START_RPS', room);
+        io.to(roomId).emit('RPS_PHASE', room);
         console.log(`[Game] Both players set secrets in ${roomId}. Moving to RPS.`);
       } else {
+        socket.emit('SECRET_ACCEPTED');
+        socket.to(roomId).emit('OPPONENT_SECRET_SET');
         io.to(roomId).emit('PLAYER_READY', {
           userId: socket.userId,
           username: socket.username
@@ -459,6 +462,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       const allReady = room.players.every(p => p.ready);
       if (!allReady) {
         socket.to(roomId).emit('OPPONENT_RPS_READY', { userId: socket.userId });
+        socket.to(roomId).emit('OPPONENT_RPS_SUBMITTED', { userId: socket.userId });
         return;
       }
 

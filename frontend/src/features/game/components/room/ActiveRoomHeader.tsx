@@ -88,17 +88,9 @@ export function ActiveRoomHeader({
       <div className="flex items-center space-x-2.5 sm:space-x-6">
         <div className="w-[110px] sm:w-[270px] flex items-center justify-center space-x-1.5 sm:space-x-2.5 shrink-0">
           <div className="hidden sm:block text-right">
-            <div className="flex items-center justify-end gap-1">
-              <p className="text-xs font-bold max-w-[80px] sm:max-w-[120px] truncate text-slate-200">{me?.username}</p>
-              {typeof me?.currentWinStreak === 'number' && me.currentWinStreak >= 2 && (
-                <span
-                  className="px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black animate-pulse"
-                  title={`${t('winStreak')}: ${me.currentWinStreak}`}
-                >
-                  🔥{me.currentWinStreak}
-                </span>
-              )}
-            </div>
+            <p className="text-xs font-bold max-w-[90px] sm:max-w-[130px] truncate text-slate-200" title={me?.username}>
+              {me?.username}
+            </p>
             {!isSpectator && (
               <p className="text-[10px] text-purple-400 font-semibold uppercase">
                 {t('you')}
@@ -133,19 +125,9 @@ export function ActiveRoomHeader({
                 </div>
               )}
               <div className="hidden sm:block text-left">
-                <div className="flex items-center gap-1">
-                  <p className="text-xs font-bold max-w-[80px] sm:max-w-[120px] truncate text-slate-200">
-                    {opponent.username}
-                  </p>
-                  {typeof opponent?.currentWinStreak === 'number' && opponent.currentWinStreak >= 2 && (
-                    <span
-                      className="px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black animate-pulse"
-                      title={`${t('winStreak')}: ${opponent.currentWinStreak}`}
-                    >
-                      🔥{opponent.currentWinStreak}
-                    </span>
-                  )}
-                </div>
+                <p className="text-xs font-bold max-w-[90px] sm:max-w-[130px] truncate text-slate-200" title={opponent.username}>
+                  {opponent.username}
+                </p>
                 {!isSpectator && (
                   <p className="text-[10px] text-pink-400 font-semibold uppercase">
                     {t('enemy')}
