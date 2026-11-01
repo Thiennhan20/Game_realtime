@@ -221,6 +221,7 @@ export function RoomChat({
         <input
           type="text"
           placeholder={t('chatPlaceholder')}
+          aria-label={t('chatPlaceholder')}
           value={input}
           onChange={(event) => onInputChange(event.target.value)}
           className="flex-1 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2 rounded-xl text-base md:text-sm placeholder-slate-600"

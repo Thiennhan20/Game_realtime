@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bot, Flame, Lock, X } from 'lucide-react';
 
@@ -18,6 +19,18 @@ export function AiDifficultyModal({
   onLockedHard,
   onClose,
 }: AiDifficultyModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -30,6 +43,9 @@ export function AiDifficultyModal({
           onClick={onClose}
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-difficulty-title"
             initial={{ opacity: 0, scale: 0.93, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.93, y: 15 }}
@@ -43,7 +59,7 @@ export function AiDifficultyModal({
                   <Bot size={20} />
                 </div>
                 <div>
-                  <h2 className="text-sm sm:text-base font-bold text-white">
+                  <h2 id="ai-difficulty-title" className="text-sm sm:text-base font-bold text-white">
                     {locale === 'vi' ? 'Chọn độ khó khi đấu với Máy' : 'Select AI Bot Difficulty'}
                   </h2>
                   <p className="text-[11px] text-slate-400">
@@ -54,10 +70,12 @@ export function AiDifficultyModal({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="p-1 bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-lg transition duration-150 cursor-pointer"
+                aria-label={locale === 'vi' ? 'Đóng' : 'Close'}
+                className="w-8 h-8 bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-lg transition duration-150 cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 

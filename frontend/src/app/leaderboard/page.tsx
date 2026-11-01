@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trophy, Medal, Crown, Users, ChevronDown, Clock, Search, Shield, Award } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Crown, Users, ChevronDown, Clock, Search, Award } from 'lucide-react';
 import { getGameApiUrl, getMainSiteUrl, navigateTopWindow } from '@/features/game/utils';
 import { RankBadge } from '@/features/game/components/common/RankBadge';
 import { getRankByRating } from '@/features/game/ranks';

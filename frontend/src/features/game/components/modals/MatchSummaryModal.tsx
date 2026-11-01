@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Clock, History, Sparkles, Swords, Target, Zap } from 'lucide-react';
 
@@ -43,6 +44,18 @@ export function MatchSummaryModal({
   onClose,
   onOpenGuessHistory,
 }: MatchSummaryModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!stats) return null;
 
   const isAbandoned = stats.status === 'abandoned' || stats.status === 'cancelled' || stats.ratingReason === 'abandoned';
@@ -152,6 +165,9 @@ export function MatchSummaryModal({
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="match-summary-title"
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -163,6 +179,7 @@ export function MatchSummaryModal({
             >
               <div className="text-5xl mb-3">{headlineIcon}</div>
               <h3
+                id="match-summary-title"
                 className={`text-2xl font-black bg-gradient-to-r ${titleGradient} text-transparent bg-clip-text`}
               >
                 {headlineTitle}

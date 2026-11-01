@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { RoomChat } from './components/chat/RoomChat';
@@ -29,12 +29,7 @@ export default function GameClient() {
   const [roomId, setRoomId] = useState('');
 
   const isAiMatch = Boolean(game.room?.isAiRoom);
-
-  useEffect(() => {
-    if (isAiMatch && activeMobileTab !== 'arena') {
-      setActiveMobileTab('arena');
-    }
-  }, [isAiMatch, activeMobileTab]);
+  const effectiveMobileTab: MobileRoomTab = isAiMatch ? 'arena' : activeMobileTab;
 
   if (!game.mounted) {
     return <LoadingScreen />;
@@ -90,8 +85,8 @@ export default function GameClient() {
       >
         {game.room && !isAiMatch && (
           <MobileRoomTabs
-            activeTab={activeMobileTab}
-            unreadCount={activeMobileTab === 'arena' ? game.unreadChatCount : 0}
+            activeTab={effectiveMobileTab}
+            unreadCount={effectiveMobileTab === 'arena' ? game.unreadChatCount : 0}
             t={game.t}
             onChange={(tab) => {
               setActiveMobileTab(tab);
@@ -103,7 +98,7 @@ export default function GameClient() {
         )}
         <div
           className={`flex-1 flex flex-col min-w-0 min-h-0 ${
-            game.room && !isAiMatch && activeMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'
+            game.room && !isAiMatch && effectiveMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'
           }`}
         >
           {!game.room ? (
@@ -176,12 +171,12 @@ export default function GameClient() {
             input={game.chatInput}
             locale={game.locale}
             t={game.t}
-            isActive={activeMobileTab === 'chat'}
+            isActive={effectiveMobileTab === 'chat'}
             floatingEmotes={game.floatingEmotes}
             onInputChange={game.setChatInput}
             onSubmit={game.handleSendChat}
             onSendReaction={game.handleSendReaction}
-            className={activeMobileTab !== 'chat' ? 'hidden lg:flex' : 'flex'}
+            className={effectiveMobileTab !== 'chat' ? 'hidden lg:flex' : 'flex'}
           />
         )}
       </main>

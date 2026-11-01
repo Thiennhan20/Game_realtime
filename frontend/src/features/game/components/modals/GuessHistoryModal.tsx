@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { History, Trophy } from 'lucide-react';
 
@@ -36,6 +36,18 @@ export function GuessHistoryModal({
   onOpenSummary,
 }: GuessHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<'mine' | 'opponent'>('mine');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
   const myGuesses = useMemo(
     () => room.guesses.filter((guess) => guess.playerIndex === myPlayerIndex),
     [room.guesses, myPlayerIndex],
@@ -69,6 +81,9 @@ export function GuessHistoryModal({
           <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
 
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="guess-history-title"
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -80,7 +95,7 @@ export function GuessHistoryModal({
                 <History size={22} />
               </div>
               <div>
-                <h3 className="text-lg sm:text-xl font-black text-white">
+                <h3 id="guess-history-title" className="text-lg sm:text-xl font-black text-white">
                   {locale === 'vi' ? 'Lịch sử lượt đoán trận đấu' : 'Match Guessing History'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">

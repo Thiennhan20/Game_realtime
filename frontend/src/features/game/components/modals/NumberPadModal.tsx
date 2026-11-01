@@ -1,3 +1,4 @@
+import { useCallback, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
 
@@ -25,19 +26,70 @@ export function NumberPadModal({
 }: NumberPadModalProps) {
   const isDuplicate = value.length === 4 && pastGuesses.includes(value);
 
-  const appendDigit = (digit: string) => {
-    if (value.length < 4 && !value.includes(digit)) {
-      const nextValue = `${value}${digit}`;
-      onChange(nextValue);
-      if (nextValue.length === 4 && pastGuesses.includes(nextValue)) {
-        sound.playWarning();
-        triggerHaptic([60, 40, 60]);
-      } else {
-        sound.playDigitKey(nextValue.length);
-        triggerHaptic(20);
+  const appendDigit = useCallback(
+    (digit: string) => {
+      if (value.length < 4 && !value.includes(digit)) {
+        const nextValue = `${value}${digit}`;
+        onChange(nextValue);
+        if (nextValue.length === 4 && pastGuesses.includes(nextValue)) {
+          sound.playWarning();
+          triggerHaptic([60, 40, 60]);
+        } else {
+          sound.playDigitKey(nextValue.length);
+          triggerHaptic(20);
+        }
       }
-    }
-  };
+    },
+    [value, pastGuesses, onChange],
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key >= '0' && event.key <= '9') {
+        event.preventDefault();
+        appendDigit(event.key);
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        if (value.length > 0) {
+          sound.playDigitDelete();
+          triggerHaptic(15);
+          onChange(value.slice(0, -1));
+        }
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (value.length === 4 && !isDuplicate) {
+          sound.playSubmitGuess();
+          triggerHaptic(35);
+          onSubmit();
+          onClose();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, value, isDuplicate, pastGuesses, onChange, onSubmit, onClose, appendDigit]);
 
   return (
     <AnimatePresence>
@@ -54,6 +106,10 @@ export function NumberPadModal({
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
 
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="numberpad-title"
+            aria-describedby="numberpad-desc"
             initial={{ opacity: 0, scale: 0.9, y: 30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 30 }}
@@ -65,21 +121,26 @@ export function NumberPadModal({
 
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 z-10">
               <div className="flex items-center gap-2">
-                <span className="text-xl">🔥</span>
+                <span className="text-xl" aria-hidden="true">🔥</span>
                 <div>
-                  <h3 className="text-sm font-black uppercase text-purple-400 tracking-wider">
+                  <h3
+                    id="numberpad-title"
+                    className="text-sm font-black uppercase text-purple-400 tracking-wider"
+                  >
                     {locale === 'vi' ? 'LƯỢT ĐOÁN CỦA BẠN' : 'YOUR GUESS TURN'}
                   </h3>
-                  <p className="text-[10px] text-slate-500">
-                    {locale === 'vi' ? 'Chọn 4 chữ số khác nhau' : 'Select 4 unique digits'}
+                  <p id="numberpad-desc" className="text-[10px] text-slate-400">
+                    {locale === 'vi' ? 'Chọn 4 chữ số khác nhau (hoặc gõ phím 0-9)' : 'Select 4 unique digits (or type 0-9)'}
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="p-2 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-800 hover:border-slate-700 text-slate-400 rounded-full transition cursor-pointer flex items-center justify-center shadow-lg"
+                aria-label={locale === 'vi' ? 'Đóng bàn phím' : 'Close keypad'}
+                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-800 hover:border-slate-700 text-slate-300 rounded-full transition cursor-pointer flex items-center justify-center shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
               >
-                <X size={15} />
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -111,12 +172,14 @@ export function NumberPadModal({
                 return (
                   <button
                     key={number}
+                    type="button"
                     disabled={isUsed || value.length >= 4}
                     onClick={() => appendDigit(digit)}
-                    className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer ${
+                    aria-label={`Digit ${number}${isUsed ? ' (already used)' : ''}`}
+                    className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
                       isUsed
-                        ? 'bg-slate-950/20 border-slate-900 text-slate-800 opacity-20 pointer-events-none'
-                        : 'bg-slate-800/50 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-200'
+                        ? 'bg-slate-950/60 border-slate-900 text-slate-600 opacity-40 cursor-not-allowed'
+                        : 'bg-slate-800/70 hover:bg-slate-700 border-slate-700/80 hover:border-purple-500/50 text-slate-100'
                     }`}
                   >
                     {number}
@@ -125,37 +188,43 @@ export function NumberPadModal({
               })}
 
               <button
+                type="button"
                 onClick={() => {
                   sound.playDigitClear();
                   triggerHaptic(15);
                   onChange('');
                 }}
                 disabled={value.length === 0}
-                className="py-3.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center bg-slate-950/40 border border-slate-900 hover:bg-red-500/15 hover:border-red-500/35 hover:text-red-400 text-slate-500 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-20 disabled:pointer-events-none"
+                aria-label={locale === 'vi' ? 'Xóa toàn bộ số đã nhập' : 'Clear all entered digits'}
+                className="py-3.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center bg-slate-950/40 border border-slate-800 hover:bg-red-500/15 hover:border-red-500/35 hover:text-red-300 text-slate-400 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
               >
                 {locale === 'vi' ? 'XÓA HẾT' : 'CLEAR'}
               </button>
 
               <button
+                type="button"
                 disabled={value.includes('0') || value.length >= 4}
                 onClick={() => appendDigit('0')}
-                className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer ${
+                aria-label={`Digit 0${value.includes('0') ? ' (already used)' : ''}`}
+                className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
                   value.includes('0')
-                    ? 'bg-slate-950/20 border-slate-900 text-slate-800 opacity-20 pointer-events-none'
-                    : 'bg-slate-800/50 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-200'
+                    ? 'bg-slate-950/60 border-slate-900 text-slate-600 opacity-40 cursor-not-allowed'
+                    : 'bg-slate-800/70 hover:bg-slate-700 border-slate-700/80 hover:border-purple-500/50 text-slate-100'
                 }`}
               >
                 0
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   sound.playDigitDelete();
                   triggerHaptic(15);
                   onChange(value.slice(0, -1));
                 }}
                 disabled={value.length === 0}
-                className="py-3.5 rounded-2xl text-base sm:text-lg font-bold flex items-center justify-center bg-slate-950/40 border border-slate-900 hover:bg-amber-500/15 hover:border-amber-500/35 hover:text-amber-400 text-slate-500 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-20 disabled:pointer-events-none"
+                aria-label={locale === 'vi' ? 'Xóa 1 chữ số' : 'Delete digit'}
+                className="py-3.5 rounded-2xl text-base sm:text-lg font-bold flex items-center justify-center bg-slate-950/40 border border-slate-800 hover:bg-amber-500/15 hover:border-amber-500/35 hover:text-amber-300 text-slate-400 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                 title="Backspace"
               >
                 ⌫

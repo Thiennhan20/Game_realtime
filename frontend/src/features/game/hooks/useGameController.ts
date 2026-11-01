@@ -86,8 +86,40 @@ export function useGameController() {
   const { locale, mounted, t, toggleLocale } = useGameLocale();
   const { user, loadingUser, authError, setAuthError } = useAuthProfile();
 
-  const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>([]);
-  const [isRefreshingLobby, setIsRefreshingLobby] = useState(true);
+  const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const preRoomsRaw = urlParams.get('preRooms');
+        if (preRoomsRaw) {
+          const parsed = JSON.parse(decodeURIComponent(preRoomsRaw));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {
+        // Ignore URL parse error
+      }
+    }
+    return [];
+  });
+  const [isRefreshingLobby, setIsRefreshingLobby] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const preRoomsRaw = urlParams.get('preRooms');
+        if (preRoomsRaw) {
+          const parsed = JSON.parse(decodeURIComponent(preRoomsRaw));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return false;
+          }
+        }
+      } catch {
+        // Ignore URL parse error
+      }
+    }
+    return true;
+  });
   const [room, setRoom] = useState<Room | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [secretInput, setSecretInput] = useState('');
@@ -124,7 +156,6 @@ export function useGameController() {
   const previousRoomStateRef = useRef<string | null>(null);
   const gameProfileRequestIdRef = useRef(0);
   const gameProfileRef = useRef<GameProfile | null>(null);
-  const lastRestFetchTimeRef = useRef<number>(0);
 
   const loadGameProfile = useCallback(async () => {
     const requestId = ++gameProfileRequestIdRef.current;
@@ -284,30 +315,13 @@ export function useGameController() {
     } else {
       previousTurnRef.current = { state: room.state, turn: room.activeTurnIndex };
     }
-  }, [room?.state, room?.activeTurnIndex, room?.players, user]);
+  }, [room, user]);
 
   // --- Fast REST Pre-fetch for Instant Room List Display ---
   useEffect(() => {
     let active = true;
 
-    // 1. Check URL query params for ?preRooms=... (0ms instant display from Web Phim)
-    if (typeof window !== 'undefined') {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const preRoomsRaw = urlParams.get('preRooms');
-        if (preRoomsRaw) {
-          const parsed = JSON.parse(decodeURIComponent(preRoomsRaw));
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setLobbyRooms(parsed);
-            setIsRefreshingLobby(false);
-          }
-        }
-      } catch {
-        // Ignore URL parse error
-      }
-    }
-
-    // 2. Fetch fresh rooms from /api/rooms (no-store to bypass browser HTTP cache)
+    // Fetch fresh rooms from /api/rooms (no-store to bypass browser HTTP cache)
     const prefetchRooms = async () => {
       try {
         const response = await fetch(getGameApiUrl('/api/rooms'), { cache: 'no-store' });
@@ -376,7 +390,9 @@ export function useGameController() {
 
     const translate = () => createTranslator(localeRef.current);
 
-    setIsRefreshingLobby(true);
+    const refreshTimer = setTimeout(() => {
+      setIsRefreshingLobby(true);
+    }, 0);
     const connectionTimer = setTimeout(() => {
       if (socketRef.current && !socketRef.current.connected) {
         setIsReconnecting(true);
@@ -770,6 +786,7 @@ export function useGameController() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      clearTimeout(refreshTimer);
       clearTimeout(connectionTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.disconnect();

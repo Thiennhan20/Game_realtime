@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Crown, Lock, Shield, Trophy, X, Zap } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -51,6 +51,18 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
     () => true,
     () => false,
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !isClient) return null;
 
@@ -174,7 +186,7 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
                     <div className="flex items-center justify-between gap-2 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <img
-                          src={`/ranks/${tier.key}.png`}
+                          src={`/ranks/${tier.key}.webp`}
                           alt={locale === 'vi' ? tier.nameVi : tier.nameEn}
                           className="w-9 h-9 object-contain shrink-0 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]"
                         />

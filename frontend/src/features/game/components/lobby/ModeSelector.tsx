@@ -16,7 +16,6 @@ interface ModeSelectorProps {
 }
 
 export function ModeSelector({
-  locale,
   t,
   roomId,
   onCreateRoom,
@@ -37,14 +36,14 @@ export function ModeSelector({
           className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer"
         >
           <Users size={18} className="shrink-0" />
-          <span>{locale === 'vi' ? 'Chơi với bạn' : 'Play vs Friends'}</span>
+          <span>{t('playVsFriends')}</span>
         </button>
         <button
           onClick={onCreateAiRoom}
           className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-extrabold rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2 text-xs sm:text-sm cursor-pointer border border-cyan-400/30"
         >
           <Bot size={18} className="shrink-0" />
-          <span>{locale === 'vi' ? 'Chơi với máy' : 'Play vs Bot'}</span>
+          <span>{t('playVsBot')}</span>
         </button>
       </div>
 
@@ -61,13 +60,10 @@ export function ModeSelector({
         <input
           type="text"
           placeholder={t('enterRoomId')}
+          aria-label={t('enterRoomId')}
           value={roomId}
           onChange={(event) => onRoomIdChange(event.target.value)}
-          className={`flex-1 w-full bg-slate-950 border px-4 py-2.5 rounded-xl text-center text-base font-mono font-bold placeholder:font-sans placeholder:text-xs sm:placeholder:text-sm placeholder-slate-500 uppercase min-w-0 transition-all duration-300 ${
-            !roomId || roomId.trim() === ''
-              ? 'border-purple-500/70 shadow-[0_0_18px_rgba(168,85,247,0.3)] ring-2 ring-purple-500/30 animate-pulse hover:border-purple-400'
-              : 'border-purple-500/80 shadow-[0_0_15px_rgba(168,85,247,0.25)]'
-          } focus:border-purple-400 focus:ring-2 focus:ring-purple-400/50 focus:outline-none`}
+          className="flex-1 w-full bg-slate-950 border border-slate-800 hover:border-purple-500/50 px-4 py-2.5 rounded-xl text-center text-base font-mono font-bold placeholder:font-sans placeholder:text-xs sm:placeholder:text-sm placeholder-slate-500 uppercase min-w-0 transition-all duration-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/50 focus:outline-none"
         />
         <button
           onClick={() => onJoinRoom(roomId)}

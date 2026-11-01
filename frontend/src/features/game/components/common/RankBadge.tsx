@@ -82,7 +82,7 @@ export function RankBadge({
   const { Icon, chipClasses, iconClasses } = RANK_VISUALS[tier.key];
   const styles = SIZE_STYLES[size];
   const label = locale === 'vi' ? tier.nameVi : tier.nameEn;
-  const imagePath = `/ranks/${tier.key}.png`;
+  const imagePath = `/ranks/${tier.key}.webp`;
 
   const inner = (
     <>

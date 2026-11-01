@@ -8,9 +8,9 @@ import {
   Grid,
   RefreshCw,
   Users,
-  X
+  X,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import type { Translator } from '../../i18n';
 import type { LobbyRoom, Locale } from '../../types';
@@ -43,6 +43,18 @@ export function AllRoomsModal({
 }: AllRoomsModalProps) {
   const [filter, setFilter] = useState<'all' | 'waiting' | 'playing'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Filter rooms based on active tab
   const filteredRooms = useMemo(() => {
@@ -94,6 +106,9 @@ export function AllRoomsModal({
           onClick={onClose}
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-rooms-modal-title"
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -108,7 +123,7 @@ export function AllRoomsModal({
                   <Grid size={16} />
                 </div>
                 <div>
-                  <h2 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                  <h2 id="all-rooms-modal-title" className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
                     <span>
                       {locale === 'vi' ? 'Danh sách phòng' : 'All Active Rooms'}
                     </span>
