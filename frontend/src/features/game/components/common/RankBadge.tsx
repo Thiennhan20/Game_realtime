@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Crown, Gem, Medal, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-import type { RankTier } from '../../ranks';
+import { getRankBadgePath, type RankTier } from '../../ranks';
 
 interface RankBadgeProps {
   tier: RankTier;
@@ -82,7 +82,7 @@ export function RankBadge({
   const { Icon, chipClasses, iconClasses } = RANK_VISUALS[tier.key];
   const styles = SIZE_STYLES[size];
   const label = locale === 'vi' ? tier.nameVi : tier.nameEn;
-  const imagePath = `/ranks/${tier.key}.webp`;
+  const imagePath = getRankBadgePath(tier.key);
 
   const inner = (
     <>

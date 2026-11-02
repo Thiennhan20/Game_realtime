@@ -56,17 +56,19 @@ export default function GameClient() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
-      <GameHeader
-        user={user}
-        locale={game.locale}
-        t={game.t}
-        onLocaleChange={game.toggleLocale}
-        onBackHome={() => navigateTopWindow(getMainSiteUrl())}
-        onOpenProfile={() => navigateTopWindow(getMainSiteUrl('/profile'))}
-        onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
-        onOpenLeaderboard={() => router.push(`/leaderboard?locale=${game.locale}`)}
-        onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
-      />
+      {!game.room && (
+        <GameHeader
+          user={user}
+          locale={game.locale}
+          t={game.t}
+          onLocaleChange={game.toggleLocale}
+          onBackHome={() => navigateTopWindow(getMainSiteUrl())}
+          onOpenProfile={() => navigateTopWindow(getMainSiteUrl('/profile'))}
+          onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
+          onOpenLeaderboard={() => router.push(`/leaderboard?locale=${game.locale}`)}
+          onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
+        />
+      )}
 
       <NotificationStack
         error={game.errorMsg}
@@ -79,7 +81,9 @@ export default function GameClient() {
       />
 
       <main
-        className={`flex-1 w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 pt-16 sm:pt-20 sm:p-4 mb-4 min-h-0 ${
+        className={`flex-1 w-full mx-auto flex flex-col lg:flex-row gap-6 p-3 ${
+          game.room ? 'pt-3 sm:pt-4' : 'pt-16 sm:pt-20'
+        } sm:p-4 mb-4 min-h-0 ${
           isAiMatch ? 'max-w-5xl justify-center' : 'max-w-[1700px]'
         }`}
       >

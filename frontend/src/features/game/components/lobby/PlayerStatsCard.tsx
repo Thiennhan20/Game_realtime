@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { AlertCircle, Flame, RefreshCw, Trophy, Zap } from 'lucide-react';
 
-import { getRankByKey, getRankByRating } from '../../ranks';
+import { getRankBadgePath, getRankByKey, getRankByRating } from '../../ranks';
 import type { GameProfile, Locale } from '../../types';
 import { RankInfoModal } from '../modals/RankInfoModal';
 
@@ -165,7 +165,7 @@ export function PlayerStatsCard({
           className="group relative flex items-center justify-center p-2 rounded-xl border border-amber-500/50 bg-gradient-to-b from-amber-500/20 to-amber-600/10 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)] hover:shadow-[0_0_16px_rgba(245,158,11,0.6)] hover:border-amber-400 hover:scale-105 transition duration-200 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <img
-            src={`/ranks/${currentTier.key}.webp`}
+            src={getRankBadgePath(currentTier.key)}
             alt={locale === 'vi' ? currentTier.nameVi : currentTier.nameEn}
             className="w-5 h-5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] group-hover:scale-110 transition duration-200"
           />

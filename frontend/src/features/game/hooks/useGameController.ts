@@ -146,11 +146,13 @@ export function useGameController() {
   const [showStartCountdown, setShowStartCountdown] = useState(false);
   const [countdownVal, setCountdownVal] = useState(3);
   const [showNumPad, setShowNumPad] = useState(false);
+  const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
   const [isSpectator, setIsSpectator] = useState(false);
   const [spectatorCount, setSpectatorCount] = useState(0);
   const [floatingEmotes, setFloatingEmotes] = useState<FloatingEmote[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
+  const lastGuessSubmitTimeRef = useRef(0);
   const localeRef = useRef(locale);
   const userRef = useRef(user);
   const previousRoomStateRef = useRef<string | null>(null);
@@ -940,6 +942,9 @@ export function useGameController() {
 
   const handleSendGuess = () => {
     if (!room || !user || isSpectator) return;
+    const now = Date.now();
+    if (isSubmittingGuess || now - lastGuessSubmitTimeRef.current < 500) return;
+
     if (!isUniqueFourDigitCode(guessInput)) {
       setErrorMsg(t('invalidGuess'));
       return;
@@ -954,6 +959,13 @@ export function useGameController() {
       setErrorMsg(t('duplicateGuess'));
       return;
     }
+
+    lastGuessSubmitTimeRef.current = now;
+    setIsSubmittingGuess(true);
+    setTimeout(() => {
+      setIsSubmittingGuess(false);
+    }, 500);
+
     socketRef.current?.emit('SUBMIT_GUESS', {
       roomId: room.roomId,
       guess: guessInput,
@@ -1074,6 +1086,7 @@ export function useGameController() {
     countdownVal,
     showNumPad,
     setShowNumPad,
+    isSubmittingGuess,
     isSpectator,
     spectatorCount,
     myPlayerIndex,

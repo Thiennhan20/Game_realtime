@@ -53,3 +53,8 @@ export function getRankProgress(rating: number) {
     pointsToNext: Math.max(0, next.minRating - Math.max(0, Math.floor(rating))),
   };
 }
+
+export function getRankBadgePath(key: RankKey, ext: 'webp' | 'png' = 'webp'): string {
+  return `/ranks/${key}.${ext}`;
+}
+

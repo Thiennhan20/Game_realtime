@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Crown, Lock, Shield, Trophy, X, Zap } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { RANK_TIERS, getRankProgress } from '../../ranks';
+import { RANK_TIERS, getRankBadgePath, getRankProgress } from '../../ranks';
 import type { GameProfile, Locale } from '../../types';
 import { RankBadge } from '../common/RankBadge';
 
@@ -186,7 +186,7 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
                     <div className="flex items-center justify-between gap-2 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <img
-                          src={`/ranks/${tier.key}.webp`}
+                          src={getRankBadgePath(tier.key)}
                           alt={locale === 'vi' ? tier.nameVi : tier.nameEn}
                           className="w-9 h-9 object-contain shrink-0 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]"
                         />

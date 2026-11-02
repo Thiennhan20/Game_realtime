@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
 
@@ -25,6 +25,22 @@ export function NumberPadModal({
   onClose,
 }: NumberPadModalProps) {
   const isDuplicate = value.length === 4 && pastGuesses.includes(value);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const lastSubmitTimeRef = useRef(0);
+
+  const handleSubmit = useCallback(() => {
+    const now = Date.now();
+    if (isDuplicate || isSubmitting || now - lastSubmitTimeRef.current < 500) return;
+    lastSubmitTimeRef.current = now;
+    setIsSubmitting(true);
+    sound.playSubmitGuess();
+    triggerHaptic(35);
+    onSubmit();
+    onClose();
+    setTimeout(() => {
+      setIsSubmitting(false);
+    }, 500);
+  }, [isDuplicate, isSubmitting, onSubmit, onClose]);
 
   const appendDigit = useCallback(
     (digit: string) => {
@@ -78,18 +94,15 @@ export function NumberPadModal({
 
       if (event.key === 'Enter') {
         event.preventDefault();
-        if (value.length === 4 && !isDuplicate) {
-          sound.playSubmitGuess();
-          triggerHaptic(35);
-          onSubmit();
-          onClose();
+        if (value.length === 4 && !isDuplicate && !isSubmitting) {
+          handleSubmit();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, value, isDuplicate, pastGuesses, onChange, onSubmit, onClose, appendDigit]);
+  }, [isOpen, value, isDuplicate, isSubmitting, pastGuesses, onChange, handleSubmit, onClose, appendDigit]);
 
   return (
     <AnimatePresence>
@@ -247,14 +260,8 @@ export function NumberPadModal({
             )}
 
             <button
-              onClick={() => {
-                if (isDuplicate) return;
-                sound.playSubmitGuess();
-                triggerHaptic(35);
-                onSubmit();
-                onClose();
-              }}
-              disabled={value.length !== 4 || isDuplicate}
+              onClick={handleSubmit}
+              disabled={value.length !== 4 || isDuplicate || isSubmitting}
               className={`w-full py-4 text-white text-base font-black rounded-2xl shadow-xl transition-all duration-200 flex items-center justify-center gap-2 z-10 ${
                 isDuplicate
                   ? 'bg-amber-600/30 border border-amber-500/50 text-amber-300 cursor-not-allowed opacity-75'
