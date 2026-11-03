@@ -35,7 +35,12 @@ const gameProfileSchema = new mongoose.Schema({
 
   // Daily AI XP tracking for anti-farming cap
   lastAiXpDate: { type: String, default: null },
-  dailyAiXpEarned: { type: Number, default: 0, min: 0 }
+  dailyAiXpEarned: { type: Number, default: 0, min: 0 },
+
+  // Equipped Achievement Title & Unlocked Achievement Tracking
+  equippedTitleId: { type: String, default: null },
+  unlockedAchievementIds: { type: [String], default: [] },
+  achievementsInitialized: { type: Boolean, default: false }
 }, { timestamps: true });
 
 // Compound index for high-performance Leaderboard queries

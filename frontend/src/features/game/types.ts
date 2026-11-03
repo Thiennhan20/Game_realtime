@@ -1,12 +1,33 @@
 export type Locale = 'en' | 'vi';
 export type AiDifficulty = 'easy' | 'medium' | 'hard';
 export type RpsChoice = 'rock' | 'paper' | 'scissors';
+export type AchievementRarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type RoomState =
   | 'WAITING_FOR_PLAYERS'
   | 'SETTING_SECRET'
   | 'RPS_DECISION'
   | 'PLAYING'
   | 'FINISHED';
+
+export interface EquippedTitle {
+  id: string;
+  category?: string;
+  rarity: AchievementRarity;
+  icon: string;
+  titleVi: string;
+  titleEn: string;
+}
+
+export interface UnlockedAchievementNotice {
+  id: string;
+  category: string;
+  rarity: AchievementRarity;
+  icon: string;
+  titleVi: string;
+  titleEn: string;
+  descVi: string;
+  descEn: string;
+}
 
 export interface AuthUser {
   id: string;
@@ -25,6 +46,7 @@ export interface Player {
   disconnectedAt?: number | null;
   hasLeft?: boolean;
   currentWinStreak?: number;
+  equippedTitle?: EquippedTitle | null;
 }
 
 export interface Guess {
@@ -50,6 +72,8 @@ export interface GameProfile {
   rankEn?: string;
   rankKey?: string;
   ratingToNextRank?: number | null;
+  equippedTitleId?: string | null;
+  equippedTitle?: EquippedTitle | null;
 }
 
 export interface PlayerXpResult extends GameProfile {
@@ -64,6 +88,7 @@ export interface PlayerXpResult extends GameProfile {
   rankAfterEn?: string;
   rankKeyBefore?: string;
   rankKeyAfter?: string;
+  newlyUnlockedAchievements?: UnlockedAchievementNotice[];
 }
 
 export type PlayerXpSettlement = Pick<
@@ -91,17 +116,20 @@ export interface MatchStats {
   ratingApplied?: boolean;
   ratingReason?: string;
   xpResults?: PlayerXpSettlement[];
+  newlyUnlockedByUser?: Record<string, UnlockedAchievementNotice[]>;
 }
 
 export interface Room {
   roomId: string;
   players: Player[];
+  spectators?: Array<{ userId: string; username: string; avatar?: string }>;
   state: RoomState;
   guesses: Guess[];
   rpsWinnerIndex: number;
   activeTurnIndex: number;
   winnerIndex: number;
   isAiRoom?: boolean;
+  isQuickMatch?: boolean;
   aiDifficulty?: AiDifficulty;
   spectatorCount?: number;
 }
@@ -110,6 +138,7 @@ export interface LobbyRoom {
   roomId: string;
   hostName: string;
   hostAvatar?: string;
+  hostEquippedTitle?: EquippedTitle | null;
   playerCount: number;
   maxPlayers?: number;
   state?: string;
@@ -169,4 +198,5 @@ export interface LeaderboardEntry {
   winRate: number;
   currentWinStreak: number;
   bestWinStreak: number;
+  equippedTitle?: EquippedTitle | null;
 }

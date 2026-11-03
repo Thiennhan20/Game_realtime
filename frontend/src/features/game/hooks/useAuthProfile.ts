@@ -43,23 +43,87 @@ function getTokenFromLocationOrStorage(searchParams: ReturnType<typeof useSearch
   return null;
 }
 
-export function useAuthProfile() {
-  const searchParams = useSearchParams();
-  const [user, setUser] = useState<AuthUser | null>(() => {
+function getInitialUser(searchParams: ReturnType<typeof useSearchParams>): AuthUser | null {
+  const token = getTokenFromLocationOrStorage(searchParams);
+  const payload = token ? decodeJwtPayload(token) : null;
+  const jwtUserId = payload && typeof payload.userId === 'string' ? payload.userId : null;
+
+  // 1. Check URL parameters passed from parent window or URL navigation
+  let pName = searchParams.get('userName') || searchParams.get('name');
+  let pId = searchParams.get('userId') || searchParams.get('id');
+  let pAvatar = searchParams.get('userAvatar') || searchParams.get('avatar');
+
+  if (typeof window !== 'undefined' && !pName) {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      pName = urlParams.get('userName') || urlParams.get('name');
+      pId = urlParams.get('userId') || urlParams.get('id');
+      pAvatar = urlParams.get('userAvatar') || urlParams.get('avatar');
+    } catch {
+      // Ignore URL parse error
+    }
+  }
+
+  const resolvedId = pId || jwtUserId;
+
+  if (pName && pName.toLowerCase() !== 'player' && resolvedId) {
+    return {
+      id: resolvedId,
+      name: pName,
+      avatar: pAvatar || '',
+    };
+  }
+
+  // 2. Fast path: decode JWT locally if token has user name
+  if (payload && jwtUserId) {
+    const jwtName =
+      (typeof payload.name === 'string' ? payload.name : null) ??
+      (typeof payload.username === 'string' ? payload.username : null);
+
+    if (jwtName && jwtName.toLowerCase() !== 'player') {
+      return {
+        id: jwtUserId,
+        name: jwtName,
+        avatar: typeof payload.avatar === 'string' ? payload.avatar : '',
+      };
+    }
+  }
+
+  // 3. Check localStorage cache
+  if (typeof window !== 'undefined') {
     try {
       const cached = localStorage.getItem('auth_user_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === 'object' && typeof parsed.name === 'string' && parsed.name && parsed.name.toLowerCase() !== 'player') {
-          return parsed as AuthUser;
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          typeof parsed.name === 'string' &&
+          parsed.name &&
+          parsed.name.toLowerCase() !== 'player' &&
+          (!jwtUserId || String(parsed.id) === String(jwtUserId))
+        ) {
+          return {
+            ...(parsed as AuthUser),
+            id: jwtUserId || (parsed as AuthUser).id,
+          };
         }
       }
     } catch {
       // Ignore parse error
     }
-    return null;
+  }
+
+  return null;
+}
+
+export function useAuthProfile() {
+  const searchParams = useSearchParams();
+  const [user, setUser] = useState<AuthUser | null>(() => getInitialUser(searchParams));
+  const [loadingUser, setLoadingUser] = useState(() => {
+    const initial = getInitialUser(searchParams);
+    return !initial;
   });
-  const [loadingUser, setLoadingUser] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,27 +140,17 @@ export function useAuthProfile() {
         return;
       }
 
-      // Fast path: decode JWT locally IF user has valid name
-      const payload = decodeJwtPayload(token);
-      let fastPathSuccess = false;
-      if (payload && typeof payload.userId === 'string') {
-        const userId = payload.userId;
-        const jwtName =
-          (typeof payload.name === 'string' ? payload.name : null) ??
-          (typeof payload.username === 'string' ? payload.username : null);
-
-        if (jwtName && jwtName.toLowerCase() !== 'player') {
-          if (active) {
-            setUser({ id: userId, name: jwtName, avatar: '' });
-            setLoadingUser(false);
-            fastPathSuccess = true;
-          }
+      // Fast path check
+      const initialUser = getInitialUser(searchParams);
+      if (initialUser && active) {
+        setUser(initialUser);
+        setLoadingUser(false);
+        try {
           localStorage.setItem('token', token);
+          localStorage.setItem('auth_user_cache', JSON.stringify(initialUser));
+        } catch {
+          // Ignore
         }
-      }
-
-      if (!fastPathSuccess && active) {
-        setLoadingUser(true);
       }
 
       // Background verification: fetch full profile from auth server

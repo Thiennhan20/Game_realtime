@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react';
 
 import type { LeaderboardEntry, Locale } from '../../types';
 import { getGameApiUrl } from '../../utils';
+import { EquippedTitleBadge } from '../common/EquippedTitleBadge';
 
 interface LeaderboardPreviewProps {
   locale: Locale;
@@ -112,7 +113,12 @@ export function LeaderboardPreview({ locale, onViewAll }: LeaderboardPreviewProp
                         {leader.username.slice(0, 1)}
                       </div>
                     )}
-                    <span className="text-xs font-extrabold text-slate-100 truncate">{leader.username}</span>
+                    <div className="min-w-0 flex items-center gap-1.5">
+                      <span className="text-xs font-extrabold text-slate-100 truncate">{leader.username}</span>
+                      {leader.equippedTitle && (
+                        <EquippedTitleBadge title={leader.equippedTitle} locale={locale} size="xs" />
+                      )}
+                    </div>
                   </div>
                   <span
                     className={`text-[11px] sm:text-xs font-mono font-black ${rankColor} shrink-0`}

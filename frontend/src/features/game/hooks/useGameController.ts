@@ -9,6 +9,7 @@ import { createTranslator, translateBackendError } from '../i18n';
 import type {
   AiDifficulty,
   ChatMessage,
+  EquippedTitle,
   FloatingEmote,
   GameProfile,
   LobbyRoom,
@@ -18,6 +19,7 @@ import type {
   QuickEmote,
   Room,
   RpsChoice,
+  UnlockedAchievementNotice,
 } from '../types';
 import {
   calculateLevelProgress,
@@ -64,6 +66,8 @@ function normalizeGameProfile(value: unknown): GameProfile {
     rankEn: candidate.rankEn || 'Bronze',
     rankKey: candidate.rankKey || 'bronze',
     ratingToNextRank: candidate.ratingToNextRank !== undefined ? candidate.ratingToNextRank : null,
+    equippedTitleId: candidate.equippedTitleId ?? (candidate.equippedTitle?.id || null),
+    equippedTitle: candidate.equippedTitle || null,
   };
 }
 
@@ -150,6 +154,17 @@ export function useGameController() {
   const [isSpectator, setIsSpectator] = useState(false);
   const [spectatorCount, setSpectatorCount] = useState(0);
   const [floatingEmotes, setFloatingEmotes] = useState<FloatingEmote[]>([]);
+  const [newlyUnlockedAchievements, setNewlyUnlockedAchievements] = useState<
+    UnlockedAchievementNotice[]
+  >([]);
+  const [toastAchievements, setToastAchievements] = useState<UnlockedAchievementNotice[]>([]);
+  const [isEquippingTitleId, setIsEquippingTitleId] = useState<string | null>(null);
+  const [isQuickMatching, setIsQuickMatching] = useState(false);
+  const [quickMatchElapsedSeconds, setQuickMatchElapsedSeconds] = useState(0);
+  const [quickMatchFoundRoom, setQuickMatchFoundRoom] = useState<{
+    roomId: string;
+    hostName: string;
+  } | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const lastGuessSubmitTimeRef = useRef(0);
@@ -158,6 +173,7 @@ export function useGameController() {
   const previousRoomStateRef = useRef<string | null>(null);
   const gameProfileRequestIdRef = useRef(0);
   const gameProfileRef = useRef<GameProfile | null>(null);
+  const quickMatchEnteringRef = useRef(false);
 
   const loadGameProfile = useCallback(async () => {
     const requestId = ++gameProfileRequestIdRef.current;
@@ -284,12 +300,14 @@ export function useGameController() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      if (room?.state === 'PLAYING' && user) {
-        const playerIndex = room.players.findIndex((player) => player.userId === user.id);
-        setShowNumPad(playerIndex !== -1 && room.activeTurnIndex === playerIndex);
+      if (room?.state !== 'PLAYING' || !user) {
+        setShowNumPad(false);
         return;
       }
-      setShowNumPad(false);
+      const playerIndex = room.players.findIndex((player) => player.userId === user.id);
+      if (playerIndex === -1 || room.activeTurnIndex !== playerIndex) {
+        setShowNumPad(false);
+      }
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
@@ -410,10 +428,22 @@ export function useGameController() {
     });
 
     socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
+      if (quickMatchEnteringRef.current) return;
       console.log('Successfully reconnected to active room:', reconnectedRoom.roomId);
       if (reconnectedRoom && reconnectedRoom.state !== 'FINISHED') {
         setRoom(reconnectedRoom);
+        setIsSpectator(false);
+        setSpectatorCount(reconnectedRoom.spectators?.length || 0);
         setErrorMsg(null);
+
+        const myIdStr = String(userRef.current?.id || '');
+        const opp = reconnectedRoom.players?.find((p) => String(p.userId) !== myIdStr);
+        if (reconnectedRoom.state === 'SETTING_SECRET') {
+          setOpponentSecretSet(Boolean(opp?.ready));
+        } else if (reconnectedRoom.state === 'RPS_DECISION') {
+          setOpponentRpsSubmitted(Boolean(opp?.ready || opp?.rpsChoice));
+        }
+        setOpponentTempDisconnected(opp?.disconnectedAt ? opp.username : null);
       } else {
         setRoom(null);
       }
@@ -454,6 +484,9 @@ export function useGameController() {
     });
 
     socket.on('ROOM_CREATED', (createdRoom: Room) => {
+      setIsQuickMatching(false);
+      setQuickMatchElapsedSeconds(0);
+      setQuickMatchFoundRoom(null);
       setRoom(createdRoom);
       setIsSpectator(false);
       setSpectatorCount(0);
@@ -463,7 +496,45 @@ export function useGameController() {
       setErrorMsg(null);
     });
 
+    socket.on(
+      'QUICK_MATCH_FOUND',
+      (data: { roomId: string; hostName: string; room: Room }) => {
+        if (quickMatchEnteringRef.current) return;
+        quickMatchEnteringRef.current = true;
+        setQuickMatchFoundRoom({
+          roomId: data.roomId,
+          hostName: data.hostName || 'Player',
+        });
+        setErrorMsg(null);
+        setOpponentSecretSet(false);
+        setOpponentRpsSubmitted(false);
+        setOpponentWantsPlayAgain(false);
+        setSecretInput('');
+        setGuessInput('');
+        setSecretReveal(null);
+        setMatchStats(null);
+        setMatchXpResult(null);
+        setShowMatchModal(false);
+        setShowGuessHistoryModal(false);
+        setOpponentTempDisconnected(null);
+        sound.playOpponentJoined();
+        triggerHaptic([50, 30, 60]);
+        window.setTimeout(() => {
+          quickMatchEnteringRef.current = false;
+          setIsQuickMatching(false);
+          setQuickMatchElapsedSeconds(0);
+          setQuickMatchFoundRoom(null);
+          setRoom((prev) => prev || data.room);
+          setIsSpectator(false);
+          setSpectatorCount(data.room.spectators?.length || 0);
+        }, 2000);
+      },
+    );
+
     socket.on('GAME_START', (startRoom: Room) => {
+      setIsQuickMatching(false);
+      setQuickMatchElapsedSeconds(0);
+      setQuickMatchFoundRoom(null);
       setRoom(startRoom);
       setIsSpectator(false);
       setSpectatorCount(0);
@@ -612,16 +683,35 @@ export function useGameController() {
         const rawXpResult = data.matchStats?.xpResults?.find(
           (result) => String(result.userId) === String(userRef.current?.id),
         );
+        const myUserIdStr = String(userRef.current?.id || '');
+        const unlockedList: UnlockedAchievementNotice[] =
+          rawXpResult?.newlyUnlockedAchievements ||
+          data.matchStats?.newlyUnlockedByUser?.[myUserIdStr] ||
+          [];
+
+        if (Array.isArray(unlockedList) && unlockedList.length > 0) {
+          setNewlyUnlockedAchievements(unlockedList);
+          setToastAchievements(unlockedList);
+        } else {
+          setNewlyUnlockedAchievements([]);
+          setToastAchievements([]);
+        }
+
         if (rawXpResult) {
           const totalXpSnapshot = rawXpResult.totalXp;
           const hasProfileSnapshot =
             typeof totalXpSnapshot === 'number' && totalXpSnapshot >= 0;
-          const updatedProfile =
-            hasProfileSnapshot
-              ? normalizeGameProfile(rawXpResult)
-              : gameProfileRef.current || normalizeGameProfile(rawXpResult);
+          const baseNormalized = hasProfileSnapshot
+            ? normalizeGameProfile({
+                ...rawXpResult,
+                equippedTitleId:
+                  rawXpResult.equippedTitleId ?? gameProfileRef.current?.equippedTitleId ?? null,
+                equippedTitle:
+                  rawXpResult.equippedTitle ?? gameProfileRef.current?.equippedTitle ?? null,
+              })
+            : gameProfileRef.current || normalizeGameProfile(rawXpResult);
           setMatchXpResult({
-            ...updatedProfile,
+            ...baseNormalized,
             userId: rawXpResult.userId,
             xpEarned: toNonNegativeInteger(rawXpResult.xpEarned),
             ratingBefore: rawXpResult.ratingBefore,
@@ -629,13 +719,19 @@ export function useGameController() {
             ratingAfter: rawXpResult.ratingAfter,
             rankBefore: rawXpResult.rankBefore,
             rankAfter: rawXpResult.rankAfter,
+            newlyUnlockedAchievements: unlockedList,
           });
           if (hasProfileSnapshot) {
             gameProfileRequestIdRef.current += 1;
-            gameProfileRef.current = updatedProfile;
-            setGameProfile(updatedProfile);
+            gameProfileRef.current = baseNormalized;
+            setGameProfile(baseNormalized);
             setGameProfileError(null);
             setIsLoadingGameProfile(false);
+            try {
+              localStorage.setItem('game_profile_cache', JSON.stringify(baseNormalized));
+            } catch {
+              // Ignore storage error
+            }
           } else {
             void loadGameProfile();
           }
@@ -652,14 +748,23 @@ export function useGameController() {
           (player) => String(player.userId) === String(userRef.current?.id),
         );
         if (data.roomState.winnerIndex === myIndex) {
-          if (rawXpResult?.rankAfter && rawXpResult?.rankBefore && rawXpResult.rankAfter !== rawXpResult.rankBefore) {
+          if (
+            (rawXpResult?.rankAfter &&
+              rawXpResult?.rankBefore &&
+              rawXpResult.rankAfter !== rawXpResult.rankBefore) ||
+            unlockedList.length > 0
+          ) {
             sound.playLevelUp();
           } else {
             sound.playVictory();
           }
           triggerHaptic([100, 50, 100, 50, 200]);
         } else {
-          sound.playDefeat();
+          if (unlockedList.length > 0) {
+            sound.playLevelUp();
+          } else {
+            sound.playDefeat();
+          }
           triggerHaptic([180]);
         }
       },
@@ -779,10 +884,11 @@ export function useGameController() {
       setTimeout(() => setErrorMsg(null), 4000);
     });
 
-    // Refresh lobby when browser tab regains focus (handles mobile tab switching)
+    // Refresh lobby and active room state when browser tab regains focus (handles mobile tab switching)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && socket.connected) {
         socket.emit('GET_LOBBY_ROOMS');
+        socket.emit('CHECK_ACTIVE_ROOM');
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -849,7 +955,10 @@ export function useGameController() {
   }, [room]);
 
   const myPlayerIndex = useMemo(
-    () => (room && user ? room.players.findIndex((player) => player.userId === user.id) : -1),
+    () =>
+      room && user
+        ? room.players.findIndex((player) => String(player.userId) === String(user.id))
+        : -1,
     [room, user],
   );
   const opponentPlayerIndex =
@@ -862,12 +971,127 @@ export function useGameController() {
       : null;
 
   const handleCreateRoom = () => {
+    setIsQuickMatching(false);
+    setQuickMatchElapsedSeconds(0);
+    setQuickMatchFoundRoom(null);
     socketRef.current?.emit('CREATE_ROOM');
   };
 
+  const handleQuickMatch = () => {
+    if (isQuickMatching || quickMatchFoundRoom) return;
+    sound.playClick();
+    triggerHaptic(25);
+    setErrorMsg(null);
+    setIsQuickMatching(true);
+    setQuickMatchElapsedSeconds(0);
+    setQuickMatchFoundRoom(null);
+    socketRef.current?.emit('QUICK_MATCH');
+  };
+
+  const handleCancelQuickMatch = () => {
+    sound.playClick();
+    triggerHaptic(15);
+    setIsQuickMatching(false);
+    setQuickMatchElapsedSeconds(0);
+    setQuickMatchFoundRoom(null);
+  };
+
   const handleStartAiMatch = (difficulty: AiDifficulty) => {
+    setIsQuickMatching(false);
+    setQuickMatchElapsedSeconds(0);
+    setQuickMatchFoundRoom(null);
     socketRef.current?.emit('CREATE_AI_ROOM', { difficulty });
   };
+
+  // Continuous 0s -> infinity timer and auto-room scanner while Quick Match is active
+  useEffect(() => {
+    if (!isQuickMatching || quickMatchFoundRoom || room) return;
+
+    const timer = window.setInterval(() => {
+      setQuickMatchElapsedSeconds((prev) => {
+        const next = prev + 1;
+        if (next % 2 === 0 && !quickMatchEnteringRef.current && socketRef.current?.connected) {
+          socketRef.current.emit('QUICK_MATCH');
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isQuickMatching, quickMatchFoundRoom, room]);
+
+  // Instant match trigger whenever LOBBY_ROOMS updates with an open waiting room while searching
+  useEffect(() => {
+    if (!isQuickMatching || quickMatchFoundRoom || room || quickMatchEnteringRef.current) return;
+    const hasOpenWaitingRoom = lobbyRooms.some(
+      (r) => r.state === 'WAITING_FOR_PLAYERS' && r.playerCount === 1,
+    );
+    if (hasOpenWaitingRoom && socketRef.current?.connected) {
+      socketRef.current.emit('QUICK_MATCH');
+    }
+  }, [isQuickMatching, quickMatchFoundRoom, room, lobbyRooms]);
+
+  const handleEquipTitle = useCallback(
+    async (achievementId: string | null) => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        setIsEquippingTitleId(achievementId || 'unequip');
+        const response = await fetch(getGameApiUrl('/api/achievements/equip'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ achievementId }),
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          equippedTitleId: string | null;
+          equippedTitle: EquippedTitle | null;
+        };
+        sound.playCopySuccess();
+        triggerHaptic(25);
+        setGameProfile((prev) => {
+          if (!prev) return prev;
+          const updated: GameProfile = {
+            ...prev,
+            equippedTitleId: data.equippedTitleId,
+            equippedTitle: data.equippedTitle,
+          };
+          gameProfileRef.current = updated;
+          try {
+            localStorage.setItem('game_profile_cache', JSON.stringify(updated));
+          } catch {
+            // Ignore storage error
+          }
+          return updated;
+        });
+        setRoom((prevRoom) => {
+          if (!prevRoom || !userRef.current) return prevRoom;
+          const players = prevRoom.players.map((p) =>
+            p.userId === userRef.current?.id
+              ? { ...p, equippedTitle: data.equippedTitle }
+              : p,
+          );
+          return { ...prevRoom, players };
+        });
+      } catch (err) {
+        console.error('Failed to equip title:', err);
+      } finally {
+        setIsEquippingTitleId(null);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (toastAchievements.length === 0) return;
+    const timer = window.setTimeout(() => {
+      setToastAchievements([]);
+    }, 6500);
+    return () => window.clearTimeout(timer);
+  }, [toastAchievements]);
 
   const handleJoinRoom = (roomId: string) => {
     if (!roomId.trim()) {
@@ -1093,8 +1317,18 @@ export function useGameController() {
     opponentPlayerIndex,
     me,
     opponent,
+    newlyUnlockedAchievements,
+    toastAchievements,
+    setToastAchievements,
+    isEquippingTitleId,
+    isQuickMatching,
+    quickMatchElapsedSeconds,
+    quickMatchFoundRoom,
     handleCreateRoom,
+    handleQuickMatch,
+    handleCancelQuickMatch,
     handleStartAiMatch,
+    handleEquipTitle,
     handleJoinRoom,
     handleJoinSpectator,
     handleLeaveSpectator,

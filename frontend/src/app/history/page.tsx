@@ -407,7 +407,7 @@ function HistoryPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
       {/* Header Info - Fixed Top Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
         <div className="max-w-[1700px] w-full mx-auto flex items-center justify-between gap-2">
@@ -516,7 +516,7 @@ function HistoryPageContent() {
       </header>
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 pt-16 sm:pt-20 space-y-4">
+      <main className="flex-1 max-w-4xl w-full mx-auto p-4 pt-16 sm:pt-20 pb-24 sm:pb-28 pb-[calc(6rem+env(safe-area-inset-bottom))] space-y-4">
         {/* Mode Filter Tabs: All, PvP, AI */}
         <div className="flex items-center gap-2 p-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl w-fit">
           <button

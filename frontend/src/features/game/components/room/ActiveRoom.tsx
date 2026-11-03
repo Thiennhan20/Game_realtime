@@ -12,6 +12,7 @@ import type {
   PlayerXpResult,
   Room,
   RpsChoice,
+  UnlockedAchievementNotice,
 } from '../../types';
 import { GuessHistoryModal } from '../modals/GuessHistoryModal';
 import { MatchSummaryModal } from '../modals/MatchSummaryModal';
@@ -40,6 +41,9 @@ interface ActiveRoomProps {
   copied: boolean;
   matchStats: MatchStats | null;
   matchXpResult: PlayerXpResult | null;
+  newlyUnlockedAchievements?: UnlockedAchievementNotice[];
+  equippedTitleId?: string | null;
+  isEquippingTitleId?: string | null;
   secretReveal: string | null;
   showMatchModal: boolean;
   showGuessHistoryModal: boolean;
@@ -58,6 +62,8 @@ interface ActiveRoomProps {
   onPlayAgain: () => void;
   onLeaveRoom: () => void;
   onCopyRoomId: () => void;
+  onSwitchToAi?: () => void;
+  onEquipTitle?: (achievementId: string | null) => void;
   onShowMatchModalChange: (isOpen: boolean) => void;
   onShowGuessHistoryModalChange: (isOpen: boolean) => void;
   onShowNumberPadChange: (isOpen: boolean) => void;
@@ -78,6 +84,9 @@ export function ActiveRoom({
   copied,
   matchStats,
   matchXpResult,
+  newlyUnlockedAchievements = [],
+  equippedTitleId = null,
+  isEquippingTitleId = null,
   secretReveal,
   showMatchModal,
   showGuessHistoryModal,
@@ -96,6 +105,8 @@ export function ActiveRoom({
   onPlayAgain,
   onLeaveRoom,
   onCopyRoomId,
+  onSwitchToAi,
+  onEquipTitle,
   onShowMatchModalChange,
   onShowGuessHistoryModalChange,
   onShowNumberPadChange,
@@ -142,8 +153,11 @@ export function ActiveRoom({
           <WaitingForOpponentPanel
             roomId={room.roomId}
             copied={copied}
+            locale={locale}
             t={t}
+            isQuickMatch={Boolean(room.isQuickMatch)}
             onCopyRoomId={onCopyRoomId}
+            onSwitchToAi={onSwitchToAi}
           />
         )}
 
@@ -257,6 +271,9 @@ export function ActiveRoom({
         room={room}
         stats={matchStats}
         xpResult={matchXpResult}
+        newlyUnlockedAchievements={newlyUnlockedAchievements}
+        equippedTitleId={equippedTitleId}
+        isEquippingTitleId={isEquippingTitleId}
         user={user}
         me={me}
         opponent={opponent}
@@ -269,6 +286,7 @@ export function ActiveRoom({
           onShowMatchModalChange(false);
           onShowGuessHistoryModalChange(true);
         }}
+        onEquipTitle={onEquipTitle}
       />
 
       <GuessHistoryModal

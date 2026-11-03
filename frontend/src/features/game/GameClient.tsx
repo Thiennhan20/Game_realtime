@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { RoomChat } from './components/chat/RoomChat';
@@ -30,6 +30,14 @@ export default function GameClient() {
 
   const isAiMatch = Boolean(game.room?.isAiRoom);
   const effectiveMobileTab: MobileRoomTab = isAiMatch ? 'arena' : activeMobileTab;
+
+  useEffect(() => {
+    if (game.mounted && (game.authError || (!game.loadingUser && game.user))) {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'GAME_READY' }, '*');
+      }
+    }
+  }, [game.mounted, game.loadingUser, game.user, game.authError]);
 
   if (!game.mounted) {
     return <LoadingScreen />;
@@ -74,10 +82,12 @@ export default function GameClient() {
         error={game.errorMsg}
         isReconnecting={game.isReconnecting}
         disconnectedOpponent={game.opponentTempDisconnected}
+        unlockedAchievements={game.toastAchievements}
         locale={game.locale}
         t={game.t}
         onDismissError={() => game.setErrorMsg(null)}
         onDismissOpponent={() => game.setOpponentTempDisconnected(null)}
+        onDismissAchievements={() => game.setToastAchievements([])}
       />
 
       <main
@@ -115,6 +125,11 @@ export default function GameClient() {
               gameProfile={game.gameProfile}
               isLoadingGameProfile={game.isLoadingGameProfile}
               gameProfileError={game.gameProfileError}
+              isQuickMatching={game.isQuickMatching}
+              quickMatchElapsedSeconds={game.quickMatchElapsedSeconds}
+              quickMatchFoundRoom={game.quickMatchFoundRoom}
+              onQuickMatch={game.handleQuickMatch}
+              onCancelQuickMatch={game.handleCancelQuickMatch}
               onCreateRoom={game.handleCreateRoom}
               onCreateAiRoom={() => setShowAiDifficultyModal(true)}
               onJoinRoom={game.handleJoinRoom}
@@ -145,6 +160,9 @@ export default function GameClient() {
               copied={game.copied}
               matchStats={game.matchStats}
               matchXpResult={game.matchXpResult}
+              newlyUnlockedAchievements={game.newlyUnlockedAchievements}
+              equippedTitleId={game.gameProfile?.equippedTitleId || null}
+              isEquippingTitleId={game.isEquippingTitleId}
               secretReveal={game.secretReveal}
               showMatchModal={game.showMatchModal}
               showGuessHistoryModal={game.showGuessHistoryModal}
@@ -161,6 +179,8 @@ export default function GameClient() {
               onPlayAgain={game.handlePlayAgain}
               onLeaveRoom={game.handleLeaveRoom}
               onCopyRoomId={game.copyRoomId}
+              onSwitchToAi={() => setShowAiDifficultyModal(true)}
+              onEquipTitle={game.handleEquipTitle}
               onShowMatchModalChange={game.setShowMatchModal}
               onShowGuessHistoryModalChange={game.setShowGuessHistoryModal}
               onShowNumberPadChange={game.setShowNumPad}

@@ -12,6 +12,9 @@ const {
 const {
   settleAbandonedPvpMatch
 } = require('./abandonedMatchSettlement');
+const {
+  syncAndDetectNewAchievements
+} = require('./achievements');
 
 // --- Game Rooms State (Hybrid: RAM + Redis) ---
 // roomId -> RoomObject (in-memory for speed)
@@ -325,9 +328,36 @@ async function settleRoomProgress(room, {
   const settlementPromise = settlePvpMatch(room, {
     endReason,
     forfeitedPlayerId
-  }).then(result => {
+  }).then(async (result) => {
+    const newlyUnlockedByUser = {};
+    try {
+      await Promise.all(
+        (room.players || []).map(async (p) => {
+          if (!p?.userId) return;
+          const uidStr = String(p.userId);
+          const unlocked = await syncAndDetectNewAchievements(uidStr);
+          if (Array.isArray(unlocked) && unlocked.length > 0) {
+            newlyUnlockedByUser[uidStr] = unlocked;
+          }
+        })
+      );
+    } catch (achErr) {
+      console.error(`[Achievements] Error checking PvP achievements for room ${room.roomId}:`, achErr.message);
+    }
+
+    if (result && typeof result === 'object') {
+      result.newlyUnlockedByUser = newlyUnlockedByUser;
+      if (Array.isArray(result.xpResults)) {
+        result.xpResults = result.xpResults.map((xr) => ({
+          ...xr,
+          newlyUnlockedAchievements: newlyUnlockedByUser[String(xr.userId)] || []
+        }));
+      }
+    }
+
     if (rooms.get(room.roomId) === room && room.matchId === settlingMatchId) {
       room.saved = true;
+      room.resultFinalized = true;
       room.xpSettlement = result;
       syncRoomToRedis(room.roomId, room);
     }
@@ -407,7 +437,8 @@ function buildMatchStats(room, {
     xpEligibilityReason: settlement?.xpEligibilityReason || 'SETTLEMENT_FAILED',
     ratingApplied: settlement?.ratingApplied || false,
     ratingReason: settlement?.ratingReason || 'settlement_failed',
-    xpResults: settlement?.xpResults || []
+    xpResults: settlement?.xpResults || [],
+    newlyUnlockedByUser: settlement?.newlyUnlockedByUser || {}
   };
 }
 
@@ -492,11 +523,29 @@ async function finishPvpByForfeit(room, forfeitedPlayerId, forfeitReason, broadc
 }
 
 function findActiveRoomForUser(userId) {
+  if (!userId) return null;
+  const targetUserId = String(userId);
   for (const room of rooms.values()) {
     const player = room.players?.find(
-      candidate => candidate.userId === userId && !candidate.hasLeft
+      candidate => String(candidate.userId) === targetUserId && !candidate.hasLeft
     );
-    if (player) return room;
+    if (!player) continue;
+
+    if (room.state === 'FINISHED') {
+      if (room.saved || room.resultFinalized || room.isAiRoom || (room.players?.length || 0) < 2) {
+        player.hasLeft = true;
+        player.socketId = null;
+        if (room.players.every(p => p.hasLeft)) {
+          rooms.delete(room.roomId);
+          deleteRoomFromRedis(room.roomId);
+        } else {
+          syncRoomToRedis(room.roomId, room);
+        }
+      }
+      continue;
+    }
+
+    return room;
   }
   return null;
 }
@@ -632,6 +681,7 @@ function getJoinableRooms() {
         roomId: room.roomId,
         hostName: room.players[0]?.username || 'Host',
         hostAvatar: room.players[0]?.avatar || '',
+        hostEquippedTitle: room.players[0]?.equippedTitle || null,
         playerCount: room.players.length,
         maxPlayers: 2,
         state: room.state,

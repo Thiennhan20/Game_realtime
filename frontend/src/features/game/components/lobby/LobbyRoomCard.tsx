@@ -2,6 +2,7 @@ import { Clock, Eye, Users } from 'lucide-react';
 
 import type { LobbyRoom, Locale } from '../../types';
 import { formatElapsedTime } from '../../utils';
+import { EquippedTitleBadge } from '../common/EquippedTitleBadge';
 
 interface LobbyRoomCardProps {
   room: LobbyRoom;
@@ -71,10 +72,15 @@ export function LobbyRoomCard({ room, locale, onJoin, onSpectate }: LobbyRoomCar
             )}
           </div>
           <div className="space-y-0.5">
-            <p className="text-xs text-slate-300 font-medium truncate">
-              {locale === 'vi' ? 'Chủ phòng:' : 'Host:'}{' '}
-              <strong className="text-white font-bold">{room.hostName}</strong>
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-300 font-medium">
+              <span className="truncate">
+                {locale === 'vi' ? 'Chủ phòng:' : 'Host:'}{' '}
+                <strong className="text-white font-bold">{room.hostName}</strong>
+              </span>
+              {room.hostEquippedTitle && (
+                <EquippedTitleBadge title={room.hostEquippedTitle} locale={locale} size="xs" />
+              )}
+            </div>
             <div className="flex items-center space-x-3 text-[11px] text-slate-400">
               <span className="flex items-center space-x-1 shrink-0">
                 <Users size={11} className="text-purple-400" />

@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const GameProfile = require('../models/GameProfile');
 const GameHistory = require('../models/GameHistory');
 const { calculateLevelProgress } = require('./progression');
-const { getRank } = require('./rating');
+const { getRank, getRatingToNextRank } = require('./rating');
+const { resolveEquippedTitle } = require('./achievements');
 
 const AI_XP_REWARDS = Object.freeze({
   easy: 5,
@@ -147,6 +148,8 @@ async function settleAiMatch(
     }
   }
 
+  const equippedTitle = resolveEquippedTitle(profile.equippedTitleId);
+
   return {
     userId: String(userId),
     xpEarned,
@@ -155,6 +158,17 @@ async function settleAiMatch(
     currentXp: levelProgressAfter.currentXp,
     xpForNextLevel: levelProgressAfter.xpForNextLevel,
     isLevelUp: levelProgressAfter.level > levelProgressBefore.level,
+    wins: profile.wins || 0,
+    losses: profile.losses || 0,
+    currentWinStreak: profile.currentWinStreak || 0,
+    bestWinStreak: profile.bestWinStreak || 0,
+    rating: profile.rating,
+    highestRating: Math.max(profile.rating || 1000, profile.highestRating || 1000),
+    rank: currentRank.nameVi,
+    rankEn: currentRank.nameEn,
+    ratingToNextRank: getRatingToNextRank(profile.rating),
+    equippedTitleId: equippedTitle ? equippedTitle.id : null,
+    equippedTitle,
     ratingBefore: profile.rating,
     ratingDelta: 0,
     ratingAfter: profile.rating,

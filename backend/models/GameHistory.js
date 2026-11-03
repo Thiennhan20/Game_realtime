@@ -104,6 +104,7 @@ const gameHistorySchema = new mongoose.Schema({
 }, { timestamps: true });
 
 gameHistorySchema.index({ 'players.userId': 1, finishedAt: -1 });
+gameHistorySchema.index({ isAiRoom: 1, status: 1, finishedAt: -1 });
 gameHistorySchema.index({ winnerId: 1 });
 gameHistorySchema.index({ roomId: 1 });
 gameHistorySchema.index({ matchId: 1 }, { unique: true, sparse: true });

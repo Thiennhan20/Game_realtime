@@ -2,6 +2,7 @@ const { getNextAiGuess } = require('../aiSolver');
 const { decryptSecret } = require('../utils/crypto');
 const { checkGuess } = require('../utils/gameLogic');
 const { settleAiMatch } = require('./aiMatchSettlement');
+const { syncAndDetectNewAchievements } = require('./achievements');
 const { invalidateUserAndLeaderboardCache } = require('../config/redis');
 const { syncRoomToRedis } = require('./roomManager');
 
@@ -65,6 +66,7 @@ function handleAiTurn(room, io) {
 
         // Settle AI match for human player (loss)
         let aiSettlement = null;
+        let newlyUnlockedByUser = {};
         try {
           const humanPlayer = room.players[0];
           if (humanPlayer && humanPlayer.userId) {
@@ -74,7 +76,12 @@ function handleAiTurn(room, io) {
               isUserWinner: false,
               room
             });
-            aiSettlement = { xpResults: [settlementResult] };
+            const unlocked = await syncAndDetectNewAchievements(humanPlayer.userId);
+            if (Array.isArray(unlocked) && unlocked.length > 0) {
+              newlyUnlockedByUser[String(humanPlayer.userId)] = unlocked;
+            }
+            settlementResult.newlyUnlockedAchievements = unlocked || [];
+            aiSettlement = { xpResults: [settlementResult], newlyUnlockedByUser };
             room.xpSettlement = aiSettlement;
             void invalidateUserAndLeaderboardCache(humanPlayer.userId);
           }
@@ -94,7 +101,8 @@ function handleAiTurn(room, io) {
           loserSecret: loserSecretDecrypted,
           startedAt: room.startedAt,
           finishedAt: room.finishedAt,
-          xpResults: aiSettlement?.xpResults || null
+          xpResults: aiSettlement?.xpResults || null,
+          newlyUnlockedByUser
         };
 
         io.to(room.roomId).emit('GAME_OVER', {

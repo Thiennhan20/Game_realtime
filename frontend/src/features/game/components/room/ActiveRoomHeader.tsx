@@ -15,6 +15,7 @@ import {
 import type { Translator } from '../../i18n';
 import { sound } from '../../sound';
 import type { Locale, Player, Room } from '../../types';
+import { EquippedTitleBadge } from '../common/EquippedTitleBadge';
 
 interface ActiveRoomHeaderProps {
   room: Room;
@@ -145,14 +146,23 @@ export function ActiveRoomHeader({
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
-            <div className="hidden sm:block text-right">
-              <p className="text-xs font-bold max-w-[75px] sm:max-w-[100px] truncate text-slate-200" title={me?.username}>
+            <div className="hidden sm:flex flex-col items-end">
+              <p className="text-xs font-bold max-w-[90px] sm:max-w-[125px] truncate text-slate-200" title={me?.username}>
                 {me?.username}
               </p>
-              {!isSpectator && (
-                <p className="text-[10px] text-purple-400 font-semibold uppercase">
-                  {t('you')}
-                </p>
+              {me?.equippedTitle ? (
+                <EquippedTitleBadge
+                  title={me.equippedTitle}
+                  locale={locale}
+                  size="xs"
+                  className="mt-0.5"
+                />
+              ) : (
+                !isSpectator && (
+                  <p className="text-[10px] text-purple-400 font-semibold uppercase">
+                    {t('you')}
+                  </p>
+                )
               )}
             </div>
             {me?.avatar ? (
@@ -182,14 +192,23 @@ export function ActiveRoomHeader({
                     {opponent.username.slice(0, 2) || 'P2'}
                   </div>
                 )}
-                <div className="hidden sm:block text-left">
-                  <p className="text-xs font-bold max-w-[75px] sm:max-w-[100px] truncate text-slate-200" title={opponent.username}>
+                <div className="hidden sm:flex flex-col items-start">
+                  <p className="text-xs font-bold max-w-[90px] sm:max-w-[125px] truncate text-slate-200" title={opponent.username}>
                     {opponent.username}
                   </p>
-                  {!isSpectator && (
-                    <p className="text-[10px] text-pink-400 font-semibold uppercase">
-                      {t('enemy')}
-                    </p>
+                  {opponent.equippedTitle ? (
+                    <EquippedTitleBadge
+                      title={opponent.equippedTitle}
+                      locale={locale}
+                      size="xs"
+                      className="mt-0.5"
+                    />
+                  ) : (
+                    !isSpectator && (
+                      <p className="text-[10px] text-pink-400 font-semibold uppercase">
+                        {t('enemy')}
+                      </p>
+                    )
                   )}
                 </div>
               </>

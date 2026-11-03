@@ -13,6 +13,7 @@ const {
   getRatingToNextRank,
   calculatePvpRating
 } = require('./rating');
+const { resolveEquippedTitle } = require('./achievements');
 
 const SCORING_VERSION = 'pvp-xp-v1';
 const RATING_VERSION = 'pvp-rating-v1';
@@ -68,6 +69,7 @@ function buildProfileSummary(userId, profile = null) {
   const highestRating = profile?.highestRating ?? rating;
   const rank = getRank(rating);
   const ratingToNextRank = getRatingToNextRank(rating);
+  const equippedTitle = resolveEquippedTitle(profile?.equippedTitleId);
 
   return {
     userId: String(userId),
@@ -84,7 +86,9 @@ function buildProfileSummary(userId, profile = null) {
     rank: rank.nameVi,
     rankEn: rank.nameEn,
     rankKey: rank.key,
-    ratingToNextRank
+    ratingToNextRank,
+    equippedTitleId: equippedTitle ? equippedTitle.id : null,
+    equippedTitle
   };
 }
 

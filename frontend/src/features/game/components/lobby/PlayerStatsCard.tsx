@@ -5,6 +5,7 @@ import { AlertCircle, Flame, RefreshCw, Trophy, Zap } from 'lucide-react';
 
 import { getRankBadgePath, getRankByKey, getRankByRating } from '../../ranks';
 import type { GameProfile, Locale } from '../../types';
+import { EquippedTitleBadge } from '../common/EquippedTitleBadge';
 import { RankInfoModal } from '../modals/RankInfoModal';
 
 interface PlayerStatsCardProps {
@@ -176,7 +177,7 @@ export function PlayerStatsCard({
         </button>
       </div>
 
-      {/* Rating & Peak Badges Header (ONLY 2 Badges) */}
+      {/* Rating, Peak & Equipped Title Badges Header */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5 font-mono text-xs">
         <div
           className="flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-bold text-cyan-300"
@@ -193,6 +194,15 @@ export function PlayerStatsCard({
           <Trophy size={12} className="text-yellow-400 shrink-0" />
           <span>Peak: {numberFormatter.format(highestRating)}</span>
         </div>
+
+        {profile.equippedTitle && (
+          <EquippedTitleBadge
+            title={profile.equippedTitle}
+            locale={locale}
+            size="sm"
+            className="font-sans"
+          />
+        )}
       </div>
 
       <div className="mt-2.5">

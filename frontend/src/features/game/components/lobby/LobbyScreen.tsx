@@ -18,6 +18,11 @@ interface LobbyScreenProps {
   gameProfile: GameProfile | null;
   isLoadingGameProfile: boolean;
   gameProfileError: string | null;
+  isQuickMatching?: boolean;
+  quickMatchElapsedSeconds?: number;
+  quickMatchFoundRoom?: { roomId: string; hostName: string } | null;
+  onQuickMatch: () => void;
+  onCancelQuickMatch?: () => void;
   onCreateRoom: () => void;
   onCreateAiRoom: () => void;
   onJoinRoom: (roomId: string) => void;
@@ -38,6 +43,11 @@ export function LobbyScreen({
   gameProfile,
   isLoadingGameProfile,
   gameProfileError,
+  isQuickMatching = false,
+  quickMatchElapsedSeconds = 0,
+  quickMatchFoundRoom = null,
+  onQuickMatch,
+  onCancelQuickMatch,
   onCreateRoom,
   onCreateAiRoom,
   onJoinRoom,
@@ -79,6 +89,11 @@ export function LobbyScreen({
             locale={locale}
             t={t}
             roomId={roomId}
+            isQuickMatching={isQuickMatching}
+            quickMatchElapsedSeconds={quickMatchElapsedSeconds}
+            quickMatchFoundRoom={quickMatchFoundRoom}
+            onQuickMatch={onQuickMatch}
+            onCancelQuickMatch={onCancelQuickMatch}
             onCreateRoom={onCreateRoom}
             onCreateAiRoom={onCreateAiRoom}
             onJoinRoom={onJoinRoom}

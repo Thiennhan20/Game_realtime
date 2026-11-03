@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Clock, History, Sparkles, Swords, Target, Zap } from 'lucide-react';
+import { Award, Check, Clock, History, Sparkles, Swords, Target, Zap } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type {
@@ -10,14 +10,19 @@ import type {
   Player,
   PlayerXpResult,
   Room,
+  UnlockedAchievementNotice,
 } from '../../types';
 import { formatDuration } from '../../utils';
+import { EquippedTitleBadge } from '../common/EquippedTitleBadge';
 
 interface MatchSummaryModalProps {
   isOpen: boolean;
   room: Room;
   stats: MatchStats | null;
   xpResult: PlayerXpResult | null;
+  newlyUnlockedAchievements?: UnlockedAchievementNotice[];
+  equippedTitleId?: string | null;
+  isEquippingTitleId?: string | null;
   user: AuthUser;
   me: Player | null;
   opponent: Player | null;
@@ -27,6 +32,7 @@ interface MatchSummaryModalProps {
   t: Translator;
   onClose: () => void;
   onOpenGuessHistory: () => void;
+  onEquipTitle?: (achievementId: string | null) => void;
 }
 
 export function MatchSummaryModal({
@@ -34,6 +40,9 @@ export function MatchSummaryModal({
   room,
   stats,
   xpResult,
+  newlyUnlockedAchievements = [],
+  equippedTitleId = null,
+  isEquippingTitleId = null,
   user,
   me,
   opponent,
@@ -43,6 +52,7 @@ export function MatchSummaryModal({
   t,
   onClose,
   onOpenGuessHistory,
+  onEquipTitle,
 }: MatchSummaryModalProps) {
   useEffect(() => {
     if (!isOpen) return;
@@ -267,6 +277,72 @@ export function MatchSummaryModal({
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-2 space-y-3.5 min-h-0">
+              {newlyUnlockedAchievements.length > 0 && (
+                <div className="bg-gradient-to-br from-amber-500/15 via-yellow-500/10 to-purple-500/15 border border-amber-400/45 rounded-2xl p-3.5 space-y-2.5 shadow-[0_4px_24px_rgba(245,158,11,0.15)]">
+                  <div className="flex items-center gap-2">
+                    <Award size={16} className="text-amber-400 shrink-0" />
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                      {locale === 'vi'
+                        ? `🎖️ Mở khóa ${newlyUnlockedAchievements.length} thành tích mới!`
+                        : `🎖️ Unlocked ${newlyUnlockedAchievements.length} New Achievement${newlyUnlockedAchievements.length > 1 ? 's' : ''}!`}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {newlyUnlockedAchievements.map((badge) => {
+                      const isEquipped = equippedTitleId === badge.id;
+                      const isBusy = isEquippingTitleId === badge.id;
+                      return (
+                        <div
+                          key={badge.id}
+                          className="flex items-center justify-between gap-2.5 bg-slate-950/75 border border-amber-500/30 rounded-xl p-2.5"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-400/35 flex items-center justify-center text-lg shrink-0">
+                              {badge.icon}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm font-extrabold text-white truncate">
+                                {locale === 'vi' ? badge.titleVi : badge.titleEn}
+                              </p>
+                              <p className="text-[11px] text-slate-300 line-clamp-1">
+                                {locale === 'vi' ? badge.descVi : badge.descEn}
+                              </p>
+                            </div>
+                          </div>
+                          {onEquipTitle && (
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() =>
+                                onEquipTitle(isEquipped ? null : badge.id)
+                              }
+                              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold border transition cursor-pointer flex items-center gap-1 ${
+                                isEquipped
+                                  ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                                  : 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/50 text-amber-200 hover:text-white'
+                              }`}
+                            >
+                              {isEquipped ? (
+                                <>
+                                  <Check size={12} />
+                                  <span>
+                                    {locale === 'vi' ? 'Đang dùng' : 'Equipped'}
+                                  </span>
+                                </>
+                              ) : (
+                                <span>
+                                  {locale === 'vi' ? 'Trang bị' : 'Equip'}
+                                </span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
                   <div className="p-2 bg-blue-500/10 rounded-lg">
@@ -310,12 +386,22 @@ export function MatchSummaryModal({
                         {user.name.slice(0, 2)}
                       </div>
                     )}
-                    <div className="text-sm">
-                      <span className="font-bold text-slate-200">{t('you')}</span>
-                      {isWinner && (
-                        <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">
-                          👑 Winner
-                        </span>
+                    <div className="text-sm min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-200">{t('you')}</span>
+                        {isWinner && (
+                          <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">
+                            👑 Winner
+                          </span>
+                        )}
+                      </div>
+                      {me?.equippedTitle && (
+                        <EquippedTitleBadge
+                          title={me.equippedTitle}
+                          locale={locale}
+                          size="xs"
+                          className="mt-0.5"
+                        />
                       )}
                     </div>
                   </div>
@@ -332,26 +418,36 @@ export function MatchSummaryModal({
                 <div className="border-t border-slate-700/40 my-2" />
 
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     {opponent?.avatar ? (
                       <img
                         src={opponent.avatar}
                         alt={opponent.username}
-                        className="w-8 h-8 rounded-full border border-slate-600"
+                        className="w-8 h-8 rounded-full border border-slate-600 shrink-0"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase">
+                      <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase shrink-0">
                         {(opponent?.username || '??').slice(0, 2)}
                       </div>
                     )}
-                    <div className="text-sm">
-                      <span className="font-bold text-slate-200">
-                        {opponent?.username || t('enemy')}
-                      </span>
-                      {!isWinner && (
-                        <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">
-                          👑 Winner
+                    <div className="text-sm min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-200 truncate">
+                          {opponent?.username || t('enemy')}
                         </span>
+                        {!isWinner && (
+                          <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">
+                            👑 Winner
+                          </span>
+                        )}
+                      </div>
+                      {opponent?.equippedTitle && (
+                        <EquippedTitleBadge
+                          title={opponent.equippedTitle}
+                          locale={locale}
+                          size="xs"
+                          className="mt-0.5"
+                        />
                       )}
                     </div>
                   </div>

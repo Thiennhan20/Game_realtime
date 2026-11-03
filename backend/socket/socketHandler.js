@@ -11,7 +11,21 @@ const {
 } = require('../utils/gameLogic');
 const { handleAiTurn } = require('../services/aiTurnHandler');
 const { settleAiMatch } = require('../services/aiMatchSettlement');
+const { resolveEquippedTitle, syncAndDetectNewAchievements } = require('../services/achievements');
 const { invalidateUserAndLeaderboardCache } = require('../config/redis');
+
+async function getPlayerProfileMeta(userId) {
+  let currentWinStreak = 0;
+  let equippedTitle = null;
+  try {
+    const profile = await GameProfile.findOne({ userId }).lean();
+    currentWinStreak = profile?.currentWinStreak || 0;
+    equippedTitle = resolveEquippedTitle(profile?.equippedTitleId);
+  } catch {
+    // Ignore profile lookup error
+  }
+  return { currentWinStreak, equippedTitle };
+}
 
 function setupSocket(io, roomManager, getIsProgressionReady) {
   const {
@@ -45,47 +59,99 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     }, 300);
   }
 
+  function reconnectPlayerToRoom(socket, room) {
+    if (!room || room.state === 'FINISHED') return false;
+    const player = room.players?.find(
+      p => String(p.userId) === String(socket.userId) && !p.hasLeft
+    );
+    if (!player) return false;
+
+    const roomId = room.roomId;
+    const timerKeyPrimary = `${roomId}:${player.userId}`;
+    const timerKeySocket = `${roomId}:${socket.userId}`;
+    const timerId = disconnectTimers.get(timerKeyPrimary) || disconnectTimers.get(timerKeySocket);
+    if (timerId) {
+      clearTimeout(timerId);
+      disconnectTimers.delete(timerKeyPrimary);
+      disconnectTimers.delete(timerKeySocket);
+    }
+
+    const wasDisconnected = Boolean(player.disconnectedAt);
+    player.disconnectedAt = null;
+    player.socketId = socket.id;
+    socket.leave('lobby');
+    socket.join(roomId);
+    socket.currentRoomId = roomId;
+    socket.isSpectator = false;
+
+    syncRoomToRedis(roomId, room);
+    socket.emit('RECONNECTED_TO_ROOM', room);
+    if (wasDisconnected) {
+      socket.to(roomId).emit('OPPONENT_RECONNECTED', {
+        username: socket.username,
+        roomState: room
+      });
+    }
+    console.log(`[Game] User ${socket.username} reconnected to room ${roomId} (state: ${room.state})`);
+    return true;
+  }
+
   io.on('connection', (socket) => {
     console.log(`[Game] User connected: ${socket.username} (${socket.userId})`);
 
-    // --- RECONNECT DETECTION ---
+    // --- RECONNECT DETECTION & FINISHED ROOM CLEANUP ---
     rooms.forEach((room, roomId) => {
-      const player = room.players?.find(p => p.userId === socket.userId);
-      if (player && !player.hasLeft) {
-        const timerKey = `${roomId}:${socket.userId}`;
-        const timerId = disconnectTimers.get(timerKey);
-        if (timerId) {
-          clearTimeout(timerId);
-          disconnectTimers.delete(timerKey);
-        }
+      const player = room.players?.find(p => String(p.userId) === String(socket.userId));
+      if (!player || player.hasLeft) return;
 
-        player.disconnectedAt = null;
-        player.socketId = socket.id;
-        socket.leave('lobby');
-        socket.join(roomId);
-        socket.currentRoomId = roomId;
-
-        syncRoomToRedis(roomId, room);
-        socket.emit('RECONNECTED_TO_ROOM', room);
-        if (room.state === 'FINISHED' && !room.isAiRoom) {
-          void finalizePendingTerminalRoom(room, socket).catch(error => {
-            console.error(
-              `[XP] Could not finalize reconnected room ${roomId}:`,
-              error.message
-            );
-            socket.emit(
-              'GAME_ERROR',
-              'Match result could not be recorded yet. Please reconnect shortly.'
-            );
-          });
-        }
-        socket.to(roomId).emit('OPPONENT_RECONNECTED', { username: socket.username, roomState: room });
-        console.log(`[Game] User ${socket.username} reconnected to room ${roomId}`);
+      const timerKeyPrimary = `${roomId}:${player.userId}`;
+      const timerKeySocket = `${roomId}:${socket.userId}`;
+      const timerId = disconnectTimers.get(timerKeyPrimary) || disconnectTimers.get(timerKeySocket);
+      if (timerId) {
+        clearTimeout(timerId);
+        disconnectTimers.delete(timerKeyPrimary);
+        disconnectTimers.delete(timerKeySocket);
       }
+
+      if (room.state === 'FINISHED') {
+        if (!room.isAiRoom && (!room.saved || !room.resultFinalized) && room.players?.length === 2) {
+          void finalizePendingTerminalRoom(room, socket)
+            .catch(error => {
+              console.error(
+                `[XP] Could not finalize reconnected room ${roomId}:`,
+                error.message
+              );
+            })
+            .finally(() => {
+              player.hasLeft = true;
+              player.socketId = null;
+              if (room.players.every(p => p.hasLeft)) {
+                rooms.delete(roomId);
+                deleteRoomFromRedis(roomId);
+              } else {
+                syncRoomToRedis(roomId, room);
+              }
+            });
+        } else {
+          player.hasLeft = true;
+          player.socketId = null;
+          if (room.players.every(p => p.hasLeft)) {
+            rooms.delete(roomId);
+            deleteRoomFromRedis(roomId);
+          } else {
+            syncRoomToRedis(roomId, room);
+          }
+        }
+        return;
+      }
+
+      reconnectPlayerToRoom(socket, room);
     });
 
-    // Join lobby channel by default and send initial joinable rooms
-    socket.join('lobby');
+    // Join lobby channel by default if not in an active room and send initial joinable rooms
+    if (!socket.currentRoomId) {
+      socket.join('lobby');
+    }
     socket.emit('LOBBY_ROOMS', getJoinableRooms());
 
     socket.on('GET_LOBBY_ROOMS', () => {
@@ -104,7 +170,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     socket.on('CHECK_ACTIVE_ROOM', () => {
       const activeRoom = findActiveRoomForUser(socket.userId);
       if (activeRoom) {
-        socket.emit('RECONNECTED_TO_ROOM', activeRoom);
+        reconnectPlayerToRoom(socket, activeRoom);
       }
     });
 
@@ -117,7 +183,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       }
       const activeRoom = findActiveRoomForUser(socket.userId);
       if (activeRoom) {
-        socket.emit('GAME_ERROR', 'You are already in an active room.');
+        reconnectPlayerToRoom(socket, activeRoom);
         return;
       }
 
@@ -130,13 +196,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       }
       userRoomCooldowns.set(socket.userId, now);
 
-      let currentWinStreak = 0;
-      try {
-        const profile = await GameProfile.findOne({ userId: socket.userId }).lean();
-        currentWinStreak = profile?.currentWinStreak || 0;
-      } catch {
-        // Ignore profile lookup error
-      }
+      const { currentWinStreak, equippedTitle } = await getPlayerProfileMeta(socket.userId);
 
       const roomId = generateRoomId(rooms);
       const room = {
@@ -147,6 +207,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             username: socket.username,
             avatar: socket.avatar || '',
             currentWinStreak,
+            equippedTitle,
             socketId: socket.id,
             secretNumber: null,
             rpsChoice: null,
@@ -182,14 +243,121 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       console.log(`[Game] Room created: ${roomId} by ${socket.username} (Win streak: ${currentWinStreak})`);
     });
 
-    // --- CREATE AI ROOM ---
-    socket.on('CREATE_AI_ROOM', (data) => {
+    // --- QUICK MATCH (Search Open Room Only) ---
+    socket.on('QUICK_MATCH', async () => {
+      const isReady = typeof getIsProgressionReady === 'function' ? getIsProgressionReady() : true;
+      if (!isReady) {
+        socket.emit('GAME_ERROR', 'PvP progression is temporarily unavailable.');
+        return;
+      }
       const activeRoom = findActiveRoomForUser(socket.userId);
       if (activeRoom) {
-        socket.emit('GAME_ERROR', 'You are already in an active room.');
+        reconnectPlayerToRoom(socket, activeRoom);
         return;
       }
 
+      // Find the oldest waiting public PvP room with 1 active connected host
+      let targetRoom = null;
+      rooms.forEach((candidate) => {
+        if (
+          !candidate.isAiRoom &&
+          candidate.state === 'WAITING_FOR_PLAYERS' &&
+          Array.isArray(candidate.players) &&
+          candidate.players.length === 1 &&
+          candidate.players[0] &&
+          !candidate.players[0].hasLeft &&
+          !candidate.players[0].disconnectedAt &&
+          String(candidate.players[0].userId) !== String(socket.userId)
+        ) {
+          if (!targetRoom || (candidate.createdAt || 0) < (targetRoom.createdAt || 0)) {
+            targetRoom = candidate;
+          }
+        }
+      });
+
+      if (!targetRoom) {
+        socket.emit('QUICK_MATCH_WAITING');
+        return;
+      }
+
+      const { currentWinStreak, equippedTitle } = await getPlayerProfileMeta(socket.userId);
+
+      // Re-verify targetRoom is still available after async profile lookup
+      if (
+        rooms.get(targetRoom.roomId) !== targetRoom ||
+        targetRoom.state !== 'WAITING_FOR_PLAYERS' ||
+        targetRoom.players.length !== 1 ||
+        targetRoom.players[0]?.hasLeft ||
+        targetRoom.players[0]?.disconnectedAt
+      ) {
+        socket.emit('QUICK_MATCH_WAITING');
+        return;
+      }
+
+      const roomId = targetRoom.roomId;
+      targetRoom.players.push({
+        userId: socket.userId,
+        username: socket.username,
+        avatar: socket.avatar || '',
+        currentWinStreak,
+        equippedTitle,
+        socketId: socket.id,
+        secretNumber: null,
+        rpsChoice: null,
+        ready: false
+      });
+
+      targetRoom.spectators = targetRoom.spectators || [];
+      socket.leave('lobby');
+      socket.join(roomId);
+      socket.currentRoomId = roomId;
+      targetRoom.state = 'SETTING_SECRET';
+      targetRoom.roundNumber = 1;
+      targetRoom.createdAt = Date.now();
+      targetRoom.startedAt = null;
+      targetRoom.finishedAt = null;
+      targetRoom.endReason = null;
+      targetRoom.forfeitReason = null;
+      targetRoom.forfeitedPlayerId = null;
+      targetRoom.xpSettlement = null;
+      targetRoom.resultFinalized = false;
+      targetRoom.matchId = `pvp-${roomId}-${Date.now()}`;
+      targetRoom.saved = false;
+      syncRoomToRedis(roomId, targetRoom);
+
+      socket.emit('QUICK_MATCH_FOUND', {
+        roomId,
+        hostName: targetRoom.players[0]?.username || 'Player',
+        room: targetRoom
+      });
+      socket.to(roomId).emit('GAME_START', targetRoom);
+      broadcastLobbyRooms();
+      console.log(`[QuickMatch] ${socket.username} matched into room ${roomId}. Moving to SETTING_SECRET.`);
+    });
+
+    // --- CREATE AI ROOM ---
+    socket.on('CREATE_AI_ROOM', async (data) => {
+      const activeRoom = findActiveRoomForUser(socket.userId);
+      if (activeRoom) {
+        // Allow seamless 1-click switch from a solo waiting room directly into an AI match
+        if (activeRoom.state === 'WAITING_FOR_PLAYERS' && activeRoom.players.length === 1) {
+          const timerKey = `${activeRoom.roomId}:${socket.userId}`;
+          const timerId = disconnectTimers.get(timerKey);
+          if (timerId) {
+            clearTimeout(timerId);
+            disconnectTimers.delete(timerKey);
+          }
+          rooms.delete(activeRoom.roomId);
+          deleteRoomFromRedis(activeRoom.roomId);
+          socket.leave(activeRoom.roomId);
+          broadcastLobbyRooms();
+        } else {
+          reconnectPlayerToRoom(socket, activeRoom);
+          return;
+        }
+      }
+
+      const { currentWinStreak, equippedTitle } = await getPlayerProfileMeta(socket.userId);
       const difficulty = (data && data.difficulty) ? data.difficulty : 'medium';
       const roomId = generateRoomId(rooms);
       const aiSecret = generate4DigitCode();
@@ -204,6 +372,8 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             userId: socket.userId,
             username: socket.username,
             avatar: socket.avatar || '',
+            currentWinStreak,
+            equippedTitle,
             socketId: socket.id,
             secretNumber: null,
             rpsChoice: null,
@@ -256,13 +426,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       }
       const activeRoom = findActiveRoomForUser(socket.userId);
       if (activeRoom) {
-        if (activeRoom.roomId === roomId) {
-          socket.join(roomId);
-          socket.currentRoomId = roomId;
-          socket.emit('RECONNECTED_TO_ROOM', activeRoom);
-          return;
-        }
-        socket.emit('GAME_ERROR', 'You are already in an active room.');
+        reconnectPlayerToRoom(socket, activeRoom);
         return;
       }
 
@@ -282,19 +446,14 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
-      let currentWinStreak = 0;
-      try {
-        const profile = await GameProfile.findOne({ userId: socket.userId }).lean();
-        currentWinStreak = profile?.currentWinStreak || 0;
-      } catch {
-        // Ignore profile lookup error
-      }
+      const { currentWinStreak, equippedTitle } = await getPlayerProfileMeta(socket.userId);
 
       room.players.push({
         userId: socket.userId,
         username: socket.username,
         avatar: socket.avatar || '',
         currentWinStreak,
+        equippedTitle,
         socketId: socket.id,
         secretNumber: null,
         rpsChoice: null,
@@ -411,7 +570,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
-      const player = room.players.find(p => p.userId === socket.userId);
+      const player = room.players.find(p => String(p.userId) === String(socket.userId));
       if (!player) return;
 
       player.secretNumber = encryptSecret(secret);
@@ -452,7 +611,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
-      const player = room.players.find(p => p.userId === socket.userId);
+      const player = room.players.find(p => String(p.userId) === String(socket.userId));
       if (!player) return;
 
       player.rpsChoice = choice;
@@ -527,7 +686,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       if (!room) return;
       if (room.state !== 'PLAYING') return;
 
-      const playerIdx = room.players.findIndex(p => p.userId === socket.userId);
+      const playerIdx = room.players.findIndex(p => String(p.userId) === String(socket.userId));
       if (playerIdx === -1) return;
 
       if (room.activeTurnIndex !== playerIdx) {
@@ -611,7 +770,12 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
               isUserWinner: true,
               room
             });
-            pvpSettlement = { xpResults: [settlementResult] };
+            const unlocked = await syncAndDetectNewAchievements(socket.userId);
+            settlementResult.newlyUnlockedAchievements = unlocked || [];
+            const newlyUnlockedByUser = Array.isArray(unlocked) && unlocked.length > 0
+              ? { [String(socket.userId)]: unlocked }
+              : {};
+            pvpSettlement = { xpResults: [settlementResult], newlyUnlockedByUser };
             room.xpSettlement = pvpSettlement;
             void invalidateUserAndLeaderboardCache(socket.userId);
           } catch (err) {
@@ -639,7 +803,8 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           loserSecret: loserSecretDecrypted,
           startedAt: room.startedAt,
           finishedAt: room.finishedAt,
-          xpResults: pvpSettlement?.xpResults || null
+          xpResults: pvpSettlement?.xpResults || null,
+          newlyUnlockedByUser: pvpSettlement?.newlyUnlockedByUser || {}
         };
 
         io.to(roomId).emit('GAME_OVER', {
@@ -672,7 +837,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       if (!room) return;
       if (room.state !== 'FINISHED') return;
 
-      const player = room.players.find(p => p.userId === socket.userId);
+      const player = room.players.find(p => String(p.userId) === String(socket.userId));
       if (!player) return;
 
       player.ready = true;
@@ -856,15 +1021,23 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
-      const targetEntries = sock.currentRoomId && rooms.has(sock.currentRoomId)
-        ? [[sock.currentRoomId, rooms.get(sock.currentRoomId)]]
-        : [...rooms.entries()].filter(([, candidateRoom]) =>
-          candidateRoom.players.some(p => p.userId === sock.userId)
-        );
+      const targetEntries = [...rooms.entries()].filter(([roomId, candidateRoom]) =>
+        (sock.currentRoomId && roomId === sock.currentRoomId) ||
+        candidateRoom.players?.some(p => String(p.userId) === String(sock.userId) && !p.hasLeft)
+      );
 
       for (const [roomId, room] of targetEntries) {
-        const player = room.players.find(p => p.userId === sock.userId);
+        const player = room.players.find(p => String(p.userId) === String(sock.userId));
         if (!player) continue;
+
+        const timerKeyPrimary = `${roomId}:${player.userId}`;
+        const timerKeySocket = `${roomId}:${sock.userId}`;
+        const timerId = disconnectTimers.get(timerKeyPrimary) || disconnectTimers.get(timerKeySocket);
+        if (timerId) {
+          clearTimeout(timerId);
+          disconnectTimers.delete(timerKeyPrimary);
+          disconnectTimers.delete(timerKeySocket);
+        }
 
         if (room.isAiRoom) {
           rooms.delete(roomId);
@@ -873,6 +1046,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           sock.join('lobby');
           sock.currentRoomId = null;
           sock.emit('ROOM_DELETED');
+          sock.emit('ROOM_LEFT');
           console.log(`[Game] AI Room ${roomId} deleted because user ${sock.username} left.`);
           broadcastLobbyRooms();
           return;
@@ -885,6 +1059,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           sock.join('lobby');
           sock.currentRoomId = null;
           sock.emit('ROOM_DELETED');
+          sock.emit('ROOM_LEFT');
           console.log(`[Game] Room ${roomId} deleted because host left before game started.`);
           broadcastLobbyRooms();
           return;

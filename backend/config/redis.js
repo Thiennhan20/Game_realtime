@@ -45,12 +45,15 @@ async function setCachedJson(key, value, ttlSeconds) {
 async function invalidateUserAndLeaderboardCache(userId) {
   try {
     if (!redis) return;
-    const deletePromises = [
-      redis.del(`${LEADERBOARD_CACHE_PREFIX}3`),
-      redis.del(`${LEADERBOARD_CACHE_PREFIX}4`),
-      redis.del(`${LEADERBOARD_CACHE_PREFIX}50`),
-      redis.del(`${LEADERBOARD_CACHE_PREFIX}100`),
-    ];
+    const limits = [3, 4, 50, 100];
+    const periods = ['all', 'month', 'week'];
+    const deletePromises = [];
+    for (const lim of limits) {
+      deletePromises.push(redis.del(`${LEADERBOARD_CACHE_PREFIX}${lim}`));
+      for (const period of periods) {
+        deletePromises.push(redis.del(`${LEADERBOARD_CACHE_PREFIX}${period}:${lim}`));
+      }
+    }
     if (userId) {
       deletePromises.push(redis.del(`${PROFILE_CACHE_PREFIX}${userId}`));
     }
