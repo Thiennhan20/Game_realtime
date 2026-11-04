@@ -533,16 +533,6 @@ function findActiveRoomForUser(userId) {
     if (!player) continue;
 
     if (room.state === 'FINISHED') {
-      if (room.saved || room.resultFinalized || room.isAiRoom || (room.players?.length || 0) < 2) {
-        player.hasLeft = true;
-        player.socketId = null;
-        if (room.players.every(p => p.hasLeft)) {
-          rooms.delete(room.roomId);
-          deleteRoomFromRedis(room.roomId);
-        } else {
-          syncRoomToRedis(room.roomId, room);
-        }
-      }
       continue;
     }
 

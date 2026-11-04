@@ -210,7 +210,7 @@ export const RoomChat = memo(function RoomChat({
               onClick={() => setShowEmotePicker((prev) => !prev)}
               aria-label={locale === 'vi' ? 'Mở bảng biểu cảm' : 'Toggle quick emotes'}
               title={locale === 'vi' ? 'Biểu cảm nhanh' : 'Quick Emotes'}
-              className={`p-2 border rounded-xl transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+              className={`w-10 h-10 border rounded-xl transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0 ${
                 showEmotePicker
                   ? 'bg-purple-600 border-purple-400 text-white shadow-md shadow-purple-500/25 ring-2 ring-purple-500/30'
                   : 'bg-slate-800/80 hover:bg-purple-600/20 border-slate-700/60 hover:border-purple-500/40 text-purple-300 hover:text-white'
@@ -242,15 +242,15 @@ export const RoomChat = memo(function RoomChat({
           aria-label={t('chatPlaceholder')}
           value={localInput}
           onChange={(event) => setLocalInput(event.target.value)}
-          className="flex-1 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2 rounded-xl text-base md:text-sm placeholder-slate-600"
+          className="h-10 flex-1 min-w-0 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 rounded-xl text-base md:text-sm placeholder-slate-600"
         />
         <button
           type="submit"
           disabled={!localInput.trim()}
           aria-label="Send message"
-          className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
+          className="w-10 h-10 bg-purple-600 hover:bg-purple-500 text-white border border-purple-400/40 rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0 shadow-sm shadow-purple-950/40"
         >
-          <Send size={16} aria-hidden="true" />
+          <Send size={18} aria-hidden="true" />
         </button>
       </form>
     </div>

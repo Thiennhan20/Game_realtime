@@ -121,27 +121,13 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
                 `[XP] Could not finalize reconnected room ${roomId}:`,
                 error.message
               );
-            })
-            .finally(() => {
-              player.hasLeft = true;
-              player.socketId = null;
-              if (room.players.every(p => p.hasLeft)) {
-                rooms.delete(roomId);
-                deleteRoomFromRedis(roomId);
-              } else {
-                syncRoomToRedis(roomId, room);
-              }
             });
-        } else {
-          player.hasLeft = true;
-          player.socketId = null;
-          if (room.players.every(p => p.hasLeft)) {
-            rooms.delete(roomId);
-            deleteRoomFromRedis(roomId);
-          } else {
-            syncRoomToRedis(roomId, room);
-          }
         }
+        player.socketId = socket.id;
+        player.disconnectedAt = null;
+        socket.currentRoomId = roomId;
+        socket.join(roomId);
+        syncRoomToRedis(roomId, room);
         return;
       }
 
@@ -1064,6 +1050,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           sock.currentRoomId = null;
           sock.emit('ROOM_DELETED');
           sock.emit('ROOM_LEFT');
+          sock.emit('LOBBY_ROOMS', getJoinableRooms());
           console.log(`[Game] AI Room ${roomId} deleted because user ${sock.username} left.`);
           broadcastLobbyRooms();
           return;
@@ -1077,29 +1064,52 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           sock.currentRoomId = null;
           sock.emit('ROOM_DELETED');
           sock.emit('ROOM_LEFT');
+          sock.emit('LOBBY_ROOMS', getJoinableRooms());
           console.log(`[Game] Room ${roomId} deleted because host left before game started.`);
           broadcastLobbyRooms();
           return;
         }
 
         if (room.state === 'FINISHED') {
-          player.hasLeft = true;
-          player.socketId = null;
           sock.leave(roomId);
           sock.join('lobby');
           sock.currentRoomId = null;
-          syncRoomToRedis(roomId, room);
 
-          const allLeft = room.players.every(p => p.hasLeft);
-          if (allLeft) {
+          const pIdx = room.players.findIndex(p => String(p.userId) === String(sock.userId));
+          if (pIdx !== -1) room.players.splice(pIdx, 1);
+
+          if (room.players.length === 0) {
             rooms.delete(roomId);
             deleteRoomFromRedis(roomId);
-            console.log(`[Game] Room ${roomId} deleted after both players left finished game.`);
+            console.log(`[Game] Room ${roomId} deleted after all players left finished game.`);
           } else {
-            sock.to(roomId).emit('PLAYER_LEFT', { username: sock.username, roomState: room });
-            sock.to(roomId).emit('OPPONENT_LEFT', { username: sock.username, roomState: room });
+            room.state = 'WAITING_FOR_PLAYERS';
+            room.guesses = [];
+            room.matchId = null;
+            room.rpsWinnerIndex = -1;
+            room.activeTurnIndex = -1;
+            room.winnerIndex = -1;
+            room.startedAt = null;
+            room.finishedAt = null;
+            room.endReason = null;
+            room.forfeitReason = null;
+            room.forfeitedPlayerId = null;
+            room.xpSettlement = null;
+            room.saved = false;
+            room.resultFinalized = false;
+            room.players.forEach(remainingPlayer => {
+              remainingPlayer.secretNumber = null;
+              remainingPlayer.rpsChoice = null;
+              remainingPlayer.ready = false;
+              remainingPlayer.disconnectedAt = null;
+              remainingPlayer.hasLeft = false;
+            });
+            syncRoomToRedis(roomId, room);
+            io.to(roomId).emit('PLAYER_LEFT', { username: sock.username, roomState: room });
+            io.to(roomId).emit('OPPONENT_LEFT', { username: sock.username, roomState: room });
           }
           sock.emit('ROOM_LEFT');
+          sock.emit('LOBBY_ROOMS', getJoinableRooms());
           broadcastLobbyRooms();
           return;
         }
@@ -1115,6 +1125,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           sock.join('lobby');
           sock.currentRoomId = null;
           sock.emit('ROOM_LEFT');
+          sock.emit('LOBBY_ROOMS', getJoinableRooms());
           broadcastLobbyRooms();
           return;
         }

@@ -38,6 +38,7 @@ interface ActiveRoomProps {
   opponentSecretSet: boolean;
   opponentRpsSubmitted: boolean;
   opponentWantsPlayAgain: boolean;
+  isRequestingPlayAgain?: boolean;
   copied: boolean;
   matchStats: MatchStats | null;
   matchXpResult: PlayerXpResult | null;
@@ -81,6 +82,7 @@ export function ActiveRoom({
   opponentSecretSet,
   opponentRpsSubmitted,
   opponentWantsPlayAgain,
+  isRequestingPlayAgain = false,
   copied,
   matchStats,
   matchXpResult,
@@ -133,7 +135,7 @@ export function ActiveRoom({
     .map((g) => g.guess);
 
   return (
-    <div className="flex-1 flex flex-col gap-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-0 min-h-0 [overflow-anchor:none]">
+    <div className="flex-1 flex flex-col gap-4 h-full pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-0 min-h-0 [overflow-anchor:none]">
       <ActiveRoomHeader
         room={room}
         me={effectiveMe}
@@ -148,7 +150,7 @@ export function ActiveRoom({
         onLeaveRoom={onLeaveRoom}
       />
 
-      <section className="flex-1 flex flex-col min-h-[440px] sm:min-h-[470px]">
+      <section className="flex-1 flex flex-col min-h-[440px] sm:min-h-[470px] h-full">
         {room.state === 'WAITING_FOR_PLAYERS' && (
           <WaitingForOpponentPanel
             roomId={room.roomId}
@@ -253,6 +255,7 @@ export function ActiveRoom({
                 : (opponent?.username || t('enemy'))
             }
             opponentWantsPlayAgain={opponentWantsPlayAgain}
+            isRequestingPlayAgain={isRequestingPlayAgain}
             locale={locale}
             t={t}
             canPlayAgain={canPlayAgain}
@@ -267,7 +270,7 @@ export function ActiveRoom({
       </section>
 
       <MatchSummaryModal
-        isOpen={showMatchModal && !isSpectator}
+        isOpen={showMatchModal && !isSpectator && room.state === 'FINISHED'}
         room={room}
         stats={matchStats}
         xpResult={matchXpResult}

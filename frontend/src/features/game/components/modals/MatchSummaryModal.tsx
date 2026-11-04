@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Award, Check, Clock, History, LogOut, Sparkles, Swords, Target, Zap } from 'lucide-react';
+import { Award, Check, Clock, Sparkles, Swords, Target, Zap } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type {
@@ -32,7 +32,7 @@ interface MatchSummaryModalProps {
   t: Translator;
   onClose: () => void;
   onLeaveRoom?: () => void;
-  onOpenGuessHistory: () => void;
+  onOpenGuessHistory?: () => void;
   onEquipTitle?: (achievementId: string | null) => void;
 }
 
@@ -509,33 +509,13 @@ export function MatchSummaryModal({
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-950/30 border-t border-slate-850 shrink-0 flex flex-col sm:flex-row items-center justify-center gap-2.5">
-              {onLeaveRoom && (
-                <button
-                  type="button"
-                  onClick={onLeaveRoom}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-slate-900/90 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-rose-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm"
-                >
-                  <LogOut size={16} />
-                  <span>{locale === 'vi' ? 'Về sảnh' : 'Back to Lobby'}</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onOpenGuessHistory}
-                className="w-full sm:w-auto px-5 py-2.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-2 cursor-pointer text-sm"
-              >
-                <History size={16} />
-                <span>
-                  {locale === 'vi' ? 'Xem lịch sử lượt đoán' : 'View Guess History'}
-                </span>
-              </button>
+            <div className="px-6 py-4 bg-slate-950/30 border-t border-slate-850 shrink-0 flex items-center justify-center">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 cursor-pointer shadow-md text-sm"
+                className="w-full sm:w-auto min-w-[200px] py-3 px-8 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 cursor-pointer shadow-lg shadow-purple-500/25 text-sm flex items-center justify-center tracking-wide"
               >
-                {locale === 'vi' ? 'Ở lại phòng' : 'Stay in Room'}
+                {locale === 'vi' ? 'Đóng' : 'Close'}
               </button>
             </div>
           </motion.div>

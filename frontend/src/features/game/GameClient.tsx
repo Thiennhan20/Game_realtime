@@ -111,7 +111,7 @@ export default function GameClient() {
           />
         )}
         <div
-          className={`flex-1 flex flex-col min-w-0 min-h-0 ${
+          className={`flex-1 flex flex-col min-w-0 min-h-0 h-full ${
             game.room && !isAiMatch && effectiveMobileTab !== 'arena' ? 'hidden lg:flex' : 'flex'
           }`}
         >
@@ -157,6 +157,7 @@ export default function GameClient() {
               opponentSecretSet={game.opponentSecretSet}
               opponentRpsSubmitted={game.opponentRpsSubmitted}
               opponentWantsPlayAgain={game.opponentWantsPlayAgain}
+              isRequestingPlayAgain={game.isRequestingPlayAgain}
               copied={game.copied}
               matchStats={game.matchStats}
               matchXpResult={game.matchXpResult}

@@ -1,6 +1,6 @@
 'use client';
 
-import { History, LogOut, RefreshCw, Trophy } from 'lucide-react';
+import { History, Loader2, RefreshCw, Trophy } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { Locale } from '../../types';
@@ -10,6 +10,7 @@ interface FinishedPanelProps {
   isWinner: boolean;
   opponentName: string;
   opponentWantsPlayAgain: boolean;
+  isRequestingPlayAgain?: boolean;
   canPlayAgain: boolean;
   locale: Locale;
   t: Translator;
@@ -18,13 +19,14 @@ interface FinishedPanelProps {
   onOpenSummary: () => void;
   onOpenGuessHistory: () => void;
   onPlayAgain: () => void;
-  onLeaveRoom: () => void;
+  onLeaveRoom?: () => void;
 }
 
 export function FinishedPanel({
   isWinner,
   opponentName,
   opponentWantsPlayAgain,
+  isRequestingPlayAgain = false,
   canPlayAgain,
   locale,
   t,
@@ -79,44 +81,50 @@ export function FinishedPanel({
           </button>
         </div>
 
-        <div className="relative my-3 flex items-center justify-center">
-          <div className="border-t border-slate-800 w-full" />
-          <span className="absolute bg-slate-950 px-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-            {locale === 'vi' ? 'Thao tác' : 'Actions'}
-          </span>
-        </div>
-
-        <div className="flex flex-row gap-2.5 w-full">
-          {!isSpectator && (
-            <button
-              onClick={onPlayAgain}
-              disabled={!canPlayAgain}
-              className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-800 disabled:text-slate-500 disabled:shadow-none"
-            >
-              <RefreshCw size={16} />
-              <span>
-                {canPlayAgain
-                  ? t('playAgain')
-                  : locale === 'vi'
-                    ? 'Đối thủ đã rời'
-                    : 'Opponent left'}
+        {!isSpectator && (
+          <>
+            <div className="relative my-3 flex items-center justify-center">
+              <div className="border-t border-slate-800 w-full" />
+              <span className="absolute bg-slate-950 px-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                {locale === 'vi' ? 'Thao tác' : 'Actions'}
               </span>
-            </button>
-          )}
-          <button
-            onClick={onLeaveRoom}
-            className={`${isSpectator ? 'w-full' : 'flex-1'} py-3 bg-slate-900/90 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-rose-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm`}
-          >
-            <LogOut size={16} />
-            <span>
-              {isSpectator
-                ? locale === 'vi'
-                  ? 'Rời phòng xem'
-                  : 'Exit Spectate'
-                : t('backToLobby')}
-            </span>
-          </button>
-        </div>
+            </div>
+
+            <div className="w-full">
+              <button
+                onClick={onPlayAgain}
+                disabled={!canPlayAgain || isRequestingPlayAgain}
+                className={`w-full py-3 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 text-sm ${
+                  isRequestingPlayAgain
+                    ? 'bg-gradient-to-r from-emerald-600/80 to-teal-700/80 border border-emerald-500/40 cursor-wait shadow-md animate-pulse text-emerald-100'
+                    : canPlayAgain
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-[0.98]'
+                      : 'bg-gradient-to-r from-slate-700 to-slate-800 text-slate-500 cursor-not-allowed shadow-none'
+                }`}
+              >
+                {isRequestingPlayAgain ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-emerald-300" />
+                    <span>
+                      {locale === 'vi' ? 'Đang chờ đối thủ...' : 'Waiting for opponent...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={16} />
+                    <span>
+                      {canPlayAgain
+                        ? t('playAgain')
+                        : locale === 'vi'
+                          ? 'Đối thủ đã rời'
+                          : 'Opponent left'}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
 
         <div className="min-h-[18px] mt-2">
           {!isSpectator && opponentWantsPlayAgain && canPlayAgain && (

@@ -17,7 +17,7 @@ export function RpsDecisionPanel({
   onChoose,
 }: RpsDecisionPanelProps) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center py-6">
+    <div className="flex-1 flex flex-col items-center justify-center py-6 h-full">
       <div className="max-w-md w-full bg-slate-900/70 border border-slate-800/80 p-5 sm:p-8 rounded-2xl shadow-2xl space-y-6">
         <div className="text-center space-y-2">
           <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-full flex items-center justify-center mx-auto mb-2">

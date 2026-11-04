@@ -257,27 +257,13 @@ export function ActiveRoomHeader({
               <LogOut size={16} className="text-rose-400 group-hover:text-white shrink-0" />
             </button>
 
-            {/* Desktop Floating Callout: GPU-accelerated CSS float, auto-paused when hidden */}
+            {/* Unified Floating Callout: Positioned above the exit icon, pointing down */}
             <div
               aria-hidden="true"
-              className="absolute left-full top-1/2 ml-2 z-30 hidden sm:flex items-center pointer-events-none select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)] animate-tag-float-x"
+              className="absolute bottom-full right-0 mb-1.5 z-30 flex flex-col items-end pointer-events-none select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)] animate-tag-float-y"
             >
-              {/* Triangular arrow on the OUTSIDE pointing left directly into the exit icon */}
-              <div className="w-0 h-0 border-y-[4px] border-y-transparent border-r-[5px] border-r-rose-500/60 -mr-[1px] shrink-0" />
-
               {/* The Floating Frame - Dark Glassmorphism */}
-              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1">
-                <span>{locale === 'vi' ? 'Thoát phòng đây nhá!' : 'Exit room here!'}</span>
-              </div>
-            </div>
-
-            {/* Mobile Floating Callout: GPU-accelerated CSS float, auto-paused on desktop */}
-            <div
-              aria-hidden="true"
-              className="absolute bottom-full right-0 mb-1.5 z-30 sm:hidden flex flex-col items-end pointer-events-none select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)] animate-tag-float-y"
-            >
-              {/* The Floating Frame on mobile - Dark Glassmorphism */}
-              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1">
+              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1">
                 <span>{locale === 'vi' ? 'Thoát phòng đây nhá!' : 'Exit room here!'}</span>
               </div>
 

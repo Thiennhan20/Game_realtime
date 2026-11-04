@@ -23,7 +23,7 @@ export function WaitingForOpponentPanel({
   onSwitchToAi,
 }: WaitingForOpponentPanelProps) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-slate-900/30 border border-slate-800/70 border-dashed rounded-2xl p-6 sm:p-10 text-center">
+    <div className="flex-1 flex flex-col items-center justify-center bg-slate-900/30 border border-slate-800/70 border-dashed rounded-2xl p-6 sm:p-10 text-center h-full">
       <div className="relative w-16 h-16 bg-purple-500/15 text-purple-400 rounded-full flex items-center justify-center mb-5 shadow-[0_0_24px_rgba(168,85,247,0.2)]">
         <Users size={30} />
         <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5">

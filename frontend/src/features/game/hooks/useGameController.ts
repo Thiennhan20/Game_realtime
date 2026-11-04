@@ -137,6 +137,7 @@ export function useGameController() {
   const [opponentRpsSubmitted, setOpponentRpsSubmitted] = useState(false);
   const [opponentSecretSet, setOpponentSecretSet] = useState(false);
   const [opponentWantsPlayAgain, setOpponentWantsPlayAgain] = useState(false);
+  const [isRequestingPlayAgain, setIsRequestingPlayAgain] = useState(false);
   const [secretReveal, setSecretReveal] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [matchStats, setMatchStats] = useState<MatchStats | null>(null);
@@ -512,6 +513,7 @@ export function useGameController() {
         setOpponentSecretSet(false);
         setOpponentRpsSubmitted(false);
         setOpponentWantsPlayAgain(false);
+        setIsRequestingPlayAgain(false);
         setSecretInput('');
         setGuessInput('');
         setSecretReveal(null);
@@ -545,6 +547,7 @@ export function useGameController() {
       setOpponentSecretSet(false);
       setOpponentRpsSubmitted(false);
       setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
       setSecretInput('');
       setGuessInput('');
       setSecretReveal(null);
@@ -890,6 +893,7 @@ export function useGameController() {
       setOpponentSecretSet(false);
       setOpponentRpsSubmitted(false);
       setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
       setSecretInput('');
       setGuessInput('');
       setSecretReveal(null);
@@ -908,6 +912,7 @@ export function useGameController() {
       setErrorMsg(translate()('opponentLeft').replace('{username}', data.username));
       setSecretReveal(null);
       setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
       setOpponentTempDisconnected(null);
       setShowMatchModal(false);
       setShowGuessHistoryModal(false);
@@ -922,6 +927,8 @@ export function useGameController() {
       setShowMatchModal(false);
       setShowGuessHistoryModal(false);
       setOpponentTempDisconnected(null);
+      setIsRequestingPlayAgain(false);
+      socket.emit('GET_LOBBY_ROOMS');
     });
 
     socket.on('PLAYER_LEFT', (data: { username: string; roomState: Room }) => {
@@ -931,8 +938,9 @@ export function useGameController() {
       setRoom(data.roomState);
       setErrorMsg(translate()('playerLeft').replace('{username}', data.username));
       setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
       setOpponentTempDisconnected(null);
-      if (data.roomState?.state !== 'FINISHED') {
+      if (data?.roomState && data.roomState.state !== 'FINISHED') {
         setSecretReveal(null);
         setShowMatchModal(false);
         setShowGuessHistoryModal(false);
@@ -957,7 +965,13 @@ export function useGameController() {
         });
       }
       setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
       setOpponentTempDisconnected(null);
+      if (data?.roomState && data.roomState.state !== 'FINISHED') {
+        setSecretReveal(null);
+        setShowMatchModal(false);
+        setShowGuessHistoryModal(false);
+      }
       const opponentName = data?.username || translate()('enemy');
       setErrorMsg(translate()('playerLeft').replace('{username}', opponentName));
       setTimeout(() => setErrorMsg(null), 5000);
@@ -1019,6 +1033,11 @@ export function useGameController() {
   useEffect(() => {
     if (room) return;
     let isMounted = true;
+
+    // Immediately request fresh lobby rooms upon entering lobby
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('GET_LOBBY_ROOMS');
+    }
 
     // Fallback REST fetch ONLY when socket is not connected
     const fetchRestRooms = () => {
@@ -1312,9 +1331,10 @@ export function useGameController() {
   };
 
   const handlePlayAgain = () => {
-    if (!room || isSpectator) return;
+    if (!room || isSpectator || isRequestingPlayAgain) return;
     sound.playClick();
     triggerHaptic(25);
+    setIsRequestingPlayAgain(true);
     socketRef.current?.emit('PLAY_AGAIN', room.roomId);
   };
 
@@ -1344,6 +1364,7 @@ export function useGameController() {
     triggerHaptic(20);
     socketRef.current?.emit('LEAVE_ROOM', () => {
       void loadGameProfile();
+      socketRef.current?.emit('GET_LOBBY_ROOMS');
     });
     setRoom(null);
     setChatMessages([]);
@@ -1352,6 +1373,7 @@ export function useGameController() {
     setShowMatchModal(false);
     setShowGuessHistoryModal(false);
     setOpponentTempDisconnected(null);
+    setIsRequestingPlayAgain(false);
     setFloatingEmotes([]);
   };
 
@@ -1410,6 +1432,7 @@ export function useGameController() {
     opponentRpsSubmitted,
     opponentSecretSet,
     opponentWantsPlayAgain,
+    isRequestingPlayAgain,
     secretReveal,
     copied,
     matchStats,
