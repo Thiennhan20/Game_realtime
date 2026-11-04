@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Award, Check, Clock, History, Sparkles, Swords, Target, Zap } from 'lucide-react';
+import { Award, Check, Clock, History, LogOut, Sparkles, Swords, Target, Zap } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type {
@@ -31,6 +31,7 @@ interface MatchSummaryModalProps {
   locale: Locale;
   t: Translator;
   onClose: () => void;
+  onLeaveRoom?: () => void;
   onOpenGuessHistory: () => void;
   onEquipTitle?: (achievementId: string | null) => void;
 }
@@ -51,6 +52,7 @@ export function MatchSummaryModal({
   locale,
   t,
   onClose,
+  onLeaveRoom,
   onOpenGuessHistory,
   onEquipTitle,
 }: MatchSummaryModalProps) {
@@ -197,7 +199,7 @@ export function MatchSummaryModal({
               <p className="text-xs text-slate-400 mt-1">
                 {headlineDesc}
               </p>
-              {showXpResult && (
+              {showXpResult ? (
                 <div className="mt-3 flex flex-col items-center gap-2">
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     {/* XP Badge */}
@@ -272,6 +274,11 @@ export function MatchSummaryModal({
                       )}
                     </p>
                   ) : null}
+                </div>
+              ) : !isAbandoned && (
+                <div className="mt-3 flex items-center justify-center gap-2 py-1 text-xs font-semibold text-slate-400 animate-pulse">
+                  <Sparkles size={13} className="text-purple-400 animate-spin" />
+                  <span>{locale === 'vi' ? 'Đang tổng kết điểm...' : 'Calculating rewards...'}</span>
                 </div>
               )}
             </div>
@@ -503,7 +510,18 @@ export function MatchSummaryModal({
             </div>
 
             <div className="px-6 py-4 bg-slate-950/30 border-t border-slate-850 shrink-0 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+              {onLeaveRoom && (
+                <button
+                  type="button"
+                  onClick={onLeaveRoom}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-slate-900/90 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-rose-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer text-sm"
+                >
+                  <LogOut size={16} />
+                  <span>{locale === 'vi' ? 'Về sảnh' : 'Back to Lobby'}</span>
+                </button>
+              )}
               <button
+                type="button"
                 onClick={onOpenGuessHistory}
                 className="w-full sm:w-auto px-5 py-2.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-2 cursor-pointer text-sm"
               >
@@ -513,10 +531,11 @@ export function MatchSummaryModal({
                 </span>
               </button>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto px-8 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 cursor-pointer shadow-md text-sm"
+                className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 cursor-pointer shadow-md text-sm"
               >
-                {locale === 'vi' ? 'Đóng' : 'Close'}
+                {locale === 'vi' ? 'Ở lại phòng' : 'Stay in Room'}
               </button>
             </div>
           </motion.div>

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronUp, Gamepad2 } from 'lucide-react';
 
 import type { Locale } from '../../types';
 
-export function MobileHowToPlay({ locale }: { locale: Locale }) {
+export const MobileHowToPlay = memo(function MobileHowToPlay({ locale }: { locale: Locale }) {
   const [isOpen, setIsOpen] = useState(false);
   const steps =
     locale === 'vi'
@@ -60,4 +60,4 @@ export function MobileHowToPlay({ locale }: { locale: Locale }) {
       </AnimatePresence>
     </div>
   );
-}
+});

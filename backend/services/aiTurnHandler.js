@@ -56,6 +56,8 @@ function handleAiTurn(room, io) {
         room.winnerIndex = 1;
         room.finishedAt = new Date().toISOString();
 
+        syncRoomToRedis(room.roomId, room);
+
         const winnerGuesses = room.guesses.filter(g => g.playerIndex === 1);
         const loserGuesses = room.guesses.filter(g => g.playerIndex === 0);
         const durationMs = room.startedAt ? (new Date(room.finishedAt) - new Date(room.startedAt)) : 0;
@@ -64,34 +66,7 @@ function handleAiTurn(room, io) {
         const winnerSecretDecrypted = decryptSecret(room.players[1]?.secretNumber);
         const loserSecretDecrypted = decryptSecret(room.players[0]?.secretNumber);
 
-        // Settle AI match for human player (loss)
-        let aiSettlement = null;
-        let newlyUnlockedByUser = {};
-        try {
-          const humanPlayer = room.players[0];
-          if (humanPlayer && humanPlayer.userId) {
-            const settlementResult = await settleAiMatch({
-              userId: humanPlayer.userId,
-              aiDifficulty: room.aiDifficulty || 'medium',
-              isUserWinner: false,
-              room
-            });
-            const unlocked = await syncAndDetectNewAchievements(humanPlayer.userId);
-            if (Array.isArray(unlocked) && unlocked.length > 0) {
-              newlyUnlockedByUser[String(humanPlayer.userId)] = unlocked;
-            }
-            settlementResult.newlyUnlockedAchievements = unlocked || [];
-            aiSettlement = { xpResults: [settlementResult], newlyUnlockedByUser };
-            room.xpSettlement = aiSettlement;
-            void invalidateUserAndLeaderboardCache(humanPlayer.userId);
-          }
-        } catch (err) {
-          console.error(`[AI Settlement] Failed to settle AI loss for room ${room.roomId}:`, err.message);
-        }
-
-        syncRoomToRedis(room.roomId, room);
-
-        const matchStats = {
+        const initialMatchStats = {
           duration: durationSec,
           totalGuesses: room.guesses.length,
           winnerGuessCount: winnerGuesses.length,
@@ -101,17 +76,53 @@ function handleAiTurn(room, io) {
           loserSecret: loserSecretDecrypted,
           startedAt: room.startedAt,
           finishedAt: room.finishedAt,
-          xpResults: aiSettlement?.xpResults || null,
-          newlyUnlockedByUser
+          xpResults: null,
+          newlyUnlockedByUser: {}
         };
 
+        // 1. Instantly notify player of AI win without waiting for DB writes (< 30ms)
         io.to(room.roomId).emit('GAME_OVER', {
           winnerIndex: 1,
           roomState: room,
           opponentSecret: winnerSecretDecrypted,
-          matchStats: matchStats
+          matchStats: initialMatchStats
         });
-        console.log(`[Game] AI won room ${room.roomId}.`);
+        console.log(`[Game] AI won room ${room.roomId}. Emitted instant GAME_OVER.`);
+
+        // 2. Settle AI match for human player (loss) asynchronously in background
+        const currentMatchId = room.matchId;
+        const humanPlayer = room.players[0];
+        if (humanPlayer && humanPlayer.userId) {
+          (async () => {
+            try {
+              const settlementResult = await settleAiMatch({
+                userId: humanPlayer.userId,
+                aiDifficulty: room.aiDifficulty || 'medium',
+                isUserWinner: false,
+                room
+              });
+              const unlocked = await syncAndDetectNewAchievements(humanPlayer.userId);
+              const newlyUnlockedByUser = {};
+              if (Array.isArray(unlocked) && unlocked.length > 0) {
+                newlyUnlockedByUser[String(humanPlayer.userId)] = unlocked;
+              }
+              settlementResult.newlyUnlockedAchievements = unlocked || [];
+              const aiSettlement = { xpResults: [settlementResult], newlyUnlockedByUser };
+              room.xpSettlement = aiSettlement;
+              syncRoomToRedis(room.roomId, room);
+              void invalidateUserAndLeaderboardCache(humanPlayer.userId);
+
+              io.to(room.roomId).emit('MATCH_SETTLED', {
+                roomId: room.roomId,
+                matchId: currentMatchId,
+                xpResults: aiSettlement.xpResults,
+                newlyUnlockedByUser
+              });
+            } catch (err) {
+              console.error(`[AI Settlement] Failed to settle AI loss for room ${room.roomId}:`, err.message);
+            }
+          })();
+        }
       } else {
         room.activeTurnIndex = 0; // Turn back to human!
         syncRoomToRedis(room.roomId, room);

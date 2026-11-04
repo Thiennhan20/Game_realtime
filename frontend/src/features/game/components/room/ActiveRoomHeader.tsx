@@ -54,11 +54,12 @@ export function ActiveRoomHeader({
     setIsMuted(nextMuted);
   };
 
-  const isMatchActive =
-    !isSpectator &&
-    (room.state === 'PLAYING' ||
-      room.state === 'SETTING_SECRET' ||
-      room.state === 'RPS_DECISION');
+  const hasLockedSecret =
+    room.state === 'PLAYING' ||
+    room.state === 'RPS_DECISION' ||
+    (room.state === 'SETTING_SECRET' && Boolean(me?.ready));
+
+  const isMatchActive = !isSpectator && hasLockedSecret;
 
   const handleLeaveClick = () => {
     if (isMatchActive) {
@@ -256,37 +257,33 @@ export function ActiveRoomHeader({
               <LogOut size={16} className="text-rose-400 group-hover:text-white shrink-0" />
             </button>
 
-            {/* Desktop Floating Callout: Floating to the RIGHT, OUTSIDE the container, arrow on the outside pointing left */}
-            <motion.div
-              animate={{ x: [0, 3, 0] }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-              onClick={handleLeaveClick}
-              className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-30 hidden sm:flex items-center cursor-pointer select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)]"
+            {/* Desktop Floating Callout: GPU-accelerated CSS float, auto-paused when hidden */}
+            <div
+              aria-hidden="true"
+              className="absolute left-full top-1/2 ml-2 z-30 hidden sm:flex items-center pointer-events-none select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)] animate-tag-float-x"
             >
               {/* Triangular arrow on the OUTSIDE pointing left directly into the exit icon */}
               <div className="w-0 h-0 border-y-[4px] border-y-transparent border-r-[5px] border-r-rose-500/60 -mr-[1px] shrink-0" />
 
               {/* The Floating Frame - Dark Glassmorphism */}
-              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1 hover:border-rose-400/60 hover:text-white hover:bg-rose-900/80 transition duration-200">
+              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1">
                 <span>{locale === 'vi' ? 'Thoát phòng đây nhá!' : 'Exit room here!'}</span>
               </div>
-            </motion.div>
+            </div>
 
-            {/* Mobile Floating Callout: Floating just below the exit icon on narrow screens */}
-            <motion.div
-              animate={{ y: [0, 2, 0] }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-              onClick={handleLeaveClick}
-              className="absolute top-full right-0 mt-1.5 z-30 sm:hidden flex flex-col items-end cursor-pointer select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)]"
+            {/* Mobile Floating Callout: GPU-accelerated CSS float, auto-paused on desktop */}
+            <div
+              aria-hidden="true"
+              className="absolute bottom-full right-0 mb-1.5 z-30 sm:hidden flex flex-col items-end pointer-events-none select-none filter drop-shadow-[0_2px_8px_rgba(244,63,94,0.25)] animate-tag-float-y"
             >
-              {/* Triangular arrow on the OUTSIDE pointing up directly into the exit icon */}
-              <div className="w-0 h-0 border-x-[4px] border-x-transparent border-b-[5px] border-b-rose-500/60 mr-3 -mb-[1px] shrink-0" />
-
               {/* The Floating Frame on mobile - Dark Glassmorphism */}
-              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1 hover:border-rose-400/60 hover:text-white hover:bg-rose-900/80 transition duration-200">
+              <div className="bg-rose-950/80 backdrop-blur-md text-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-rose-500/40 whitespace-nowrap shadow-lg shadow-rose-950/50 flex items-center gap-1">
                 <span>{locale === 'vi' ? 'Thoát phòng đây nhá!' : 'Exit room here!'}</span>
               </div>
-            </motion.div>
+
+              {/* Triangular arrow on the OUTSIDE pointing down directly into the exit icon */}
+              <div className="w-0 h-0 border-x-[4px] border-x-transparent border-t-[5px] border-t-rose-500/60 mr-3 -mt-[1px] shrink-0" />
+            </div>
           </div>
         </div>
       </div>

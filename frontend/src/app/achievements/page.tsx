@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   Award,
@@ -141,6 +140,27 @@ function AchievementsPageContent() {
     return null;
   });
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowUserDropdown(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowUserDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -264,28 +284,43 @@ function AchievementsPageContent() {
   };
 
   const cleanQuery = searchQuery.trim().toLowerCase();
-  const filteredAchievements = achievements
-    .filter(item => {
-      if (filterCategory !== 'all' && item.category !== filterCategory) return false;
-      if (statusFilter === 'unlocked' && !item.isUnlocked) return false;
-      if (statusFilter === 'locked' && item.isUnlocked) return false;
-      if (cleanQuery) {
-        const title = (locale === 'vi' ? item.titleVi : item.titleEn).toLowerCase();
-        const desc = (locale === 'vi' ? item.descVi : item.descEn).toLowerCase();
-        if (!title.includes(cleanQuery) && !desc.includes(cleanQuery)) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (a.isUnlocked !== b.isUnlocked) return a.isUnlocked ? -1 : 1;
-      return b.percentage - a.percentage;
-    });
+  const filteredAchievements = useMemo(() => {
+    return achievements
+      .filter((item) => {
+        if (filterCategory !== 'all' && item.category !== filterCategory) return false;
+        if (statusFilter === 'unlocked' && !item.isUnlocked) return false;
+        if (statusFilter === 'locked' && item.isUnlocked) return false;
+        if (cleanQuery) {
+          const title = (locale === 'vi' ? item.titleVi : item.titleEn).toLowerCase();
+          const desc = (locale === 'vi' ? item.descVi : item.descEn).toLowerCase();
+          if (!title.includes(cleanQuery) && !desc.includes(cleanQuery)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (a.isUnlocked !== b.isUnlocked) return a.isUnlocked ? -1 : 1;
+        return b.percentage - a.percentage;
+      });
+  }, [achievements, filterCategory, statusFilter, cleanQuery, locale]);
 
-  const pveCount = achievements.filter(item => item.category === 'pve').length;
-  const pvpCount = achievements.filter(item => item.category === 'pvp').length;
-  const generalCount = achievements.filter(item => item.category === 'general').length;
-  const progressionCount = achievements.filter(item => item.category === 'progression').length;
-  const lockedCount = Math.max(0, summary.totalCount - summary.unlockedCount);
+  const { pveCount, pvpCount, generalCount, progressionCount } = useMemo(() => {
+    let pve = 0;
+    let pvp = 0;
+    let general = 0;
+    let progression = 0;
+    for (const item of achievements) {
+      if (item.category === 'pve') pve++;
+      else if (item.category === 'pvp') pvp++;
+      else if (item.category === 'general') general++;
+      else if (item.category === 'progression') progression++;
+    }
+    return { pveCount: pve, pvpCount: pvp, generalCount: general, progressionCount: progression };
+  }, [achievements]);
+
+  const lockedCount = useMemo(
+    () => Math.max(0, summary.totalCount - summary.unlockedCount),
+    [summary.totalCount, summary.unlockedCount]
+  );
 
   if (!mounted) {
     return (
@@ -343,71 +378,95 @@ function AchievementsPageContent() {
             </div>
 
             {userProfile && userProfile.name && userProfile.name.toLowerCase() !== 'player' && userProfile.name.toLowerCase() !== 'user' ? (
-              <div className="relative">
+              <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={() => setShowUserDropdown(!showUserDropdown)}
-                  className="flex items-center space-x-1.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-1 rounded-full sm:px-3 sm:py-1.5 sm:rounded-xl transition duration-150 cursor-pointer"
+                  type="button"
+                  onClick={() => setShowUserDropdown((isOpen) => !isOpen)}
+                  aria-label={userProfile.name}
+                  aria-expanded={showUserDropdown}
+                  className="flex items-center justify-center bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
-                  {userProfile.avatar ? (
-                    <img src={userProfile.avatar} alt={userProfile.name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 object-cover" />
+                  {userProfile.avatar && !avatarError ? (
+                    <img
+                      src={userProfile.avatar}
+                      alt={userProfile.name}
+                      onError={() => setAvatarError(true)}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 shrink-0 object-cover"
+                    />
                   ) : (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white shrink-0">
                       {userProfile.name.slice(0, 2)}
                     </div>
                   )}
-                  <span className="hidden sm:inline font-medium text-xs text-slate-200">{userProfile.name}</span>
-                  <ChevronDown size={14} className="hidden sm:inline text-slate-500" />
+                  <div className="hidden sm:flex items-center gap-1.5">
+                    <span className="font-medium text-sm text-slate-200">
+                      {userProfile.name}
+                    </span>
+                    <ChevronDown size={14} className="text-slate-500" />
+                  </div>
                 </button>
 
                 {showUserDropdown && (
-                  <div className="absolute right-0 mt-2 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50">
+                  <div
+                    role="menu"
+                    aria-label="User navigation"
+                    className="absolute right-0 mt-2 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  >
                     <button
+                      type="button"
+                      role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
                         navigateTopWindow(getMainSiteUrl('/profile', locale));
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
-                      <Users size={14} className="text-purple-400" />
+                      <Users size={16} className="text-purple-400" />
                       <span>{locale === 'vi' ? 'Hồ sơ cá nhân' : 'User Profile'}</span>
                     </button>
                     <button
+                      type="button"
+                      role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
                         router.push(`/history?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
-                      <Clock size={14} className="text-cyan-400" />
+                      <Clock size={16} className="text-cyan-400" />
                       <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
                     </button>
                     <button
+                      type="button"
+                      role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
                         router.push(`/leaderboard?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
-                      <Trophy size={14} className="text-amber-400" />
+                      <Trophy size={16} className="text-amber-400" />
                       <span>{locale === 'vi' ? 'Bảng xếp hạng' : 'Leaderboard'}</span>
                     </button>
                     <button
+                      type="button"
+                      role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
                         router.push(`/achievements?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-xs font-semibold flex items-center space-x-2 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
-                      <Award size={14} className="text-emerald-400" />
+                      <Award size={16} className="text-emerald-400" />
                       <span>{locale === 'vi' ? 'Thành tích' : 'Achievements'}</span>
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800/80 p-1 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
+              <div className="flex items-center justify-center bg-slate-900/60 border border-slate-800/80 p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800/80 rounded-full shrink-0" />
-                <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md" />
+                <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md sm:ml-2" />
               </div>
             )}
           </div>
@@ -736,10 +795,8 @@ function AchievementsPageContent() {
               const rarityLabel = locale === 'vi' ? rarityStyle.labelVi : rarityStyle.labelEn;
 
               return (
-                <motion.div
+                <div
                   key={item.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
                   className={`relative p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
                     item.isUnlocked
                       ? rarityStyle.unlockedCardClass
@@ -838,7 +895,7 @@ function AchievementsPageContent() {
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>

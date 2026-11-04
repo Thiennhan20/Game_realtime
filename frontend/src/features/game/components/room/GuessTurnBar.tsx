@@ -24,9 +24,9 @@ export function GuessTurnBar({
     <div className="bg-slate-900/70 border border-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg shrink-0">
       {isMyTurn ? (
         <div className="min-h-[42px] flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 uppercase tracking-wider min-w-0">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-black uppercase tracking-wider min-w-0">
             <span className="shrink-0">🔥</span>
-            <span className="truncate">
+            <span className="truncate bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
               {locale === 'vi' ? 'Lượt đoán của bạn!' : 'Your turn to guess!'}
             </span>
           </div>

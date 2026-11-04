@@ -484,35 +484,36 @@ async function finishPvpByForfeit(room, forfeitedPlayerId, forfeitReason, broadc
     );
   }
 
-  try {
-    await settleRoomProgress(room, {
-      endReason: forfeitReason,
-      forfeitedPlayerId
-    });
-  } catch (error) {
-    console.error(`[XP] Failed to settle forfeited match ${room.matchId}:`, error.message);
-    room.xpSettlement = createFailedSettlement(room);
-  }
-
-  if (
-    rooms.get(room.roomId) !== room
-    || room.matchId !== forfeitingMatchId
-    || room.state !== 'FINISHED'
-  ) {
-    return false;
-  }
-
   const forfeitedPlayer = room.players[forfeitedPlayerIndex];
   forfeitedPlayer.hasLeft = true;
   forfeitedPlayer.socketId = null;
   room.resultFinalized = true;
+
   if (rooms.get(room.roomId) === room) {
     syncRoomToRedis(room.roomId, room);
     emitFinishedPvpRoom(room, broadcaster);
   }
   console.log(
-    `[Game] Room ${room.roomId} ended by forfeit. Winner: ${room.players[room.winnerIndex].username}.`
+    `[Game] Room ${room.roomId} ended by forfeit. Winner: ${room.players[room.winnerIndex].username}. Emitted instant GAME_OVER.`
   );
+
+  // Settle forfeit progress asynchronously in the background
+  settleRoomProgress(room, {
+    endReason: forfeitReason,
+    forfeitedPlayerId
+  }).then((settlement) => {
+    if (settlement && broadcaster) {
+      broadcaster.emit('MATCH_SETTLED', {
+        roomId: room.roomId,
+        matchId: forfeitingMatchId,
+        xpResults: settlement.xpResults || [],
+        newlyUnlockedByUser: settlement.newlyUnlockedByUser || {}
+      });
+    }
+  }).catch((error) => {
+    console.error(`[XP] Failed to settle forfeited match ${forfeitingMatchId}:`, error.message);
+    room.xpSettlement = createFailedSettlement(room);
+  });
 
   if (room.players.every(player => player.hasLeft)) {
     rooms.delete(room.roomId);

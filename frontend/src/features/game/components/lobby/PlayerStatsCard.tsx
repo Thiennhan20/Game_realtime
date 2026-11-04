@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { AlertCircle, Flame, RefreshCw, Trophy, Zap } from 'lucide-react';
 
 import { getRankBadgePath, getRankByKey, getRankByRating } from '../../ranks';
@@ -17,7 +17,7 @@ interface PlayerStatsCardProps {
   className?: string;
 }
 
-export function PlayerStatsCard({
+export const PlayerStatsCard = memo(function PlayerStatsCard({
   locale,
   profile,
   isLoading,
@@ -255,4 +255,4 @@ export function PlayerStatsCard({
       />
     </section>
   );
-}
+});

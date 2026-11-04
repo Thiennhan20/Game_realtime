@@ -1,3 +1,4 @@
+import { memo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 import type { Translator } from '../../i18n';
@@ -34,7 +35,7 @@ interface LobbyScreenProps {
   onSpectateRoom?: (roomId: string) => void;
 }
 
-export function LobbyScreen({
+export const LobbyScreen = memo(function LobbyScreen({
   rooms,
   isRefreshing,
   locale,
@@ -58,6 +59,21 @@ export function LobbyScreen({
   onViewLeaderboard,
   onSpectateRoom,
 }: LobbyScreenProps) {
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const desktop = window.innerWidth >= 1024;
+      setIsDesktop((prev) => (prev !== desktop ? desktop : prev));
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const statsCard = (className: string) => (
     <PlayerStatsCard
       locale={locale}
@@ -82,7 +98,7 @@ export function LobbyScreen({
         animate={{ opacity: 1, y: 0 }}
         className="w-full lg:w-[440px] xl:w-[480px] shrink-0 flex flex-col justify-center"
       >
-        {statsCard('lg:hidden mb-3')}
+        {!isDesktop && statsCard('mb-3')}
         <MobileHowToPlay locale={locale} />
         <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-2xl space-y-4 sm:space-y-6">
           <ModeSelector
@@ -114,9 +130,9 @@ export function LobbyScreen({
 
       {/* Right Column: Arena Performance (Top) & Leaderboard (Bottom) */}
       <div className="hidden lg:flex flex-col flex-1 gap-4 min-w-0">
-        {statsCard('shrink-0')}
-        <LeaderboardPreview locale={locale} onViewAll={onViewLeaderboard} />
+        {isDesktop && statsCard('shrink-0')}
+        {isDesktop && <LeaderboardPreview locale={locale} onViewAll={onViewLeaderboard} />}
       </div>
     </div>
   );
-}
+});

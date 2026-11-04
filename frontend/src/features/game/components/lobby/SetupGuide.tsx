@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import type { Locale } from '../../types';
 
-export function SetupGuide({ locale }: { locale: Locale }) {
+export const SetupGuide = memo(function SetupGuide({ locale }: { locale: Locale }) {
   const steps =
     locale === 'vi'
       ? [
@@ -39,9 +40,11 @@ export function SetupGuide({ locale }: { locale: Locale }) {
   return (
     <div className="flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-5 lg:p-6 rounded-2xl shadow-xl flex flex-col justify-between">
       <div className="space-y-4">
-        <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2.5 border-b border-slate-700/80 flex items-center gap-1.5">
+        <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider pb-2.5 border-b border-slate-700/80 flex items-center gap-1.5">
           <span className="text-sm">📖</span>
-          <span>{locale === 'vi' ? 'Hướng Dẫn Luật Chơi' : 'How To Play Guide'}</span>
+          <span className="bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
+            {locale === 'vi' ? 'Hướng Dẫn Luật Chơi' : 'How To Play Guide'}
+          </span>
         </h3>
         <div className="space-y-3 sm:space-y-3.5">
           {steps.map(([title, description], index) => (
@@ -63,4 +66,4 @@ export function SetupGuide({ locale }: { locale: Locale }) {
       </div>
     </div>
   );
-}
+});

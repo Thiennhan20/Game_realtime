@@ -77,8 +77,11 @@ function isSameLobbyRooms(a: LobbyRoom[], b: LobbyRoom[]) {
     if (
       a[i]?.roomId !== b[i]?.roomId ||
       a[i]?.playerCount !== b[i]?.playerCount ||
+      a[i]?.spectatorCount !== b[i]?.spectatorCount ||
       a[i]?.state !== b[i]?.state ||
-      a[i]?.hostName !== b[i]?.hostName
+      a[i]?.hostName !== b[i]?.hostName ||
+      a[i]?.hostAvatar !== b[i]?.hostAvatar ||
+      a[i]?.hostEquippedTitle?.id !== b[i]?.hostEquippedTitle?.id
     ) {
       return false;
     }
@@ -737,7 +740,6 @@ export function useGameController() {
           }
         } else {
           setMatchXpResult(null);
-          void loadGameProfile();
         }
 
         setShowMatchModal(true);
@@ -767,6 +769,90 @@ export function useGameController() {
           }
           triggerHaptic([180]);
         }
+      },
+    );
+
+    socket.on(
+      'MATCH_SETTLED',
+      (data: {
+        roomId: string;
+        matchId: string;
+        xpResults?: PlayerXpResult[];
+        newlyUnlockedByUser?: Record<string, UnlockedAchievementNotice[]>;
+      }) => {
+        const rawXpResult = data.xpResults?.find(
+          (result) => String(result.userId) === String(userRef.current?.id),
+        );
+        const myUserIdStr = String(userRef.current?.id || '');
+        const unlockedList: UnlockedAchievementNotice[] =
+          rawXpResult?.newlyUnlockedAchievements ||
+          data.newlyUnlockedByUser?.[myUserIdStr] ||
+          [];
+
+        if (Array.isArray(unlockedList) && unlockedList.length > 0) {
+          setNewlyUnlockedAchievements(unlockedList);
+          setToastAchievements(unlockedList);
+        }
+
+        if (rawXpResult) {
+          const totalXpSnapshot = rawXpResult.totalXp;
+          const hasProfileSnapshot =
+            typeof totalXpSnapshot === 'number' && totalXpSnapshot >= 0;
+          const baseNormalized = hasProfileSnapshot
+            ? normalizeGameProfile({
+                ...rawXpResult,
+                equippedTitleId:
+                  rawXpResult.equippedTitleId ?? gameProfileRef.current?.equippedTitleId ?? null,
+                equippedTitle:
+                  rawXpResult.equippedTitle ?? gameProfileRef.current?.equippedTitle ?? null,
+              })
+            : gameProfileRef.current || normalizeGameProfile(rawXpResult);
+
+          setMatchXpResult({
+            ...baseNormalized,
+            userId: rawXpResult.userId,
+            xpEarned: toNonNegativeInteger(rawXpResult.xpEarned),
+            ratingBefore: rawXpResult.ratingBefore,
+            ratingDelta: rawXpResult.ratingDelta,
+            ratingAfter: rawXpResult.ratingAfter,
+            rankBefore: rawXpResult.rankBefore,
+            rankAfter: rawXpResult.rankAfter,
+            newlyUnlockedAchievements: unlockedList,
+          });
+
+          if (hasProfileSnapshot) {
+            gameProfileRequestIdRef.current += 1;
+            gameProfileRef.current = baseNormalized;
+            setGameProfile(baseNormalized);
+            setGameProfileError(null);
+            setIsLoadingGameProfile(false);
+            try {
+              localStorage.setItem('game_profile_cache', JSON.stringify(baseNormalized));
+            } catch {
+              // Ignore storage error
+            }
+          } else {
+            void loadGameProfile();
+          }
+
+          if (
+            (rawXpResult.rankAfter &&
+              rawXpResult.rankBefore &&
+              rawXpResult.rankAfter !== rawXpResult.rankBefore) ||
+            unlockedList.length > 0
+          ) {
+            sound.playLevelUp();
+          }
+        }
+
+        setMatchStats((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            xpResults: data.xpResults || prev.xpResults,
+            newlyUnlockedByUser: data.newlyUnlockedByUser || prev.newlyUnlockedByUser,
+          };
+        });
       },
     );
 
@@ -844,11 +930,36 @@ export function useGameController() {
       }
       setRoom(data.roomState);
       setErrorMsg(translate()('playerLeft').replace('{username}', data.username));
-      setSecretReveal(null);
       setOpponentWantsPlayAgain(false);
       setOpponentTempDisconnected(null);
-      setShowMatchModal(false);
-      setShowGuessHistoryModal(false);
+      if (data.roomState?.state !== 'FINISHED') {
+        setSecretReveal(null);
+        setShowMatchModal(false);
+        setShowGuessHistoryModal(false);
+      }
+      setTimeout(() => setErrorMsg(null), 5000);
+    });
+
+    socket.on('OPPONENT_LEFT', (data?: { username?: string; roomState?: Room }) => {
+      if (data?.roomState) {
+        setRoom(data.roomState);
+      } else {
+        setRoom((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            players: prev.players.map((p) =>
+              String(p.userId) !== String(userRef.current?.id)
+                ? { ...p, hasLeft: true }
+                : p,
+            ),
+          };
+        });
+      }
+      setOpponentWantsPlayAgain(false);
+      setOpponentTempDisconnected(null);
+      const opponentName = data?.username || translate()('enemy');
+      setErrorMsg(translate()('playerLeft').replace('{username}', opponentName));
       setTimeout(() => setErrorMsg(null), 5000);
     });
 
@@ -933,15 +1044,19 @@ export function useGameController() {
     }, 300);
 
     // Polling while in lobby:
-    // - If socket is connected: silently emit GET_LOBBY_ROOMS every 3s
-    // - If socket is disconnected: fallback to REST fetch every 2s
+    // - If socket is connected: emit GET_LOBBY_ROOMS every 15s (every 5 ticks of 3000ms) to conserve CPU/battery
+    // - If socket is disconnected: fallback to REST fetch every 3s
+    let tickCount = 0;
     const pollInterval = setInterval(() => {
       if (!isMounted) return;
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return; // Pause polling when tab is hidden to conserve mobile battery
       }
+      tickCount++;
       if (socketRef.current?.connected) {
-        socketRef.current.emit('GET_LOBBY_ROOMS');
+        if (tickCount % 5 === 0) {
+          socketRef.current.emit('GET_LOBBY_ROOMS');
+        }
       } else {
         fetchRestRooms();
       }
@@ -1240,12 +1355,15 @@ export function useGameController() {
     setFloatingEmotes([]);
   };
 
-  const handleSendChat = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!room || !chatInput.trim()) return;
+  const handleSendChat = (eventOrMessage?: FormEvent<HTMLFormElement> | string) => {
+    if (typeof eventOrMessage === 'object' && eventOrMessage !== null && 'preventDefault' in eventOrMessage) {
+      eventOrMessage.preventDefault();
+    }
+    const message = typeof eventOrMessage === 'string' ? eventOrMessage : chatInput;
+    if (!room || !message || !message.trim()) return;
     socketRef.current?.emit('SEND_MESSAGE', {
       roomId: room.roomId,
-      message: chatInput,
+      message: message.trim(),
     });
     setChatInput('');
   };

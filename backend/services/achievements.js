@@ -929,7 +929,7 @@ async function syncAndDetectNewAchievements(userId, {
   try {
     const [profile, historyList] = await Promise.all([
       GameProfileModel.findOne({ userId }).lean(),
-      GameHistoryModel.find({ 'players.userId': userId }).sort({ finishedAt: -1 }).limit(250).lean()
+      GameHistoryModel.find({ 'players.userId': userId }).sort({ finishedAt: -1 }).limit(50).lean()
     ]);
 
     if (!profile) return [];

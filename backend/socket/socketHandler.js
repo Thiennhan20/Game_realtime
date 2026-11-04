@@ -752,37 +752,6 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         room.finishedAt = new Date().toISOString();
         room.endReason = 'COMPLETED';
 
-        let pvpSettlement = null;
-        if (!room.isAiRoom) {
-          try {
-            pvpSettlement = await settleRoomProgress(room, {
-              endReason: 'correct_guess',
-              forfeitedPlayerId: null
-            });
-          } catch (err) {
-            console.error(`[XP] Failed to settle PvP room ${room.roomId}:`, err.message);
-          }
-        } else {
-          try {
-            const settlementResult = await settleAiMatch({
-              userId: socket.userId,
-              aiDifficulty: room.aiDifficulty || 'medium',
-              isUserWinner: true,
-              room
-            });
-            const unlocked = await syncAndDetectNewAchievements(socket.userId);
-            settlementResult.newlyUnlockedAchievements = unlocked || [];
-            const newlyUnlockedByUser = Array.isArray(unlocked) && unlocked.length > 0
-              ? { [String(socket.userId)]: unlocked }
-              : {};
-            pvpSettlement = { xpResults: [settlementResult], newlyUnlockedByUser };
-            room.xpSettlement = pvpSettlement;
-            void invalidateUserAndLeaderboardCache(socket.userId);
-          } catch (err) {
-            console.error(`[AI Settlement] Failed to settle AI win for user ${socket.userId}:`, err.message);
-          }
-        }
-
         syncRoomToRedis(roomId, room);
 
         const winnerSecretDecrypted = decryptSecret(room.players[playerIdx]?.secretNumber);
@@ -793,7 +762,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         const durationMs = room.startedAt ? (new Date(room.finishedAt) - new Date(room.startedAt)) : 0;
         const durationSec = Math.floor(durationMs / 1000);
 
-        const matchStats = {
+        const initialMatchStats = {
           duration: durationSec,
           totalGuesses: room.guesses.length,
           winnerGuessCount: winnerGuesses.length,
@@ -803,18 +772,66 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           loserSecret: loserSecretDecrypted,
           startedAt: room.startedAt,
           finishedAt: room.finishedAt,
-          xpResults: pvpSettlement?.xpResults || null,
-          newlyUnlockedByUser: pvpSettlement?.newlyUnlockedByUser || {}
+          xpResults: null,
+          newlyUnlockedByUser: {}
         };
 
+        // 1. Instantly notify players of victory/defeat without waiting for DB writes (< 30ms)
         io.to(roomId).emit('GAME_OVER', {
           winnerIndex: playerIdx,
           winningGuess: guessRecord,
           roomState: room,
           opponentSecret: loserSecretDecrypted,
-          matchStats: matchStats
+          matchStats: initialMatchStats
         });
-        console.log(`[Game] Player ${playerIdx} (${socket.username}) won in ${roomId} by guessing ${guess}!`);
+        console.log(`[Game] Player ${playerIdx} (${socket.username}) won in ${roomId} by guessing ${guess}! Emitted instant GAME_OVER.`);
+
+        // 2. Perform settlement, DB writes, and achievement checks asynchronously in the background
+        const currentMatchId = room.matchId;
+        const settleAsync = async () => {
+          let pvpSettlement = null;
+          if (!room.isAiRoom) {
+            try {
+              pvpSettlement = await settleRoomProgress(room, {
+                endReason: 'correct_guess',
+                forfeitedPlayerId: null
+              });
+            } catch (err) {
+              console.error(`[XP] Failed to settle PvP room ${room.roomId}:`, err.message);
+            }
+          } else {
+            try {
+              const settlementResult = await settleAiMatch({
+                userId: socket.userId,
+                aiDifficulty: room.aiDifficulty || 'medium',
+                isUserWinner: true,
+                room
+              });
+              const unlocked = await syncAndDetectNewAchievements(socket.userId);
+              settlementResult.newlyUnlockedAchievements = unlocked || [];
+              const newlyUnlockedByUser = Array.isArray(unlocked) && unlocked.length > 0
+                ? { [String(socket.userId)]: unlocked }
+                : {};
+              pvpSettlement = { xpResults: [settlementResult], newlyUnlockedByUser };
+              room.xpSettlement = pvpSettlement;
+              void invalidateUserAndLeaderboardCache(socket.userId);
+            } catch (err) {
+              console.error(`[AI Settlement] Failed to settle AI win for user ${socket.userId}:`, err.message);
+            }
+          }
+
+          if (pvpSettlement) {
+            syncRoomToRedis(roomId, room);
+            io.to(roomId).emit('MATCH_SETTLED', {
+              roomId,
+              matchId: currentMatchId,
+              xpResults: pvpSettlement.xpResults || null,
+              newlyUnlockedByUser: pvpSettlement.newlyUnlockedByUser || {}
+            });
+          }
+        };
+
+        void settleAsync();
       } else {
         room.activeTurnIndex = opponentIdx;
         syncRoomToRedis(roomId, room);
@@ -1079,7 +1096,8 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             deleteRoomFromRedis(roomId);
             console.log(`[Game] Room ${roomId} deleted after both players left finished game.`);
           } else {
-            sock.to(roomId).emit('OPPONENT_LEFT');
+            sock.to(roomId).emit('PLAYER_LEFT', { username: sock.username, roomState: room });
+            sock.to(roomId).emit('OPPONENT_LEFT', { username: sock.username, roomState: room });
           }
           sock.emit('ROOM_LEFT');
           broadcastLobbyRooms();

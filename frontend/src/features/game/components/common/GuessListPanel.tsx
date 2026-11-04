@@ -65,7 +65,7 @@ export function GuessListPanel({
       } border border-slate-800/80 ${
         isModal
           ? 'rounded-2xl overflow-hidden min-h-0'
-          : 'rounded-xl sm:rounded-2xl overflow-hidden h-[218px] min-h-[218px] md:h-[366px] md:min-h-[366px] shrink-0'
+          : 'rounded-xl sm:rounded-2xl overflow-hidden h-[398px] max-h-[398px] min-h-[398px] md:h-[366px] md:min-h-[366px] md:max-h-[366px] 2xl:h-[480px] 2xl:min-h-[480px] 2xl:max-h-[480px] shrink-0'
       } ${className}`}
     >
       <div
@@ -97,7 +97,7 @@ export function GuessListPanel({
         className={`flex-1 overflow-y-auto custom-scrollbar min-h-0 ${
           isModal
             ? 'p-3 space-y-2'
-            : 'p-2.5 sm:p-3 space-y-1.5 h-[182px] md:h-[318px]'
+            : 'p-2.5 sm:p-3 space-y-1.5 h-[356px] max-h-[356px] md:h-auto md:max-h-none md:flex-1'
         }`}
       >
         {guesses.map((guess, index) => (

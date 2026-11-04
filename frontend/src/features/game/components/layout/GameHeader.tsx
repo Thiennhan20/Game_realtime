@@ -5,7 +5,6 @@ import {
   Award,
   ChevronDown,
   Clock,
-  Gamepad2,
   Home,
   Trophy,
   Users,
@@ -87,32 +86,23 @@ export function GameHeader({
           >
             <Home size={18} aria-hidden="true" />
           </button>
-          <div className="hidden xs:block p-2 sm:p-2.5 bg-purple-500/10 text-purple-400 rounded-xl shrink-0 border border-purple-500/20">
-            <Gamepad2 size={20} className="sm:w-6 sm:h-6" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-extrabold text-sm sm:text-xl tracking-tight text-white flex items-center gap-1.5">
-              <span>{locale === 'vi' ? 'Đoán Số' : 'Guess Number'}</span>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold uppercase rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                1v1 Arena
-              </span>
-            </h1>
-            <p className="hidden sm:block text-xs text-slate-400">{t('subtitle')}</p>
-          </div>
+          <h1 className="font-extrabold text-sm sm:text-xl tracking-tight text-white truncate">
+            {locale === 'vi' ? 'Đoán Số' : 'Guess Number'}
+          </h1>
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-          <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-xs font-bold">
+          <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-[10px] font-bold">
             {(['en', 'vi'] as const).map((language) => (
               <button
                 key={language}
                 type="button"
                 onClick={() => onLocaleChange(language)}
                 aria-label={`Switch language to ${language.toUpperCase()}`}
-                className={`px-2.5 py-1.5 min-h-[34px] sm:min-h-[36px] rounded-lg transition-all cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                   locale === language
                     ? 'bg-purple-600 text-white shadow-sm'
-                    : 'text-slate-300 hover:text-slate-100'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 {language.toUpperCase()}
@@ -125,16 +115,16 @@ export function GameHeader({
             onClick={toggleSound}
             aria-label={isMuted ? t('soundOff') : t('soundOn')}
             title={isMuted ? t('soundOff') : t('soundOn')}
-            className={`w-9 h-9 sm:w-10 sm:h-10 border rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`w-7 h-7 sm:w-8 sm:h-8 border rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
               isMuted
                 ? 'bg-slate-900/40 border-slate-800 text-slate-500 hover:text-slate-300'
                 : 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:text-purple-300 shadow-sm shadow-purple-500/10'
             }`}
           >
             {isMuted ? (
-              <VolumeX size={18} aria-hidden="true" />
+              <VolumeX size={15} aria-hidden="true" />
             ) : (
-              <Volume2 size={18} aria-hidden="true" />
+              <Volume2 size={15} aria-hidden="true" />
             )}
           </button>
 

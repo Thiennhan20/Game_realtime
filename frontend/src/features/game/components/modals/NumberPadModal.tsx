@@ -129,9 +129,6 @@ export function NumberPadModal({
             transition={{ type: 'spring', stiffness: 350, damping: 26 }}
             className="relative w-full max-w-sm sm:max-w-md bg-slate-900/95 border border-purple-500/35 rounded-[2.5rem] shadow-2xl p-6 sm:p-8 flex flex-col space-y-6 overflow-hidden z-10"
           >
-            <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
-
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 z-10">
               <div className="flex items-center gap-2">
                 <span className="text-xl" aria-hidden="true">🔥</span>

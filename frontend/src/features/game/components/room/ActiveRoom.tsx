@@ -282,6 +282,7 @@ export function ActiveRoom({
         locale={locale}
         t={t}
         onClose={() => onShowMatchModalChange(false)}
+        onLeaveRoom={onLeaveRoom}
         onOpenGuessHistory={() => {
           onShowMatchModalChange(false);
           onShowGuessHistoryModalChange(true);

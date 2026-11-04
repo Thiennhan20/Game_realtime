@@ -170,7 +170,7 @@ export const translations = {
     opponentGuesses: 'Số lượt đoán của đối thủ',
     turnsCount: '{count} lượt',
     playAgain: 'Đấu lại',
-    backToLobby: 'Rời phòng chờ',
+    backToLobby: 'Về sảnh',
     rematchRequest: '💡 {username} muốn đấu lại! Hãy nhấn Đấu lại để bắt đầu.',
     roomChat: 'Trò chuyện',
     sayHi: 'Gửi lời chào tới đối thủ nào!',

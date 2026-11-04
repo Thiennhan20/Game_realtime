@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowDown, MessageSquare, Send, Smile } from 'lucide-react';
 
@@ -9,24 +9,35 @@ import type { ChatMessage, FloatingEmote, Locale, QuickEmote } from '../../types
 import { FloatingEmoteOverlay } from '../common/FloatingEmoteOverlay';
 import { QuickEmotePicker } from '../common/QuickEmotePicker';
 
+function formatChatTime(timestamp: string | number): string {
+  try {
+    const d = new Date(timestamp);
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  } catch {
+    return '';
+  }
+}
+
 interface RoomChatProps {
   messages: ChatMessage[];
   currentUsername: string;
-  input: string;
+  input?: string;
   t: Translator;
   locale?: Locale;
   className?: string;
   isActive: boolean;
   floatingEmotes?: FloatingEmote[];
-  onInputChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onInputChange?: (value: string) => void;
+  onSubmit: (eventOrMessage: FormEvent<HTMLFormElement> | string) => void;
   onSendReaction?: (emoji: QuickEmote) => void;
 }
 
-export function RoomChat({
+export const RoomChat = memo(function RoomChat({
   messages,
   currentUsername,
-  input,
+  input = '',
   t,
   locale = 'vi',
   className = '',
@@ -36,11 +47,21 @@ export function RoomChat({
   onSubmit,
   onSendReaction,
 }: RoomChatProps) {
+  const [localInput, setLocalInput] = useState('');
   const [showEmotePicker, setShowEmotePicker] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const [showNewMessageButton, setShowNewMessageButton] = useState(false);
   const isUserAtBottomRef = useRef(true);
   const prevMessagesLengthRef = useRef(messages.length);
+
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = localInput.trim();
+    if (!message) return;
+    onSubmit(message);
+    setLocalInput('');
+    onInputChange?.('');
+  };
 
   const handleScroll = () => {
     if (!messagesRef.current) return;
@@ -90,7 +111,7 @@ export function RoomChat({
 
   return (
     <div
-      className={`relative w-full lg:w-80 lg:flex-none bg-slate-900/70 border border-slate-800/80 rounded-2xl flex flex-col h-[calc(100dvh-8rem)] max-h-[600px] lg:h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-6rem)] overflow-hidden ${className}`}
+      className={`relative w-full lg:w-80 lg:flex-none bg-slate-900/70 border border-slate-800/80 rounded-2xl flex flex-col h-[calc(100dvh-8rem)] max-h-[600px] lg:h-[536px] 2xl:lg:h-[650px] lg:max-h-[calc(100vh-140px)] overflow-hidden ${className}`}
     >
       <div className="p-4 border-b border-slate-800 flex items-center space-x-2 shrink-0 bg-slate-950/20">
         <MessageSquare size={16} className="text-purple-400" />
@@ -122,10 +143,7 @@ export function RoomChat({
                   </span>
                 )}
                 <span className="text-[9px] text-slate-600">
-                  {new Date(message.timestamp).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatChatTime(message.timestamp)}
                 </span>
               </div>
               {isReaction ? (
@@ -182,7 +200,7 @@ export function RoomChat({
       )}
 
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         className="relative p-3 border-t border-slate-800 flex items-center gap-2 shrink-0 bg-slate-950/20"
       >
         {onSendReaction && (
@@ -222,13 +240,13 @@ export function RoomChat({
           type="text"
           placeholder={t('chatPlaceholder')}
           aria-label={t('chatPlaceholder')}
-          value={input}
-          onChange={(event) => onInputChange(event.target.value)}
+          value={localInput}
+          onChange={(event) => setLocalInput(event.target.value)}
           className="flex-1 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 py-2 rounded-xl text-base md:text-sm placeholder-slate-600"
         />
         <button
           type="submit"
-          disabled={!input.trim()}
+          disabled={!localInput.trim()}
           aria-label="Send message"
           className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
         >
@@ -237,4 +255,4 @@ export function RoomChat({
       </form>
     </div>
   );
-}
+});

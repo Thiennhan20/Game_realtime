@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 
 import type { LeaderboardEntry, Locale } from '../../types';
@@ -10,7 +10,7 @@ interface LeaderboardPreviewProps {
   onViewAll: () => void;
 }
 
-export function LeaderboardPreview({ locale, onViewAll }: LeaderboardPreviewProps) {
+export const LeaderboardPreview = memo(function LeaderboardPreview({ locale, onViewAll }: LeaderboardPreviewProps) {
   const [topLeaders, setTopLeaders] = useState<LeaderboardEntry[]>(() => {
     try {
       const cached = localStorage.getItem('leaderboard_preview_cache');
@@ -26,6 +26,12 @@ export function LeaderboardPreview({ locale, onViewAll }: LeaderboardPreviewProp
   const [loading, setLoading] = useState(() => topLeaders.length === 0);
 
   useEffect(() => {
+    // Skip fetching leaderboard preview on mobile screens (<1024px) where this component is hidden
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
     const fetchTopLeaders = async () => {
       try {
@@ -137,4 +143,4 @@ export function LeaderboardPreview({ locale, onViewAll }: LeaderboardPreviewProp
       </div>
     </div>
   );
-}
+});

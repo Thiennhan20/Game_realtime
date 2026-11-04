@@ -85,6 +85,27 @@ body {
   scrollbar-color: rgba(139, 92, 246, 0.45) rgba(2, 6, 23, 0.4);
 }
 
+/* Lightweight GPU-accelerated Keyframe Animations for Floating Tags */
+@keyframes tagFloatX {
+  0%, 100% { transform: translateY(-50%) translateX(0); }
+  50% { transform: translateY(-50%) translateX(3px); }
+}
+
+@keyframes tagFloatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.animate-tag-float-x {
+  animation: tagFloatX 2s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-tag-float-y {
+  animation: tagFloatY 2s ease-in-out infinite;
+  will-change: transform;
+}
+
 /* Accessibility: respect user preferences for reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,

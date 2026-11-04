@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Grid, RefreshCw, Users } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
@@ -15,7 +16,7 @@ interface LobbyRoomListProps {
   onViewAll: () => void;
 }
 
-export function LobbyRoomList({
+export const LobbyRoomList = memo(function LobbyRoomList({
   rooms,
   isRefreshing,
   locale,
@@ -102,4 +103,4 @@ export function LobbyRoomList({
       )}
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Clock, Eye, Users } from 'lucide-react';
 
 import type { LobbyRoom, Locale } from '../../types';
@@ -11,7 +12,7 @@ interface LobbyRoomCardProps {
   onSpectate?: (roomId: string) => void;
 }
 
-export function LobbyRoomCard({ room, locale, onJoin, onSpectate }: LobbyRoomCardProps) {
+export const LobbyRoomCard = memo(function LobbyRoomCard({ room, locale, onJoin, onSpectate }: LobbyRoomCardProps) {
   const isFull =
     room.playerCount >= 2 || (Boolean(room.state) && room.state !== 'WAITING_FOR_PLAYERS');
 
@@ -132,4 +133,4 @@ export function LobbyRoomCard({ room, locale, onJoin, onSpectate }: LobbyRoomCar
       </div>
     </div>
   );
-}
+});
