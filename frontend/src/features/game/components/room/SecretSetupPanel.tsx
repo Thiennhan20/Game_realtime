@@ -43,6 +43,15 @@ export function SecretSetupPanel({
             </div>
           ) : (
             <form onSubmit={onSubmit} className="w-full space-y-4">
+              {opponentSecretSet && (
+                <div className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shadow-sm">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <span className="tracking-wide">{t('opponentLockedSecret')}</span>
+                </div>
+              )}
               <input
                 type="text"
                 maxLength={4}

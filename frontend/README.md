@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎮 Frontend — Bulls and Cows Game Arena (Next.js 16)
 
-## Getting Started
+<div align="center">
 
-First, run the development server:
+<img src="https://img.shields.io/badge/Next.js-16.2.7-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js" />
+<img src="https://img.shields.io/badge/React-19.2.4-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+<img src="https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind" />
+<img src="https://img.shields.io/badge/Socket.IO_Client-4.8.3-010101?style=for-the-badge&logo=socketdotio&logoColor=white" alt="Socket.IO" />
+<img src="https://img.shields.io/badge/Web_Audio_API-Synthesizer-orange?style=for-the-badge" alt="Web Audio" />
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+</div>
+
+Đây là mã nguồn Frontend của **Game Đoán Số Bí Mật (Bulls and Cows)**, được xây dựng với Next.js 16 (App Router), React 19, Tailwind CSS v4, và Web Audio API Synthesizer.
+
+---
+
+## 🌟 Tính Năng Frontend
+
+- **Giao diện Cyber Gaming Esports**: Tối ưu hiển thị màn hình OLED, Dark mode hiện đại, gradient lung linh và hiệu ứng kính mờ (glassmorphism).
+- **Bộ tổng hợp âm thanh Web Audio API (`sound.ts`)**:
+  - Không tải file `.mp3` ngoài, không giật lag mạng.
+  - Âm thanh gõ phím số theo thang âm C5-C6.
+  - Chuông báo ngân 3 tầng ("Ting 🔔") nhắc nhở khi đối thủ khóa số hoặc ra chiêu Oẳn Tù Tì.
+  - Fanfare hân hoan khi chiến thắng, thăng cấp, mở khóa thành tựu.
+- **Pháo hoa giấy Canvas (`ConfettiCanvas.tsx`)**:
+  - Tự động bung 120 mảnh kim tuyến đa sắc khi chiến thắng hoặc lên Rank.
+  - Tự giải phóng 100% CPU/GPU sau 4.5 giây.
+- **Biểu tượng cảm xúc trôi nổi (`FloatingEmoteOverlay.tsx`)**:
+  - Thả cảm xúc hoạt họa trôi quanh avatar của chính người chơi theo hướng tự nhiên.
+- **Bàn phím cơ số ảo (NumberPadModal)**:
+  - Tối ưu cho màn hình cảm ứng di động, chống trùng lặp số, tự động hiển thị các lượt đoán đã thử trước đó.
+- **Chế độ Nhúng Iframe (`embedded=1`)**:
+  - Giao tiếp 2 chiều với website chính thông qua `postMessage`.
+  - Khắc phục triệt để lỗi Hydration Mismatch giữa SSR và Client.
+- **Đa ngôn ngữ (`i18n.ts`)**:
+  - Hỗ trợ đầy đủ song ngữ Tiếng Việt (`vi`) và Tiếng Anh (`en`).
+
+---
+
+## 📁 Cấu Trúc Thư Mục Frontend
+
+```text
+frontend/src/
+├── app/
+│   ├── layout.tsx             # Root layout & Metadata
+│   ├── page.tsx               # Trang sảnh & phòng đấu chính
+│   ├── history/               # Trang lịch sử trận đấu cá nhân
+│   ├── leaderboard/           # Bảng xếp hạng Elo toàn server
+│   └── achievements/          # Danh sách huy hiệu & Danh hiệu trang bị
+└── features/game/
+    ├── components/
+    │   ├── common/            # ConfettiCanvas, EquippedTitleBadge
+    │   ├── lobby/             # Sảnh phòng, Quick Match, Danh sách phân trang
+    │   ├── modals/            # NumberPad, GuessHistory, MatchSummary, Countdown
+    │   ├── room/              # ActiveRoom, PlayingArena, SecretSetup, RpsDecision
+    │   └── chat/              # Khung chat & Floating Emote Overlay
+    ├── hooks/                 # useGameController, useGameProfile, useLocale
+    ├── sound.ts               # Web Audio API Synthesizer
+    ├── i18n.ts                # Từ điển song ngữ vi/en
+    ├── utils.ts               # Tiện ích định dạng thời gian, tính toán giao diện
+    └── types.ts               # Định nghĩa TypeScript toàn bộ luồng game
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Khởi Chạy Frontend Độc Lập
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Cài đặt dependencies:
+```bash
+npm install
+```
 
-## Learn More
+### Chạy môi trường phát triển:
+```bash
+npm run dev
+```
+Giao diện sẽ chạy tại: [http://localhost:3002](http://localhost:3002)
 
-To learn more about Next.js, take a look at the following resources:
+### Kiểm tra Build Production:
+```bash
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🔗 Tích Hợp với Parent Website (client-en-website)
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Khi chạy ở chế độ nhúng bên trong thẻ `<iframe>`:
+* Truyền query parameter: `?embedded=1`.
+* Khi đăng nhập trên website chính, token người dùng được truyền qua sự kiện:
+  ```javascript
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'AUTH_TOKEN') {
+      // Nhận JWT token và tự động đăng nhập vào phòng đấu
+    }
+  });
+  ```

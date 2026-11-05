@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { RoomChat } from './components/chat/RoomChat';
 import { AuthRequiredScreen } from './components/common/AuthRequiredScreen';
@@ -31,6 +31,15 @@ export default function GameClient() {
   const isAiMatch = Boolean(game.room?.isAiRoom);
   const effectiveMobileTab: MobileRoomTab = isAiMatch ? 'arena' : activeMobileTab;
 
+  const searchParams = useSearchParams();
+  const [isIframeClient, setIsIframeClient] = useState(false);
+
+  useEffect(() => {
+    setIsIframeClient(typeof window !== 'undefined' && window.parent !== window);
+  }, []);
+
+  const isInIframe = searchParams.get('embedded') === '1' || isIframeClient;
+
   useEffect(() => {
     if (game.mounted && (game.authError || (!game.loadingUser && game.user))) {
       if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
@@ -40,11 +49,15 @@ export default function GameClient() {
   }, [game.mounted, game.loadingUser, game.user, game.authError]);
 
   if (!game.mounted) {
-    return <LoadingScreen />;
+    return isInIframe ? <div className="min-h-screen bg-slate-950" /> : <LoadingScreen />;
   }
 
   if (game.loadingUser) {
-    return <LoadingScreen label={game.t('loadingProfile')} animated />;
+    return isInIframe ? (
+      <div className="min-h-screen bg-slate-950" />
+    ) : (
+      <LoadingScreen label={game.t('loadingProfile')} animated />
+    );
   }
 
   if (game.authError || !game.user) {
@@ -152,6 +165,7 @@ export default function GameClient() {
               opponentPlayerIndex={game.opponentPlayerIndex}
               isSpectator={game.isSpectator}
               spectatorCount={game.spectatorCount}
+              floatingEmotes={game.floatingEmotes}
               secretInput={game.secretInput}
               guessInput={game.guessInput}
               opponentSecretSet={game.opponentSecretSet}

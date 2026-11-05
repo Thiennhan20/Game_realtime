@@ -1,10 +1,9 @@
 'use client';
 
-import { History, Loader2, RefreshCw, Trophy } from 'lucide-react';
+import { History, Loader2, RefreshCw, Trophy, UserPlus } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { Locale } from '../../types';
-import { ConfettiCanvas } from '../common/ConfettiCanvas';
 
 interface FinishedPanelProps {
   isWinner: boolean;
@@ -39,7 +38,6 @@ export function FinishedPanel({
 }: FinishedPanelProps) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-6 text-center w-full max-w-sm mx-auto">
-      {isWinner && <ConfettiCanvas />}
       <div className="space-y-4 w-full">
         <div className="text-6xl">{isSpectator ? '🏁' : isWinner ? '🏆' : '💀'}</div>
         <h3
@@ -91,37 +89,57 @@ export function FinishedPanel({
             </div>
 
             <div className="w-full">
-              <button
-                onClick={onPlayAgain}
-                disabled={!canPlayAgain || isRequestingPlayAgain}
-                className={`w-full py-3 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 text-sm ${
-                  isRequestingPlayAgain
-                    ? 'bg-gradient-to-r from-emerald-600/80 to-teal-700/80 border border-emerald-500/40 cursor-wait shadow-md animate-pulse text-emerald-100'
-                    : canPlayAgain
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-[0.98]'
-                      : 'bg-gradient-to-r from-slate-700 to-slate-800 text-slate-500 cursor-not-allowed shadow-none'
-                }`}
-              >
-                {isRequestingPlayAgain ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin text-emerald-300" />
-                    <span>
-                      {locale === 'vi' ? 'Đang chờ đối thủ...' : 'Waiting for opponent...'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw size={16} />
-                    <span>
-                      {canPlayAgain
-                        ? t('playAgain')
-                        : locale === 'vi'
-                          ? 'Đối thủ đã rời'
-                          : 'Opponent left'}
-                    </span>
-                  </>
-                )}
-              </button>
+              {canPlayAgain ? (
+                <button
+                  type="button"
+                  onClick={onPlayAgain}
+                  disabled={isRequestingPlayAgain}
+                  className={`w-full py-3 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 text-sm ${
+                    isRequestingPlayAgain
+                      ? 'bg-gradient-to-r from-emerald-600/80 to-teal-700/80 border border-emerald-500/40 cursor-wait shadow-md animate-pulse text-emerald-100'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-[0.98]'
+                  }`}
+                >
+                  {isRequestingPlayAgain ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin text-emerald-300" />
+                      <span>
+                        {locale === 'vi' ? 'Đang chờ đối thủ...' : 'Waiting for opponent...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={16} />
+                      <span>{t('playAgain')}</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onPlayAgain}
+                  disabled={isRequestingPlayAgain}
+                  className={`w-full py-3 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 text-sm ${
+                    isRequestingPlayAgain
+                      ? 'bg-gradient-to-r from-purple-600/80 to-indigo-700/80 border border-purple-500/40 cursor-wait shadow-md animate-pulse text-purple-100'
+                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-lg shadow-purple-500/20 cursor-pointer active:scale-[0.98]'
+                  }`}
+                >
+                  {isRequestingPlayAgain ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin text-purple-300" />
+                      <span>
+                        {locale === 'vi' ? 'Đang mở phòng chờ...' : 'Opening room...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={16} />
+                      <span>{t('openWaitingRoom')}</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </>
         )}

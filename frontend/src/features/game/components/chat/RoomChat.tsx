@@ -6,7 +6,6 @@ import { ArrowDown, MessageSquare, Send, Smile } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { ChatMessage, FloatingEmote, Locale, QuickEmote } from '../../types';
-import { FloatingEmoteOverlay } from '../common/FloatingEmoteOverlay';
 import { QuickEmotePicker } from '../common/QuickEmotePicker';
 
 function formatChatTime(timestamp: string | number): string {
@@ -218,8 +217,6 @@ export const RoomChat = memo(function RoomChat({
             >
               <Smile size={18} aria-hidden="true" />
             </button>
-
-            <FloatingEmoteOverlay emotes={floatingEmotes} />
 
             {showEmotePicker && (
               <QuickEmotePicker

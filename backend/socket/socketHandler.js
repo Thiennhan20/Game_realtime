@@ -51,12 +51,57 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
 
   // Debounced lobby broadcast helper: batches rapid changes into a single broadcast to 'lobby' room only
   let lobbyBroadcastTimer = null;
-  function broadcastLobbyRooms() {
+  function broadcastLobbyRooms(immediate = false) {
+    if (immediate) {
+      if (lobbyBroadcastTimer) {
+        clearTimeout(lobbyBroadcastTimer);
+        lobbyBroadcastTimer = null;
+      }
+      io.to('lobby').emit('LOBBY_ROOMS', getJoinableRooms());
+      return;
+    }
     if (lobbyBroadcastTimer) return;
     lobbyBroadcastTimer = setTimeout(() => {
       lobbyBroadcastTimer = null;
       io.to('lobby').emit('LOBBY_ROOMS', getJoinableRooms());
     }, 300);
+  }
+
+  function convertRoomToWaiting(room, leavingUserId = null) {
+    if (!room) return null;
+    if (leavingUserId) {
+      room.players = (room.players || []).filter(
+        p => !p.hasLeft && String(p.userId) !== String(leavingUserId)
+      );
+    } else {
+      room.players = (room.players || []).filter(p => !p.hasLeft);
+    }
+    room.state = 'WAITING_FOR_PLAYERS';
+    room.guesses = [];
+    room.rpsWinnerIndex = -1;
+    room.activeTurnIndex = -1;
+    room.winnerIndex = -1;
+    room.startedAt = null;
+    room.finishedAt = null;
+    room.saved = false;
+    room.matchId = null;
+    room.endReason = null;
+    room.forfeitReason = null;
+    room.forfeitedPlayerId = null;
+    room.xpSettlement = null;
+    room.resultFinalized = false;
+    room.roundNumber = 1;
+
+    (room.players || []).forEach(p => {
+      p.secretNumber = null;
+      p.rpsChoice = null;
+      p.ready = false;
+      p.disconnectedAt = null;
+      p.hasLeft = false;
+    });
+
+    syncRoomToRedis(room.roomId, room);
+    return room;
   }
 
   function reconnectPlayerToRoom(socket, room) {
@@ -871,6 +916,19 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
+      // If opponent has left or only 1 player remains, reopen room for new challengers
+      const opponent = room.players.find(p => String(p.userId) !== String(socket.userId));
+      const opponentHasLeft = !opponent || opponent.hasLeft || room.players.length === 1;
+
+      if (opponentHasLeft) {
+        convertRoomToWaiting(room);
+        io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
+        io.to(roomId).emit('PLAYER_LEFT', { username: opponent?.username || 'opponent', roomState: room });
+        broadcastLobbyRooms(true);
+        console.log(`[Game] Room ${roomId} reopened for new players by ${socket.username}.`);
+        return;
+      }
+
       const allWantRematch = room.players.every(p => p.ready);
       if (allWantRematch) {
         room.state = 'SETTING_SECRET';
@@ -903,6 +961,21 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           username: socket.username
         });
       }
+    });
+
+    // --- RESET ROOM TO WAITING (Wait for new opponent) ---
+    socket.on('RESET_TO_WAITING', async (roomId) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const player = room.players.find(p => String(p.userId) === String(socket.userId));
+      if (!player) return;
+
+      convertRoomToWaiting(room);
+      io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
+      io.to(roomId).emit('PLAYER_LEFT', { username: 'opponent', roomState: room });
+      broadcastLobbyRooms(true);
+      console.log(`[Game] Room ${roomId} reset to WAITING_FOR_PLAYERS by ${socket.username}.`);
     });
 
     // --- CHAT MESSAGES ---
@@ -1078,39 +1151,22 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           const pIdx = room.players.findIndex(p => String(p.userId) === String(sock.userId));
           if (pIdx !== -1) room.players.splice(pIdx, 1);
 
+          // Clean up any other players that previously left
+          room.players = room.players.filter(p => !p.hasLeft);
+
           if (room.players.length === 0) {
             rooms.delete(roomId);
             deleteRoomFromRedis(roomId);
             console.log(`[Game] Room ${roomId} deleted after all players left finished game.`);
           } else {
-            room.state = 'WAITING_FOR_PLAYERS';
-            room.guesses = [];
-            room.matchId = null;
-            room.rpsWinnerIndex = -1;
-            room.activeTurnIndex = -1;
-            room.winnerIndex = -1;
-            room.startedAt = null;
-            room.finishedAt = null;
-            room.endReason = null;
-            room.forfeitReason = null;
-            room.forfeitedPlayerId = null;
-            room.xpSettlement = null;
-            room.saved = false;
-            room.resultFinalized = false;
-            room.players.forEach(remainingPlayer => {
-              remainingPlayer.secretNumber = null;
-              remainingPlayer.rpsChoice = null;
-              remainingPlayer.ready = false;
-              remainingPlayer.disconnectedAt = null;
-              remainingPlayer.hasLeft = false;
-            });
-            syncRoomToRedis(roomId, room);
+            convertRoomToWaiting(room);
+            io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
             io.to(roomId).emit('PLAYER_LEFT', { username: sock.username, roomState: room });
             io.to(roomId).emit('OPPONENT_LEFT', { username: sock.username, roomState: room });
           }
           sock.emit('ROOM_LEFT');
           sock.emit('LOBBY_ROOMS', getJoinableRooms());
-          broadcastLobbyRooms();
+          broadcastLobbyRooms(true);
           return;
         }
 
@@ -1125,8 +1181,17 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           sock.join('lobby');
           sock.currentRoomId = null;
           sock.emit('ROOM_LEFT');
+
+          // Auto-reopen room to WAITING_FOR_PLAYERS for the remaining player:
+          convertRoomToWaiting(room, sock.userId);
+          io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
+          io.to(roomId).emit('OPPONENT_FORFEITED', {
+            username: sock.username,
+            roomState: room
+          });
+
           sock.emit('LOBBY_ROOMS', getJoinableRooms());
-          broadcastLobbyRooms();
+          broadcastLobbyRooms(true);
           return;
         }
 
@@ -1143,32 +1208,14 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           deleteRoomFromRedis(roomId);
           console.log(`[Game] Room ${roomId} deleted (all players left).`);
         } else {
-          room.state = 'WAITING_FOR_PLAYERS';
-          room.guesses = [];
-          room.matchId = null;
-          room.winnerIndex = -1;
-          room.finishedAt = null;
-          room.endReason = null;
-          room.forfeitReason = null;
-          room.forfeitedPlayerId = null;
-          room.xpSettlement = null;
-          room.resultFinalized = false;
-          room.saved = false;
-          room.players.forEach(remainingPlayer => {
-            remainingPlayer.secretNumber = null;
-            remainingPlayer.rpsChoice = null;
-            remainingPlayer.ready = false;
-            remainingPlayer.disconnectedAt = null;
-            remainingPlayer.hasLeft = false;
-          });
-          syncRoomToRedis(roomId, room);
-          io.to(roomId).emit('PLAYER_LEFT', {
-            username: sock.username,
-            roomState: room
-          });
+          convertRoomToWaiting(room);
+          io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
+          io.to(roomId).emit('PLAYER_LEFT', { username: sock.username, roomState: room });
+          io.to(roomId).emit('OPPONENT_LEFT', { username: sock.username, roomState: room });
         }
-
-        broadcastLobbyRooms();
+        sock.emit('LOBBY_ROOMS', getJoinableRooms());
+        broadcastLobbyRooms(true);
+        return;
       }
     };
 
@@ -1317,7 +1364,13 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
                 'disconnect_timeout',
                 io.to(roomId)
               );
-              broadcastLobbyRooms();
+              convertRoomToWaiting(currentRoom, socket.userId);
+              io.to(roomId).emit('ROOM_RESET_TO_WAITING', currentRoom);
+              io.to(roomId).emit('OPPONENT_FORFEITED', {
+                username: socket.username,
+                roomState: currentRoom
+              });
+              broadcastLobbyRooms(true);
               return;
             }
 

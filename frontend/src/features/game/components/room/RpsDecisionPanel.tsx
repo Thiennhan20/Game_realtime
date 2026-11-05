@@ -59,8 +59,8 @@ export function RpsDecisionPanel({
           })}
         </div>
 
-        <div className="min-h-[64px] flex items-start">
-          {selectedChoice && (
+        <div className="min-h-[64px] flex items-center justify-center">
+          {selectedChoice ? (
             <div className="w-full text-center pt-3 border-t border-slate-800/60 space-y-2">
               <div className="flex items-center justify-center space-x-2">
                 <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -70,6 +70,22 @@ export function RpsDecisionPanel({
               </div>
               <p className="text-[10px] text-slate-500 italic">
                 {t('submittedChoice').replace('{choice}', t(selectedChoice as RpsChoice))}
+              </p>
+            </div>
+          ) : opponentSubmitted ? (
+            <div className="w-full text-center pt-2.5 border-t border-slate-800/60">
+              <div className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold shadow-sm">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                </span>
+                <span className="tracking-wide">{t('opponentChoseRps')}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full text-center pt-3 border-t border-slate-800/60">
+              <p className="text-[11px] text-slate-500 italic">
+                {t('rpsTip')}
               </p>
             </div>
           )}

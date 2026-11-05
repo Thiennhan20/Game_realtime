@@ -78,25 +78,32 @@ export function NotificationStack({
       </AnimatePresence>
 
       <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, x: 50, scale: 0.95 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 50, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="bg-red-950/90 backdrop-blur-md border border-red-500/50 p-3 rounded-xl text-xs sm:text-sm font-semibold text-red-200 shadow-2xl flex items-center gap-3 pointer-events-auto"
-          >
-            <span className="shrink-0">⚠️</span>
-            <span className="flex-1 leading-snug">{error}</span>
-            <button
-              onClick={onDismissError}
-              className="p-1 text-white bg-slate-950/25 hover:bg-white hover:text-slate-950 border border-white/70 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
-              title={locale === 'vi' ? 'Đóng' : 'Close'}
+        {error && (() => {
+          const isPositiveNotice = error.includes('chiến thắng') || error.includes('won');
+          return (
+            <motion.div
+              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className={`${
+                isPositiveNotice
+                  ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100 shadow-[0_8px_30px_rgba(16,185,129,0.3)]'
+                  : 'bg-red-950/90 border-red-500/50 text-red-200 shadow-2xl'
+              } backdrop-blur-md border p-3.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-3 pointer-events-auto`}
             >
-              <X size={13} />
-            </button>
-          </motion.div>
-        )}
+              <span className="shrink-0 text-base">{isPositiveNotice ? '🏆' : '⚠️'}</span>
+              <span className="flex-1 leading-snug">{error}</span>
+              <button
+                onClick={onDismissError}
+                className="p-1 text-white bg-slate-950/25 hover:bg-white hover:text-slate-950 border border-white/70 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
+                title={locale === 'vi' ? 'Đóng' : 'Close'}
+              >
+                <X size={13} />
+              </button>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       <AnimatePresence>

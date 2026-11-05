@@ -177,11 +177,21 @@ class SoundManager {
   }
 
   /**
-   * Notifies that opponent has finished locking their secret
+   * Crisp, bright bell chime ("Ting! 🔔") that alerts the player instantly
+   * when opponent has finished setting their secret or submitted their RPS choice.
    */
   public playOpponentSecretReady(): void {
-    this.playTone(523.25, 'sine', 0.14, 0.14, 0); // C5
-    this.playTone(659.25, 'sine', 0.22, 0.16, 0.09); // E5
+    if (this.isMuted) return;
+    // Layer 1: Bright strike (C6 - 1046.5Hz)
+    this.playTone(1046.5, 'sine', 0.28, 0.26, 0);
+    // Layer 2: Resonant bell chime (G6 - 1567.98Hz)
+    this.playTone(1567.98, 'sine', 0.48, 0.28, 0.05);
+    // Layer 3: Crystal overtone shimmer (C7 - 2093.0Hz)
+    this.playTone(2093.0, 'sine', 0.35, 0.14, 0.08);
+  }
+
+  public playAlertTing(): void {
+    this.playOpponentSecretReady();
   }
 
   /**

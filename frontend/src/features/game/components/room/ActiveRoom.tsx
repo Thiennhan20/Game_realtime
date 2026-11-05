@@ -6,6 +6,7 @@ import { Eye } from 'lucide-react';
 import type { Translator } from '../../i18n';
 import type {
   AuthUser,
+  FloatingEmote,
   Locale,
   MatchStats,
   Player,
@@ -18,6 +19,7 @@ import { GuessHistoryModal } from '../modals/GuessHistoryModal';
 import { MatchSummaryModal } from '../modals/MatchSummaryModal';
 import { NumberPadModal } from '../modals/NumberPadModal';
 import { StartCountdownOverlay } from '../modals/StartCountdownOverlay';
+import { ConfettiCanvas } from '../common/ConfettiCanvas';
 import { ActiveRoomHeader } from './ActiveRoomHeader';
 import { FinishedPanel } from './FinishedPanel';
 import { GuessTurnBar } from './GuessTurnBar';
@@ -55,6 +57,7 @@ interface ActiveRoomProps {
   t: Translator;
   isSpectator?: boolean;
   spectatorCount?: number;
+  floatingEmotes?: FloatingEmote[];
   onSecretInputChange: (value: string) => void;
   onGuessInputChange: (value: string) => void;
   onSetSecret: (event: FormEvent<HTMLFormElement>) => void;
@@ -99,6 +102,7 @@ export function ActiveRoom({
   t,
   isSpectator = false,
   spectatorCount = 0,
+  floatingEmotes = [],
   onSecretInputChange,
   onGuessInputChange,
   onSetSecret,
@@ -114,9 +118,19 @@ export function ActiveRoom({
   onShowNumberPadChange,
 }: ActiveRoomProps) {
   const effectiveMe = me || room.players[0] || null;
-  const effectiveOpponent = opponent || room.players[1] || null;
+  const effectiveOpponent =
+    room.state === 'WAITING_FOR_PLAYERS' ? null : (opponent || room.players[1] || null);
   const isMyTurn = !isSpectator && room.activeTurnIndex === myPlayerIndex;
   const isWinner = !isSpectator && room.winnerIndex === myPlayerIndex;
+  const isRankUp = Boolean(
+    (matchXpResult?.rankKeyAfter &&
+      matchXpResult?.rankKeyBefore &&
+      matchXpResult.rankKeyAfter !== matchXpResult.rankKeyBefore) ||
+    (matchXpResult?.rankAfter &&
+      matchXpResult?.rankBefore &&
+      matchXpResult.rankAfter !== matchXpResult.rankBefore),
+  );
+  const shouldCelebrate = !isSpectator && room.state === 'FINISHED' && (isWinner || isRankUp);
   const normalizedEndReason = matchStats?.endReason?.toLowerCase() || '';
   const canPlayAgain =
     !isSpectator &&
@@ -136,6 +150,7 @@ export function ActiveRoom({
 
   return (
     <div className="flex-1 flex flex-col gap-4 h-full pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-0 min-h-0 [overflow-anchor:none]">
+      {shouldCelebrate && <ConfettiCanvas />}
       <ActiveRoomHeader
         room={room}
         me={effectiveMe}
@@ -146,6 +161,7 @@ export function ActiveRoom({
         t={t}
         isSpectator={isSpectator}
         spectatorCount={spectatorCount}
+        floatingEmotes={floatingEmotes}
         onCopyRoomId={onCopyRoomId}
         onLeaveRoom={onLeaveRoom}
       />

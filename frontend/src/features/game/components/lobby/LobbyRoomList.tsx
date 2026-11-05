@@ -39,16 +39,16 @@ export const LobbyRoomList = memo(function LobbyRoomList({
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
-          className={`flex items-center space-x-1.5 px-3 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 border ${
+          className={`flex items-center space-x-1.5 px-3 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-200 border ${
             isRefreshing
-              ? 'bg-purple-950/60 border-purple-500/60 text-purple-300 shadow-md shadow-purple-900/20'
-              : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800/80 hover:border-purple-500/40 text-slate-300 hover:text-white'
+              ? 'bg-purple-950/60 border-purple-500/60 text-purple-300 shadow-md shadow-purple-900/20 cursor-wait opacity-80'
+              : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800/80 hover:border-purple-500/40 text-slate-300 hover:text-white cursor-pointer active:scale-95'
           }`}
           title={locale === 'vi' ? 'Làm mới danh sách phòng' : 'Refresh room list'}
         >
           <RefreshCw
             size={13}
-            className={`shrink-0 ${isRefreshing ? 'animate-spin text-purple-400' : ''}`}
+            className={`shrink-0 transition-transform ${isRefreshing ? 'animate-spin text-purple-400' : ''}`}
           />
           <span>
             {isRefreshing
@@ -62,45 +62,36 @@ export const LobbyRoomList = memo(function LobbyRoomList({
         </button>
       </div>
 
-      {rooms.length === 0 ? (
-        isRefreshing ? (
-          <div className="py-4 border border-purple-500/20 bg-slate-900/40 rounded-xl text-purple-300 text-xs sm:text-sm flex items-center justify-center space-x-2 animate-pulse">
-            <RefreshCw size={14} className="animate-spin text-purple-400 shrink-0" />
-            <span>
-              {locale === 'vi'
-                ? 'Đang kết nối & tải danh sách phòng...'
-                : 'Connecting & loading lobby rooms...'}
-            </span>
-          </div>
-        ) : (
+      <div className={`transition-opacity duration-300 ${isRefreshing ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+        {rooms.length === 0 ? (
           <div className="text-center py-4 border border-dashed border-slate-800/60 rounded-xl text-slate-600 text-xs sm:text-sm">
             {t('noRooms')}
           </div>
-        )
-      ) : (
-        <div className="space-y-2">
-          {rooms.slice(0, 2).map((room) => (
-            <LobbyRoomCard
-              key={room.roomId}
-              room={room}
-              locale={locale}
-              onJoin={onJoin}
-              onSpectate={onSpectate}
-            />
-          ))}
-          <button
-            onClick={onViewAll}
-            className="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 text-purple-300 hover:text-purple-200 text-xs font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm mt-2"
-          >
-            <Grid size={14} />
-            <span>
-              {locale === 'vi'
-                ? `Xem tất cả phòng (${rooms.length})`
-                : `View All Rooms (${rooms.length})`}
-            </span>
-          </button>
-        </div>
-      )}
+        ) : (
+          <div className="space-y-2">
+            {rooms.slice(0, 2).map((room) => (
+              <LobbyRoomCard
+                key={room.roomId}
+                room={room}
+                locale={locale}
+                onJoin={onJoin}
+                onSpectate={onSpectate}
+              />
+            ))}
+            <button
+              onClick={onViewAll}
+              className="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 text-purple-300 hover:text-purple-200 text-xs font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm mt-2"
+            >
+              <Grid size={14} />
+              <span>
+                {locale === 'vi'
+                  ? `Xem tất cả phòng (${rooms.length})`
+                  : `View All Rooms (${rooms.length})`}
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 });

@@ -14,8 +14,9 @@ import {
 
 import type { Translator } from '../../i18n';
 import { sound } from '../../sound';
-import type { Locale, Player, Room } from '../../types';
+import type { FloatingEmote, Locale, Player, Room } from '../../types';
 import { EquippedTitleBadge } from '../common/EquippedTitleBadge';
+import { FloatingEmoteOverlay } from '../common/FloatingEmoteOverlay';
 
 interface ActiveRoomHeaderProps {
   room: Room;
@@ -27,6 +28,7 @@ interface ActiveRoomHeaderProps {
   t: Translator;
   isSpectator?: boolean;
   spectatorCount?: number;
+  floatingEmotes?: FloatingEmote[];
   onCopyRoomId: () => void;
   onLeaveRoom: () => void;
 }
@@ -41,6 +43,7 @@ export function ActiveRoomHeader({
   t,
   isSpectator = false,
   spectatorCount = 0,
+  floatingEmotes = [],
   onCopyRoomId,
   onLeaveRoom,
 }: ActiveRoomHeaderProps) {
@@ -48,6 +51,13 @@ export function ActiveRoomHeader({
   const isAiRoom = Boolean(room.isAiRoom);
   const [isMuted, setIsMuted] = useState(() => sound.getMuted());
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
+
+  const myEmotes = (floatingEmotes || []).filter(
+    (e) => me?.userId && String(e.userId) === String(me.userId)
+  );
+  const opponentEmotes = (floatingEmotes || []).filter(
+    (e) => opponent?.userId && String(e.userId) === String(opponent.userId)
+  );
 
   const toggleSound = () => {
     const nextMuted = sound.toggleMute();
@@ -166,38 +176,63 @@ export function ActiveRoomHeader({
                 )
               )}
             </div>
-            {me?.avatar ? (
-              <img
-                src={me.avatar}
-                alt={me.username}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-purple-500 shrink-0"
-              />
-            ) : (
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                {me?.username.slice(0, 2) || 'P1'}
-              </div>
-            )}
+            <div className="relative shrink-0 flex items-center justify-center">
+              {me?.avatar ? (
+                <img
+                  src={me.avatar}
+                  alt={me.username}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-purple-500 shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                  {me?.username.slice(0, 2) || 'P1'}
+                </div>
+              )}
+              <FloatingEmoteOverlay emotes={myEmotes} side="left" />
+            </div>
 
             <span className="text-slate-700 font-bold text-xs sm:text-sm px-0.5">VS</span>
 
-            {opponent ? (
+            {opponent && room.state !== 'WAITING_FOR_PLAYERS' ? (
               <>
-                {opponent.avatar ? (
-                  <img
-                    src={opponent.avatar}
-                    alt={opponent.username}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-pink-500 shrink-0"
-                  />
-                ) : (
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-pink-600 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                    {opponent.username.slice(0, 2) || 'P2'}
-                  </div>
-                )}
+                <div className="relative shrink-0 flex items-center justify-center">
+                  {opponent.avatar ? (
+                    <img
+                      src={opponent.avatar}
+                      alt={opponent.username}
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full shrink-0 ${
+                        opponent.hasLeft
+                          ? 'border border-slate-700 grayscale opacity-40'
+                          : 'border border-pink-500'
+                      }`}
+                    />
+                  ) : (
+                    <div
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0 ${
+                        opponent.hasLeft
+                          ? 'bg-slate-800 text-slate-500 border border-slate-700'
+                          : 'bg-pink-600'
+                      }`}
+                    >
+                      {opponent.username.slice(0, 2) || 'P2'}
+                    </div>
+                  )}
+                  <FloatingEmoteOverlay emotes={opponentEmotes} side="right" />
+                </div>
                 <div className="hidden sm:flex flex-col items-start">
-                  <p className="text-xs font-bold max-w-[90px] sm:max-w-[125px] truncate text-slate-200" title={opponent.username}>
+                  <p
+                    className={`text-xs font-bold max-w-[90px] sm:max-w-[125px] truncate ${
+                      opponent.hasLeft ? 'text-slate-500 line-through' : 'text-slate-200'
+                    }`}
+                    title={opponent.username}
+                  >
                     {opponent.username}
                   </p>
-                  {opponent.equippedTitle ? (
+                  {opponent.hasLeft ? (
+                    <span className="text-[9px] text-rose-400 font-bold uppercase tracking-wider bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                      {t('opponentHasLeft')}
+                    </span>
+                  ) : opponent.equippedTitle ? (
                     <EquippedTitleBadge
                       title={opponent.equippedTitle}
                       locale={locale}

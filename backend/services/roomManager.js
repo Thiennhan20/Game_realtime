@@ -325,6 +325,8 @@ async function settleRoomProgress(room, {
   const existingPromise = settlementPromises.get(settlingMatchId);
   if (existingPromise) return existingPromise;
 
+  const participantPlayers = Array.isArray(room.players) ? [...room.players] : [];
+
   const settlementPromise = settlePvpMatch(room, {
     endReason,
     forfeitedPlayerId
@@ -332,7 +334,7 @@ async function settleRoomProgress(room, {
     const newlyUnlockedByUser = {};
     try {
       await Promise.all(
-        (room.players || []).map(async (p) => {
+        participantPlayers.map(async (p) => {
           if (!p?.userId) return;
           const uidStr = String(p.userId);
           const unlocked = await syncAndDetectNewAchievements(uidStr);
@@ -458,7 +460,8 @@ function emitFinishedPvpRoom(room, broadcaster, winningGuess = null) {
 }
 
 async function finishPvpByForfeit(room, forfeitedPlayerId, forfeitReason, broadcaster) {
-  if (!room || room.isAiRoom || room.state !== 'PLAYING' || room.players.length !== 2) {
+  const activeStates = ['PLAYING', 'RPS_DECISION'];
+  if (!room || room.isAiRoom || !activeStates.includes(room.state) || room.players.length !== 2) {
     return false;
   }
 

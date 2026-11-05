@@ -110,23 +110,8 @@ export function useGameController() {
     }
     return [];
   });
-  const [isRefreshingLobby, setIsRefreshingLobby] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const preRoomsRaw = urlParams.get('preRooms');
-        if (preRoomsRaw) {
-          const parsed = JSON.parse(decodeURIComponent(preRoomsRaw));
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return false;
-          }
-        }
-      } catch {
-        // Ignore URL parse error
-      }
-    }
-    return true;
-  });
+  const [isRefreshingLobby, setIsRefreshingLobby] = useState(false);
+  const refreshUntilRef = useRef<number>(0);
   const [room, setRoom] = useState<Room | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [secretInput, setSecretInput] = useState('');
@@ -414,9 +399,6 @@ export function useGameController() {
 
     const translate = () => createTranslator(localeRef.current);
 
-    const refreshTimer = setTimeout(() => {
-      setIsRefreshingLobby(true);
-    }, 0);
     const connectionTimer = setTimeout(() => {
       if (socketRef.current && !socketRef.current.connected) {
         setIsReconnecting(true);
@@ -428,7 +410,9 @@ export function useGameController() {
       if (Array.isArray(roomsList)) {
         setLobbyRooms((prev) => (isSameLobbyRooms(prev, roomsList) ? prev : roomsList));
       }
-      setIsRefreshingLobby(false);
+      if (Date.now() >= refreshUntilRef.current) {
+        setIsRefreshingLobby(false);
+      }
     });
 
     socket.on('RECONNECTED_TO_ROOM', (reconnectedRoom: Room) => {
@@ -597,6 +581,7 @@ export function useGameController() {
     socket.on('OPPONENT_SECRET_SET', () => {
       setOpponentSecretSet(true);
       sound.playOpponentSecretReady();
+      triggerHaptic([35, 45]);
     });
 
     socket.on('PLAYER_READY', (data: { userId: string; username: string }) => {
@@ -614,6 +599,7 @@ export function useGameController() {
       } else {
         setOpponentSecretSet(true);
         sound.playOpponentSecretReady();
+        triggerHaptic([35, 45]);
       }
     });
 
@@ -626,6 +612,8 @@ export function useGameController() {
 
     const handleOpponentRpsSubmitted = () => {
       setOpponentRpsSubmitted(true);
+      sound.playOpponentSecretReady();
+      triggerHaptic([30]);
     };
     socket.on('OPPONENT_RPS_SUBMITTED', handleOpponentRpsSubmitted);
     socket.on('OPPONENT_RPS_READY', handleOpponentRpsSubmitted);
@@ -907,6 +895,47 @@ export function useGameController() {
       triggerHaptic([50]);
     });
 
+    socket.on('ROOM_RESET_TO_WAITING', (resetRoom: Room) => {
+      setRoom(resetRoom);
+      setOpponentSecretSet(false);
+      setOpponentRpsSubmitted(false);
+      setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
+      setSecretInput('');
+      setGuessInput('');
+      setSecretReveal(null);
+      setMatchStats(null);
+      setMatchXpResult(null);
+      setShowMatchModal(false);
+      setShowGuessHistoryModal(false);
+      setOpponentTempDisconnected(null);
+      setErrorMsg(null);
+      sound.playClick();
+    });
+
+    socket.on('OPPONENT_FORFEITED', (data: { username: string; roomState: Room }) => {
+      if (data?.roomState) {
+        setRoom(data.roomState);
+      }
+      setOpponentSecretSet(false);
+      setOpponentRpsSubmitted(false);
+      setOpponentWantsPlayAgain(false);
+      setIsRequestingPlayAgain(false);
+      setSecretInput('');
+      setGuessInput('');
+      setSecretReveal(null);
+      setMatchStats(null);
+      setMatchXpResult(null);
+      setShowMatchModal(false);
+      setShowGuessHistoryModal(false);
+      setOpponentTempDisconnected(null);
+      sound.playVictory();
+      triggerHaptic([100, 50, 100]);
+      const opponentName = data?.username || translate()('enemy');
+      setErrorMsg(translate()('opponentForfeitedNotice').replace('{username}', opponentName));
+      setTimeout(() => setErrorMsg(null), 6000);
+    });
+
     socket.on('PLAYER_DISCONNECTED', (data: { username: string; roomState: Room }) => {
       setRoom(data.roomState);
       setErrorMsg(translate()('opponentLeft').replace('{username}', data.username));
@@ -1019,7 +1048,6 @@ export function useGameController() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearTimeout(refreshTimer);
       clearTimeout(connectionTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.disconnect();
@@ -1247,7 +1275,11 @@ export function useGameController() {
   const handleRefreshLobby = async () => {
     if (isRefreshingLobby) return;
     setIsRefreshingLobby(true);
-    if (socketRef.current) {
+    refreshUntilRef.current = Date.now() + 3000;
+    sound.playClick();
+    triggerHaptic(20);
+
+    if (socketRef.current?.connected) {
       socketRef.current.emit('GET_LOBBY_ROOMS');
     }
     try {
@@ -1261,7 +1293,9 @@ export function useGameController() {
     } catch {
       // Ignore manual refresh REST error
     } finally {
-      setTimeout(() => setIsRefreshingLobby(false), 500);
+      setTimeout(() => {
+        setIsRefreshingLobby(false);
+      }, 3000);
     }
   };
 
