@@ -132,3 +132,12 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
   }
 }
+
+/* Prevent iOS Safari auto-zoom on focus: form fields must be >= 16px on touch devices */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

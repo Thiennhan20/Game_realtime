@@ -278,7 +278,7 @@ export const RoomChat = memo(function RoomChat({
           aria-label={t('chatPlaceholder')}
           value={localInput}
           onChange={(event) => setLocalInput(event.target.value)}
-          className="h-9 sm:h-10 flex-1 min-w-0 bg-[#090a0f] border border-white/[0.08] focus:border-violet-500/50 focus:outline-none px-3.5 rounded-xl text-xs sm:text-sm text-slate-200 placeholder-slate-500 font-sans"
+          className="h-9 sm:h-10 flex-1 min-w-0 bg-[#090a0f] border border-white/[0.08] focus:border-violet-500/50 focus:outline-none px-3.5 rounded-xl text-base sm:text-sm text-slate-200 placeholder-slate-500 font-sans"
         />
         <button
           type="submit"

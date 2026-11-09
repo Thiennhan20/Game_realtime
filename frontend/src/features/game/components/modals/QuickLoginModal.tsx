@@ -129,7 +129,7 @@ export function QuickLoginModal({
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={t('emailPlaceholder')}
                       disabled={isSubmitting}
-                      className="w-full pl-10 pr-4 py-2.5 bg-[#121622] border border-white/[0.08] focus:border-violet-500/80 rounded-xl text-white font-mono text-xs placeholder-slate-500 outline-none transition"
+                      className="w-full pl-10 pr-4 py-2.5 bg-[#121622] border border-white/[0.08] focus:border-violet-500/80 rounded-xl text-white font-mono text-base sm:text-xs placeholder-slate-500 outline-none transition"
                       autoComplete="username"
                     />
                   </div>
@@ -147,7 +147,7 @@ export function QuickLoginModal({
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={t('passwordPlaceholder')}
                       disabled={isSubmitting}
-                      className="w-full pl-10 pr-10 py-2.5 bg-[#121622] border border-white/[0.08] focus:border-violet-500/80 rounded-xl text-white font-mono text-xs placeholder-slate-500 outline-none transition"
+                      className="w-full pl-10 pr-10 py-2.5 bg-[#121622] border border-white/[0.08] focus:border-violet-500/80 rounded-xl text-white font-mono text-base sm:text-xs placeholder-slate-500 outline-none transition"
                       autoComplete="current-password"
                     />
                     <button

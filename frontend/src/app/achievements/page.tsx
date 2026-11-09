@@ -769,7 +769,7 @@ function AchievementsPageContent() {
                 placeholder={locale === 'vi' ? 'Tìm danh hiệu...' : 'Search badge...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#090a0f] border border-white/[0.08] focus:border-emerald-500/50 focus:outline-none pl-8 pr-3 py-1.5 rounded-xl text-xs placeholder-slate-600 text-white"
+                className="w-full bg-[#090a0f] border border-white/[0.08] focus:border-emerald-500/50 focus:outline-none pl-8 pr-3 py-1.5 rounded-xl text-base sm:text-xs placeholder-slate-600 text-white"
               />
             </div>
           </div>

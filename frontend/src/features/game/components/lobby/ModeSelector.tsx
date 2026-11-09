@@ -204,7 +204,7 @@ export const ModeSelector = memo(function ModeSelector({
               onJoinRoom(normalizedRoomId || roomId.trim());
             }
           }}
-          className={`flex-1 w-full bg-[#0d1017] border px-3.5 py-2.5 rounded-lg text-center text-sm sm:text-base font-mono font-bold placeholder:font-sans placeholder:text-xs placeholder-slate-500 uppercase min-w-0 transition-all focus:outline-none ${
+          className={`flex-1 w-full bg-[#0d1017] border px-3.5 py-2.5 rounded-lg text-center text-base font-mono font-bold placeholder:font-sans placeholder:text-xs placeholder-slate-500 uppercase min-w-0 transition-all focus:outline-none ${
             isValidRoomId
               ? 'border-violet-400 ring-2 ring-violet-500/25 text-violet-100 shadow-sm shadow-violet-500/20'
               : 'border-white/[0.08] hover:border-white/[0.15] text-slate-100 focus:border-violet-500/60'
