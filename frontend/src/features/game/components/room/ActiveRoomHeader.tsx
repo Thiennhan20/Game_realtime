@@ -30,6 +30,9 @@ interface ActiveRoomHeaderProps {
   isReconnecting?: boolean;
   spectatorCount?: number;
   floatingEmotes?: FloatingEmote[];
+  isOpponentActiveTurn?: boolean;
+  lastOpponentActivityAt?: number;
+  opponentIsVisible?: boolean;
   onCopyRoomId: () => void;
   onLeaveRoom: () => void;
   onOpenProfile?: (userId: string | null) => void;
@@ -47,6 +50,9 @@ export function ActiveRoomHeader({
   isReconnecting = false,
   spectatorCount = 0,
   floatingEmotes = [],
+  isOpponentActiveTurn = false,
+  lastOpponentActivityAt = Date.now(),
+  opponentIsVisible = true,
   onCopyRoomId,
   onLeaveRoom,
   onOpenProfile,
@@ -55,6 +61,15 @@ export function ActiveRoomHeader({
   const isAiRoom = Boolean(room.isAiRoom);
   const [isMuted, setIsMuted] = useState(() => sound.getMuted());
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
+  const [headerCurrentTime, setHeaderCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpponentActiveTurn) return;
+    const timer = setInterval(() => setHeaderCurrentTime(Date.now()), 2000);
+    return () => clearInterval(timer);
+  }, [isOpponentActiveTurn]);
+
+  const isOpponentActive = headerCurrentTime - lastOpponentActivityAt < 60000;
 
   const myEmotes = (floatingEmotes || []).filter(
     (e) => me?.userId && String(e.userId) === String(me.userId)
@@ -223,6 +238,8 @@ export function ActiveRoomHeader({
                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full shrink-0 ${
                         opponent.hasLeft
                           ? 'border border-slate-700 grayscale opacity-40'
+                          : isOpponentActiveTurn
+                          ? 'border border-violet-400 ring-2 ring-violet-500/70 shadow-[0_0_12px_rgba(139,92,246,0.6)]'
                           : 'border border-rose-500'
                       }`}
                     />
@@ -231,24 +248,50 @@ export function ActiveRoomHeader({
                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-mono font-bold text-xs uppercase shrink-0 text-white ${
                         opponent.hasLeft
                           ? 'bg-slate-800 text-slate-500 border border-slate-700'
+                          : isOpponentActiveTurn
+                          ? 'bg-violet-600 border border-violet-400 ring-2 ring-violet-500/70 shadow-[0_0_12px_rgba(139,92,246,0.6)]'
                           : 'bg-rose-600'
                       }`}
                     >
                       {opponent.username.slice(0, 2) || 'P2'}
                     </div>
                   )}
+                  {isOpponentActiveTurn && !opponent.hasLeft && (
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0d1017] z-10 transition-colors ${
+                        !isOpponentActive || !opponentIsVisible
+                          ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)] animate-pulse'
+                          : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse'
+                      }`}
+                      title={
+                        !isOpponentActive || !opponentIsVisible
+                          ? (locale === 'vi' ? 'Tạm ngưng thao tác > 60s / chuyển tab' : 'Inactive > 60s / switched tab')
+                          : (locale === 'vi' ? 'Đang hoạt động & suy nghĩ' : 'Active & thinking')
+                      }
+                    />
+                  )}
                   <FloatingEmoteOverlay emotes={opponentEmotes} side="right" />
                 </div>
                 <div className="hidden sm:flex flex-col items-start">
-                  <p
-                    onClick={() => !isAiRoom && opponent?.userId && onOpenProfile?.(String(opponent.userId))}
-                    className={`text-xs font-mono font-bold max-w-[90px] sm:max-w-[125px] truncate ${
-                      opponent.hasLeft ? 'text-slate-500 line-through' : 'text-slate-200'
-                    } ${!isAiRoom && opponent?.userId ? 'cursor-pointer hover:text-rose-300 transition' : ''}`}
-                    title={opponent.username}
-                  >
-                    {opponent.username}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p
+                      onClick={() => !isAiRoom && opponent?.userId && onOpenProfile?.(String(opponent.userId))}
+                      className={`text-xs font-mono font-bold max-w-[90px] sm:max-w-[125px] truncate ${
+                        opponent.hasLeft ? 'text-slate-500 line-through' : 'text-slate-200'
+                      } ${!isAiRoom && opponent?.userId ? 'cursor-pointer hover:text-rose-300 transition' : ''}`}
+                      title={opponent.username}
+                    >
+                      {opponent.username}
+                    </p>
+                    {isOpponentActiveTurn && !opponent.hasLeft && (
+                      <span
+                        className="text-[11px] animate-pulse"
+                        title={locale === 'vi' ? 'Đang cân não suy nghĩ...' : 'Thinking...'}
+                      >
+                        🧠
+                      </span>
+                    )}
+                  </div>
                   {opponent.hasLeft ? (
                     <span className="text-[9px] text-rose-400 font-mono font-bold uppercase tracking-wider bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
                       {t('opponentHasLeft')}

@@ -9,9 +9,24 @@ const { syncRoomToRedis } = require('./roomManager');
 function handleAiTurn(room, io, delayMs = 1200) {
   if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
 
+  if (delayMs > 1000) {
+    setTimeout(() => {
+      if (room.state === 'PLAYING' && room.activeTurnIndex === 1) {
+        io.to(room.roomId).emit('OPPONENT_GUESS_TYPING', { digitsCount: 2 });
+      }
+    }, Math.floor(delayMs * 0.45));
+
+    setTimeout(() => {
+      if (room.state === 'PLAYING' && room.activeTurnIndex === 1) {
+        io.to(room.roomId).emit('OPPONENT_GUESS_TYPING', { digitsCount: 4 });
+      }
+    }, Math.floor(delayMs * 0.8));
+  }
+
   setTimeout(async () => {
     try {
       if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
+      io.to(room.roomId).emit('OPPONENT_GUESS_TYPING', { digitsCount: 0 });
 
       // Collect past AI guesses in this match
       const pastAiGuesses = (room.guesses || [])

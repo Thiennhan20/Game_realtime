@@ -773,6 +773,8 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
+      socket.to(roomId).emit('OPPONENT_GUESS_TYPING', { digitsCount: 0 });
+
       // Rate limiting: 1s base cooldown with 5x escalation on rapid spam
       const now = Date.now();
       const cooldownMs = socket.guessCooldownMs || 1000;
@@ -1128,6 +1130,39 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
           }, aiDelay);
         }
       }
+    });
+
+    // --- REALTIME GUESS TYPING INDICATOR (Feature 1) ---
+    socket.on('GUESS_TYPING', ({ roomId, digitsCount }) => {
+      if (!roomId) return;
+      const room = rooms.get(roomId);
+      if (!room || room.state !== 'PLAYING') return;
+      const count = Math.min(4, Math.max(0, Number(digitsCount) || 0));
+      socket.to(roomId).emit('OPPONENT_GUESS_TYPING', {
+        userId: socket.userId,
+        digitsCount: count
+      });
+    });
+
+    // --- ACTIVITY HEARTBEAT (Feature 4 - 60s inactivity detector) ---
+    socket.on('PLAYER_ACTIVITY', ({ roomId }) => {
+      if (!roomId) return;
+      const room = rooms.get(roomId);
+      if (!room || room.state !== 'PLAYING') return;
+      socket.to(roomId).emit('OPPONENT_ACTIVITY', {
+        userId: socket.userId
+      });
+    });
+
+    // --- VISIBILITY CHANGE (Tab switch notice) ---
+    socket.on('PLAYER_VISIBILITY', ({ roomId, isVisible }) => {
+      if (!roomId) return;
+      const room = rooms.get(roomId);
+      if (!room || room.state !== 'PLAYING') return;
+      socket.to(roomId).emit('OPPONENT_VISIBILITY', {
+        userId: socket.userId,
+        isVisible: Boolean(isVisible)
+      });
     });
 
     // --- LEAVE ROOM (Intentional) ---

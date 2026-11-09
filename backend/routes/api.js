@@ -340,7 +340,7 @@ function createApiRouter(roomManager, healthHandler) {
             achievementsInitialized: true
           }
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       // Update active room player object if the user is currently in a room

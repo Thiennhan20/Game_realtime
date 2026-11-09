@@ -35,6 +35,8 @@ interface RoomChatProps {
   locale?: Locale;
   className?: string;
   isActive: boolean;
+  isMyTurn?: boolean;
+  onGoToTurn?: () => void;
   floatingEmotes?: FloatingEmote[];
   onInputChange?: (value: string) => void;
   onSubmit: (eventOrMessage: FormEvent<HTMLFormElement> | string) => void;
@@ -49,6 +51,8 @@ export const RoomChat = memo(function RoomChat({
   locale = 'vi',
   className = '',
   isActive,
+  isMyTurn = false,
+  onGoToTurn,
   floatingEmotes = [],
   onInputChange,
   onSubmit,
@@ -56,10 +60,27 @@ export const RoomChat = memo(function RoomChat({
 }: RoomChatProps) {
   const [localInput, setLocalInput] = useState('');
   const [showEmotePicker, setShowEmotePicker] = useState(false);
+  const [showTurnReminder, setShowTurnReminder] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const [showNewMessageButton, setShowNewMessageButton] = useState(false);
   const isUserAtBottomRef = useRef(true);
   const prevMessagesLengthRef = useRef(messages.length);
+
+  // Remind user after staying in the chat tab for 3s during their turn
+  useEffect(() => {
+    if (!isActive || !isMyTurn) {
+      setShowTurnReminder(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowTurnReminder(true);
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isActive, isMyTurn]);
 
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -235,6 +256,29 @@ export const RoomChat = memo(function RoomChat({
           <ArrowDown size={14} />
           <span>{t('newMessages')}</span>
         </button>
+      )}
+
+      {showTurnReminder && isMyTurn && (
+        <div className="mx-2.5 sm:mx-3 mb-2 p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-violet-950/95 via-[#16122b]/95 to-violet-950/95 border border-violet-500/50 shadow-[0_4px_16px_rgba(139,92,246,0.35)] backdrop-blur-md flex items-center justify-between gap-2.5 z-20 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+            </span>
+            <span className="text-xs font-mono font-bold text-violet-100 truncate">
+              {locale === 'vi' ? '⚡ Đã đến lượt bạn đoán số!' : "⚡ It's your turn to guess!"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGoToTurn}
+            className="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 active:scale-95 text-white rounded-lg text-[11px] font-mono font-bold tracking-tight shadow-md shadow-violet-950/60 transition cursor-pointer flex items-center gap-1 border border-violet-400/40 shrink-0"
+          >
+            <span>{locale === 'vi' ? 'Vào đoán ngay' : 'Guess now'}</span>
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
       )}
 
       <form

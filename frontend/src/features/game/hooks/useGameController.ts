@@ -192,6 +192,11 @@ export function useGameController() {
     hostName: string;
   } | null>(null);
 
+  const [opponentTypingCount, setOpponentTypingCount] = useState(0);
+  const [lastOpponentActivityAt, setLastOpponentActivityAt] = useState(() => Date.now());
+  const [opponentIsVisible, setOpponentIsVisible] = useState(true);
+  const [turnStartTime, setTurnStartTime] = useState(() => Date.now());
+
   const socketRef = useRef<Socket | null>(null);
   const lastGuessSubmitTimeRef = useRef(0);
   const localeRef = useRef(locale);
@@ -296,46 +301,49 @@ export function useGameController() {
     previousRoomStateRef.current = roomState;
   }, [roomState]);
 
-  const previousTurnRef = useRef<{ state?: string; turn?: number }>({});
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      if (room?.state !== 'PLAYING' || !user) {
-        setShowNumPad(false);
-        return;
-      }
-      const playerIndex = room.players.findIndex((player) => player.userId === user.id);
-      if (playerIndex === -1 || room.activeTurnIndex !== playerIndex) {
-        setShowNumPad(false);
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [room, user]);
+  const wasMyTurnRef = useRef(false);
 
   useEffect(() => {
     if (!room || !user) {
-      previousTurnRef.current = {};
+      wasMyTurnRef.current = false;
+      setShowNumPad(false);
       return;
     }
     if (room.state === 'PLAYING') {
-      const myPlayerIndex = room.players.findIndex((player) => player.userId === user.id);
-      const isMyTurn = myPlayerIndex !== -1 && room.activeTurnIndex === myPlayerIndex;
-      const prev = previousTurnRef.current;
+      const myPlayerIndex = room.players.findIndex(
+        (player) => String(player.userId) === String(user.id),
+      );
+      const isMyTurnNow =
+        !isSpectator && myPlayerIndex !== -1 && room.activeTurnIndex === myPlayerIndex;
 
-      if (prev.state === 'PLAYING' && prev.turn !== undefined && prev.turn !== room.activeTurnIndex) {
-        if (isMyTurn) {
-          sound.playTurnAlert();
-          triggerHaptic([40, 60]);
-        } else {
-          sound.playOpponentTurn();
-        }
+      if (!isMyTurnNow) {
+        setShowNumPad(false);
       }
-      previousTurnRef.current = { state: room.state, turn: room.activeTurnIndex };
+
+      // Do not trigger turn alert while the start countdown modal is active
+      if (showStartCountdown) {
+        return;
+      }
+
+      if (!wasMyTurnRef.current && isMyTurnNow) {
+        sound.playAlertTing();
+        triggerHaptic(25); // Gentle haptic tap
+      } else if (wasMyTurnRef.current && !isMyTurnNow) {
+        sound.playOpponentTurn();
+      }
+      wasMyTurnRef.current = isMyTurnNow;
     } else {
-      previousTurnRef.current = { state: room.state, turn: room.activeTurnIndex };
+      wasMyTurnRef.current = false;
+      setShowNumPad(false);
     }
-  }, [room, user]);
+  }, [
+    room?.state,
+    room?.activeTurnIndex,
+    room?.players,
+    user,
+    isSpectator,
+    showStartCountdown,
+  ]);
 
   // --- Fast REST Pre-fetch for Instant Room List Display ---
   useEffect(() => {
@@ -545,7 +553,7 @@ export function useGameController() {
           setRoom((prev) => prev || data.room);
           setIsSpectator(false);
           setSpectatorCount(data.room.spectators?.length || 0);
-        }, 2000);
+        }, 2200);
       },
     );
 
@@ -702,7 +710,19 @@ export function useGameController() {
 
         setTimeout(() => {
           setRpsClash(null);
-          setRoom((curr) => (curr ? data.roomState : null));
+          setRoom((curr) => {
+            if (!curr) return null;
+            const hasNewerGuesses =
+              (curr.guesses?.length || 0) > (data.roomState.guesses?.length || 0);
+            return {
+              ...curr,
+              ...data.roomState,
+              guesses: hasNewerGuesses ? curr.guesses : (data.roomState.guesses || []),
+              activeTurnIndex: hasNewerGuesses
+                ? curr.activeTurnIndex
+                : data.roomState.activeTurnIndex,
+            };
+          });
           setShowStartCountdown(true);
         }, 1500);
       },
@@ -711,6 +731,8 @@ export function useGameController() {
     socket.on('GUESS_RESULT', (data: { roomState: Room }) => {
       setRoom(data.roomState);
       setGuessInput('');
+      setOpponentTypingCount(0);
+      setLastOpponentActivityAt(Date.now());
       setErrorMsg(null);
       const latestGuess = data.roomState.guesses?.[data.roomState.guesses.length - 1];
       if (latestGuess) {
@@ -938,6 +960,19 @@ export function useGameController() {
       if (userRef.current && data.username !== userRef.current.name) {
         setUnreadChatCount((count) => count + 1);
       }
+    });
+
+    socket.on('OPPONENT_GUESS_TYPING', (data: { digitsCount: number }) => {
+      setOpponentTypingCount(data?.digitsCount || 0);
+      setLastOpponentActivityAt(Date.now());
+    });
+
+    socket.on('OPPONENT_ACTIVITY', () => {
+      setLastOpponentActivityAt(Date.now());
+    });
+
+    socket.on('OPPONENT_VISIBILITY', (data: { isVisible: boolean }) => {
+      setOpponentIsVisible(Boolean(data?.isVisible));
     });
 
     socket.on('GAME_RESET', (resetRoom: Room) => {
@@ -1195,6 +1230,86 @@ export function useGameController() {
     room && opponentPlayerIndex !== -1
       ? (room.players[opponentPlayerIndex] ?? null)
       : null;
+
+  const isMyTurn = useMemo(
+    () =>
+      Boolean(
+        room?.state === 'PLAYING' &&
+          !isSpectator &&
+          myPlayerIndex !== -1 &&
+          room.activeTurnIndex === myPlayerIndex,
+      ),
+    [room?.state, room?.activeTurnIndex, isSpectator, myPlayerIndex],
+  );
+
+  // --- REAL-TIME TURN INDICATORS & ACTIVITY (Features 1, 2, 4) ---
+  const prevTurnForIndicatorRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (room?.state === 'PLAYING') {
+      if (prevTurnForIndicatorRef.current !== room.activeTurnIndex) {
+        prevTurnForIndicatorRef.current = room.activeTurnIndex;
+        setOpponentTypingCount(0);
+        setLastOpponentActivityAt(Date.now());
+        setTurnStartTime(Date.now());
+        setOpponentIsVisible(true);
+      }
+    } else {
+      prevTurnForIndicatorRef.current = undefined;
+      setOpponentTypingCount(0);
+    }
+  }, [room?.state, room?.activeTurnIndex]);
+
+  // Broadcast digits count when I type on my turn (Feature 1)
+  useEffect(() => {
+    if (room?.state === 'PLAYING' && isMyTurn && room?.roomId) {
+      socketRef.current?.emit('GUESS_TYPING', {
+        roomId: room.roomId,
+        digitsCount: guessInput.length,
+      });
+    }
+  }, [guessInput, isMyTurn, room?.state, room?.roomId]);
+
+  // Throttled user activity heartbeat (mouse/pointer/keyboard) during my turn (Feature 4 - 60s detector)
+  const lastActivityEmitRef = useRef(0);
+  useEffect(() => {
+    if (!isMyTurn || room?.state !== 'PLAYING' || !room?.roomId) return;
+
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityEmitRef.current > 10000) {
+        lastActivityEmitRef.current = now;
+        socketRef.current?.emit('PLAYER_ACTIVITY', { roomId: room.roomId });
+      }
+    };
+
+    window.addEventListener('pointermove', handleUserActivity, { passive: true });
+    window.addEventListener('pointerdown', handleUserActivity, { passive: true });
+    window.addEventListener('keydown', handleUserActivity, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointermove', handleUserActivity);
+      window.removeEventListener('pointerdown', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+    };
+  }, [isMyTurn, room?.state, room?.roomId]);
+
+  // Broadcast visibility change when tab is switched/minimized (Feature 4)
+  useEffect(() => {
+    if (room?.state !== 'PLAYING' || !room?.roomId) return;
+
+    const handleVisibility = () => {
+      const isVisible = document.visibilityState === 'visible';
+      socketRef.current?.emit('PLAYER_VISIBILITY', {
+        roomId: room.roomId,
+        isVisible,
+      });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [room?.state, room?.roomId]);
 
   const handleCreateRoom = () => {
     if (isReconnecting || !socketRef.current?.connected) {
@@ -1615,8 +1730,13 @@ export function useGameController() {
     spectatorCount,
     myPlayerIndex,
     opponentPlayerIndex,
+    isMyTurn,
     me,
     opponent,
+    opponentTypingCount,
+    lastOpponentActivityAt,
+    opponentIsVisible,
+    turnStartTime,
     newlyUnlockedAchievements,
     toastAchievements,
     setToastAchievements,

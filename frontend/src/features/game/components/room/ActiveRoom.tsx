@@ -64,6 +64,10 @@ interface ActiveRoomProps {
   showNumberPad: boolean;
   showStartCountdown: boolean;
   countdown: number;
+  opponentTypingCount?: number;
+  lastOpponentActivityAt?: number;
+  opponentIsVisible?: boolean;
+  turnStartTime?: number;
   locale: Locale;
   t: Translator;
   isSpectator?: boolean;
@@ -113,6 +117,10 @@ export function ActiveRoom({
   showNumberPad,
   showStartCountdown,
   countdown,
+  opponentTypingCount = 0,
+  lastOpponentActivityAt = Date.now(),
+  opponentIsVisible = true,
+  turnStartTime = Date.now(),
   locale,
   t,
   isSpectator = false,
@@ -181,6 +189,9 @@ export function ActiveRoom({
         isReconnecting={isReconnecting}
         spectatorCount={spectatorCount}
         floatingEmotes={floatingEmotes}
+        isOpponentActiveTurn={!isMyTurn && room.state === 'PLAYING'}
+        lastOpponentActivityAt={lastOpponentActivityAt}
+        opponentIsVisible={opponentIsVisible}
         onCopyRoomId={onCopyRoomId}
         onLeaveRoom={onLeaveRoom}
         onOpenProfile={onOpenProfile}
@@ -279,6 +290,10 @@ export function ActiveRoom({
                   : (opponent?.username || '')
               }
               currentGuessInput={guessInput}
+              opponentTypingCount={opponentTypingCount}
+              lastOpponentActivityAt={lastOpponentActivityAt}
+              opponentIsVisible={opponentIsVisible}
+              turnStartTime={turnStartTime}
               locale={locale}
               t={t}
               onOpenNumberPad={() => onShowNumberPadChange(true)}

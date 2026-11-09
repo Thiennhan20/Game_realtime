@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -14,6 +14,7 @@ import {
 } from './components/layout/MobileRoomTabs';
 import { NotificationStack } from './components/layout/NotificationStack';
 import { LobbyScreen } from './components/lobby/LobbyScreen';
+import { MatchFoundOverlay } from './components/modals/MatchFoundOverlay';
 import { ActiveRoom } from './components/room/ActiveRoom';
 import { useGameController } from './hooks/useGameController';
 import type { AiDifficulty } from './types';
@@ -66,6 +67,27 @@ export default function GameClient() {
 
   const isAiMatch = Boolean(game.room?.isAiRoom);
   const effectiveMobileTab: MobileRoomTab = isAiMatch ? 'arena' : activeMobileTab;
+
+  const handleGoToTurn = useCallback(() => {
+    setActiveMobileTab('arena');
+    game.setShowNumPad(true);
+  }, [game.setShowNumPad]);
+
+  // Auto-open number pad when turn starts (after 350ms delay, unless in mobile chat tab)
+  const prevTurnForPadRef = useRef(false);
+  useEffect(() => {
+    const isReadyForTurn = game.isMyTurn && !game.showStartCountdown;
+
+    if (!prevTurnForPadRef.current && isReadyForTurn) {
+      if (effectiveMobileTab !== 'chat') {
+        const timer = window.setTimeout(() => {
+          game.setShowNumPad(true);
+        }, 350);
+        return () => window.clearTimeout(timer);
+      }
+    }
+    prevTurnForPadRef.current = isReadyForTurn;
+  }, [game.isMyTurn, game.showStartCountdown, effectiveMobileTab, game.setShowNumPad]);
 
   const searchParams = useSearchParams();
   const [isIframeClient, setIsIframeClient] = useState(false);
@@ -257,6 +279,10 @@ export default function GameClient() {
               showNumberPad={game.showNumPad}
               showStartCountdown={game.showStartCountdown}
               countdown={game.countdownVal}
+              opponentTypingCount={game.opponentTypingCount}
+              lastOpponentActivityAt={game.lastOpponentActivityAt}
+              opponentIsVisible={game.opponentIsVisible}
+              turnStartTime={game.turnStartTime}
               locale={game.locale}
               t={game.t}
               onSecretInputChange={game.setSecretInput}
@@ -286,6 +312,8 @@ export default function GameClient() {
             locale={game.locale}
             t={game.t}
             isActive={effectiveMobileTab === 'chat'}
+            isMyTurn={game.isMyTurn}
+            onGoToTurn={handleGoToTurn}
             floatingEmotes={game.floatingEmotes}
             onInputChange={game.setChatInput}
             onSubmit={game.handleSendChat}
@@ -374,6 +402,13 @@ export default function GameClient() {
         }}
         locale={game.locale}
         t={game.t}
+      />
+
+      <MatchFoundOverlay
+        isOpen={Boolean(game.quickMatchFoundRoom)}
+        roomId={game.quickMatchFoundRoom?.roomId || ''}
+        opponentName={game.quickMatchFoundRoom?.hostName || ''}
+        locale={game.locale}
       />
     </div>
   );

@@ -259,7 +259,7 @@ async function updateProfile({
     { userId: player.userId },
     update,
     {
-      new: true,
+      returnDocument: 'after',
       upsert: true,
       setDefaultsOnInsert: true,
       session
@@ -270,7 +270,7 @@ async function updateProfile({
     profile = await GameProfileModel.findOneAndUpdate(
       { userId: player.userId },
       { $max: { bestWinStreak: profile.currentWinStreak } },
-      { new: true, session }
+      { returnDocument: 'after', session }
     );
   }
 
