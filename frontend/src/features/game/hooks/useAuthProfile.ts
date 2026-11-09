@@ -144,6 +144,8 @@ export function useAuthProfile() {
     return !initial;
   });
   const [authError, setAuthError] = useState<string | null>(null);
+  const [parentMovieUser, setParentMovieUser] = useState<AuthUser | null>(null);
+  const [parentMovieToken, setParentMovieToken] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -243,8 +245,28 @@ export function useAuthProfile() {
 
     // Level 2: Listen for AUTH_TOKEN message from parent window
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'AUTH_TOKEN' && typeof event.data?.token === 'string') {
-        const receivedToken = event.data.token;
+      if (event.data?.type === 'AUTH_TOKEN') {
+        const receivedToken = typeof event.data?.token === 'string' ? event.data.token : null;
+        const pUser =
+          event.data?.user && event.data.user.id
+            ? {
+                id: String(event.data.user.id),
+                name: String(event.data.user.name || ''),
+                avatar: String(event.data.user.avatar || ''),
+              }
+            : null;
+
+        if (active) {
+          setParentMovieToken(receivedToken);
+          setParentMovieUser(pUser);
+        }
+
+        // If user explicitly chose a separate game account, do NOT override with movie site account
+        const accountMode = typeof window !== 'undefined' ? localStorage.getItem('game_account_mode') : null;
+        if (accountMode === 'custom') {
+          return;
+        }
+
         if (receivedToken) {
           try {
             localStorage.setItem('token', receivedToken);
@@ -253,17 +275,12 @@ export function useAuthProfile() {
             clearTimeout(gracePeriodTimer);
             gracePeriodTimer = null;
           }
-          if (event.data.user?.id && event.data.user?.name && active) {
-            const u: AuthUser = {
-              id: String(event.data.user.id),
-              name: String(event.data.user.name),
-              avatar: String(event.data.user.avatar || ''),
-            };
-            setUser(u);
+          if (pUser && active) {
+            setUser(pUser);
             setLoadingUser(false);
             setAuthError(null);
             try {
-              localStorage.setItem('auth_user_cache', JSON.stringify(u));
+              localStorage.setItem('auth_user_cache', JSON.stringify(pUser));
             } catch {}
           }
           void validateToken(receivedToken);
@@ -292,5 +309,92 @@ export function useAuthProfile() {
     };
   }, [searchParams]);
 
-  return { user, loadingUser, authError, setAuthError };
+  const loginWithCredentials = async (email: string, password: string) => {
+    try {
+      const response = await fetch(`${getAuthApiBaseUrl()}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.token) {
+        return {
+          success: false,
+          error: data.message || 'Invalid email or password',
+        };
+      }
+
+      const fetchedUser: AuthUser = {
+        id: data.user.id || data.user._id,
+        name: data.user.name || data.user.username || '',
+        avatar: data.user.avatar || '',
+      };
+
+      try {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('game_account_mode', 'custom');
+        localStorage.setItem('auth_user_cache', JSON.stringify(fetchedUser));
+      } catch {}
+
+      setUser(fetchedUser);
+      setAuthError(null);
+      setLoadingUser(false);
+
+      const isDifferentFromMovie = Boolean(
+        parentMovieUser && String(parentMovieUser.id) !== String(fetchedUser.id)
+      );
+
+      return {
+        success: true,
+        user: fetchedUser,
+        isDifferentFromMovie,
+      };
+    } catch (err) {
+      console.error('Login error:', err);
+      return {
+        success: false,
+        error: 'Network error or server unavailable',
+      };
+    }
+  };
+
+  const useParentMovieAccount = () => {
+    if (!parentMovieToken) return;
+    try {
+      localStorage.setItem('token', parentMovieToken);
+      localStorage.setItem('game_account_mode', 'sync');
+      if (parentMovieUser) {
+        localStorage.setItem('auth_user_cache', JSON.stringify(parentMovieUser));
+        setUser(parentMovieUser);
+      }
+    } catch {}
+    setAuthError(null);
+    setLoadingUser(false);
+  };
+
+  const logout = () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_user_cache');
+      localStorage.removeItem('game_account_mode');
+    } catch {}
+    setUser(null);
+    setAuthError('NO_TOKEN');
+    setLoadingUser(false);
+  };
+
+  return {
+    user,
+    loadingUser,
+    authError,
+    setAuthError,
+    parentMovieUser,
+    parentMovieToken,
+    loginWithCredentials,
+    useParentMovieAccount,
+    logout,
+  };
 }

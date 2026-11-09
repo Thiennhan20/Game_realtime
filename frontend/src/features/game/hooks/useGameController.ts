@@ -92,7 +92,28 @@ function isSameLobbyRooms(a: LobbyRoom[], b: LobbyRoom[]) {
 
 export function useGameController() {
   const { locale, mounted, t, toggleLocale } = useGameLocale();
-  const { user, loadingUser, authError, setAuthError } = useAuthProfile();
+  const {
+    user,
+    loadingUser,
+    authError,
+    setAuthError,
+    parentMovieUser,
+    parentMovieToken,
+    loginWithCredentials,
+    useParentMovieAccount,
+    logout,
+  } = useAuthProfile();
+
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [dualAccountNotice, setDualAccountNotice] = useState<{
+    isOpen: boolean;
+    movieUser: string;
+    gameUser: string;
+  }>({
+    isOpen: false,
+    movieUser: '',
+    gameUser: '',
+  });
 
   const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>(() => {
     if (typeof window !== 'undefined') {
@@ -1637,6 +1658,15 @@ export function useGameController() {
     handleSendReaction,
     floatingEmotes,
     copyRoomId,
+    parentMovieUser,
+    parentMovieToken,
+    loginWithCredentials,
+    useParentMovieAccount,
+    logout,
+    isLoginModalOpen,
+    setIsLoginModalOpen,
+    dualAccountNotice,
+    setDualAccountNotice,
   };
 }
 

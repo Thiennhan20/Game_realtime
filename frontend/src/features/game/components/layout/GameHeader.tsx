@@ -6,6 +6,8 @@ import {
   ChevronDown,
   Clock,
   Home,
+  LogOut,
+  RefreshCw,
   Trophy,
   Users,
   Volume2,
@@ -26,6 +28,8 @@ interface GameHeaderProps {
   onOpenHistory: () => void;
   onOpenLeaderboard: () => void;
   onOpenAchievements: () => void;
+  onSwitchAccount?: () => void;
+  onLogout?: () => void;
 }
 
 export function GameHeader({
@@ -38,6 +42,8 @@ export function GameHeader({
   onOpenHistory,
   onOpenLeaderboard,
   onOpenAchievements,
+  onSwitchAccount,
+  onLogout,
 }: GameHeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(() => sound.getMuted());
@@ -205,6 +211,32 @@ export function GameHeader({
                     <Award size={16} className="text-emerald-400" />
                     <span>{t('achievements')}</span>
                   </button>
+
+                  {(onSwitchAccount || onLogout) && <div className="my-1 border-t border-white/[0.08]" />}
+
+                  {onSwitchAccount && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => selectMenuItem(onSwitchAccount)}
+                      className="w-full text-left py-2.5 px-4 hover:bg-[#121622] text-amber-300 hover:text-amber-200 text-xs sm:text-sm font-mono font-bold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                    >
+                      <RefreshCw size={15} className="text-amber-400" />
+                      <span>{t('switchAccount')}</span>
+                    </button>
+                  )}
+
+                  {onLogout && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => selectMenuItem(onLogout)}
+                      className="w-full text-left py-2.5 px-4 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 text-xs sm:text-sm font-mono font-bold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                    >
+                      <LogOut size={15} className="text-rose-400" />
+                      <span>{t('logout')}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

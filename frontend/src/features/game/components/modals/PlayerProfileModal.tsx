@@ -37,6 +37,7 @@ interface PlayerProfileModalProps {
   onClose: () => void;
   onOpenAchievements?: () => void;
   onOpenHistory?: () => void;
+  onSwitchAccount?: () => void;
 }
 
 export function PlayerProfileModal({
@@ -47,6 +48,7 @@ export function PlayerProfileModal({
   onClose,
   onOpenAchievements,
   onOpenHistory,
+  onSwitchAccount,
 }: PlayerProfileModalProps) {
   const [profile, setProfile] = useState<PublicGameProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -510,6 +512,19 @@ export function PlayerProfileModal({
                     >
                       <History size={13} className="text-cyan-400" />
                       <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
+                    </button>
+                  )}
+                  {isMe && onSwitchAccount && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onSwitchAccount();
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-amber-500/40 text-amber-300 font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <RefreshCw size={13} className="text-amber-400" />
+                      <span>{locale === 'vi' ? 'Đổi tài khoản' : 'Switch Account'}</span>
                     </button>
                   )}
                 </div>

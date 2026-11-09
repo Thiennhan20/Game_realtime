@@ -34,6 +34,16 @@ const PlayerProfileModal = dynamic(
   { ssr: false }
 );
 
+const QuickLoginModal = dynamic(
+  () => import('./components/modals/QuickLoginModal').then((mod) => mod.QuickLoginModal),
+  { ssr: false }
+);
+
+const DualAccountNoticeModal = dynamic(
+  () => import('./components/modals/DualAccountNoticeModal').then((mod) => mod.DualAccountNoticeModal),
+  { ssr: false }
+);
+
 export default function GameClient() {
   const router = useRouter();
   const game = useGameController();
@@ -83,10 +93,43 @@ export default function GameClient() {
 
   if (game.authError || !game.user) {
     return (
-      <AuthRequiredScreen
-        t={game.t}
-        onLogin={() => navigateTopWindow(getMainSiteUrl('/login'))}
-      />
+      <>
+        <AuthRequiredScreen
+          t={game.t}
+          locale={game.locale}
+          onLogin={() => game.setIsLoginModalOpen(true)}
+          onRegister={() => navigateTopWindow(getMainSiteUrl('/login?mode=register', game.locale))}
+        />
+
+        <QuickLoginModal
+          isOpen={game.isLoginModalOpen}
+          onClose={() => game.setIsLoginModalOpen(false)}
+          parentMovieUser={game.parentMovieUser}
+          onUseParentMovieAccount={game.useParentMovieAccount}
+          onSubmitLogin={async (email, pass) => {
+            const res = await game.loginWithCredentials(email, pass);
+            if (res.success && res.isDifferentFromMovie && game.parentMovieUser) {
+              game.setDualAccountNotice({
+                isOpen: true,
+                movieUser: game.parentMovieUser.name,
+                gameUser: res.user?.name || email,
+              });
+            }
+            return res;
+          }}
+          locale={game.locale}
+          t={game.t}
+        />
+
+        <DualAccountNoticeModal
+          isOpen={game.dualAccountNotice.isOpen}
+          onClose={() => game.setDualAccountNotice({ isOpen: false, movieUser: '', gameUser: '' })}
+          movieUser={game.dualAccountNotice.movieUser}
+          gameUser={game.dualAccountNotice.gameUser}
+          locale={game.locale}
+          t={game.t}
+        />
+      </>
     );
   }
 
@@ -104,11 +147,20 @@ export default function GameClient() {
           locale={game.locale}
           t={game.t}
           onLocaleChange={game.toggleLocale}
-          onBackHome={() => navigateTopWindow(getMainSiteUrl())}
-          onOpenProfile={() => handleOpenProfile(user?.userId || 'me')}
+          onBackHome={() => navigateTopWindow(getMainSiteUrl('', game.locale))}
+          onOpenProfile={() => handleOpenProfile(user?.id || user?.userId || 'me')}
           onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
           onOpenLeaderboard={() => router.push(`/leaderboard?locale=${game.locale}`)}
           onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
+          onSwitchAccount={() => game.setIsLoginModalOpen(true)}
+          onLogout={() => {
+            if (window.confirm(game.t('confirmLogout'))) {
+              if (game.room) {
+                game.handleLeaveRoom();
+              }
+              game.logout();
+            }
+          }}
         />
       )}
 
@@ -282,6 +334,39 @@ export default function GameClient() {
         onClose={() => setShowProfileModal(false)}
         onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
         onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
+        onSwitchAccount={() => {
+          setShowProfileModal(false);
+          game.setIsLoginModalOpen(true);
+        }}
+      />
+
+      <QuickLoginModal
+        isOpen={game.isLoginModalOpen}
+        onClose={() => game.setIsLoginModalOpen(false)}
+        parentMovieUser={game.parentMovieUser}
+        onUseParentMovieAccount={game.useParentMovieAccount}
+        onSubmitLogin={async (email, pass) => {
+          const res = await game.loginWithCredentials(email, pass);
+          if (res.success && res.isDifferentFromMovie && game.parentMovieUser) {
+            game.setDualAccountNotice({
+              isOpen: true,
+              movieUser: game.parentMovieUser.name,
+              gameUser: res.user?.name || email,
+            });
+          }
+          return res;
+        }}
+        locale={game.locale}
+        t={game.t}
+      />
+
+      <DualAccountNoticeModal
+        isOpen={game.dualAccountNotice.isOpen}
+        onClose={() => game.setDualAccountNotice({ isOpen: false, movieUser: '', gameUser: '' })}
+        movieUser={game.dualAccountNotice.movieUser}
+        gameUser={game.dualAccountNotice.gameUser}
+        locale={game.locale}
+        t={game.t}
       />
     </div>
   );
