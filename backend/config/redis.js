@@ -56,6 +56,7 @@ async function invalidateUserAndLeaderboardCache(userId) {
     }
     if (userId) {
       deletePromises.push(redis.del(`${PROFILE_CACHE_PREFIX}${userId}`));
+      deletePromises.push(redis.del(`${PROFILE_CACHE_PREFIX}full:${userId}`));
     }
     await Promise.all(deletePromises);
   } catch (err) {

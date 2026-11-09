@@ -70,23 +70,23 @@ export function PlayingArena({
 
   return (
     <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-h-0">
-      <div className="flex md:hidden border border-slate-800/80 bg-slate-950/40 p-1 rounded-xl shrink-0 gap-1">
+      <div className="flex md:hidden border border-white/[0.08] bg-[#0d1017] p-1 rounded-lg shrink-0 gap-1 font-mono">
         <button
           onClick={() => setActiveTab('mine')}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition duration-200 ${
+          className={`flex-1 py-1.5 rounded text-xs font-bold transition ${
             activeTab === 'mine'
-              ? 'bg-purple-500/15 border border-purple-500/30 text-purple-300'
-              : 'text-slate-500 hover:text-slate-400'
+              ? 'bg-violet-500/15 border border-violet-500/30 text-violet-200'
+              : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           {isSpectator ? p0Name : t('yourGuesses')} ({myGuesses.length})
         </button>
         <button
           onClick={() => setActiveTab('opponent')}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition duration-200 ${
+          className={`flex-1 py-1.5 rounded text-xs font-bold transition ${
             activeTab === 'opponent'
-              ? 'bg-pink-500/15 border border-pink-500/30 text-pink-300'
-              : 'text-slate-500 hover:text-slate-400'
+              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-200'
+              : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           {isSpectator ? p1Name : locale === 'vi' ? 'Đối thủ đoán' : 'Opponent Guesses'} ({opponentGuesses.length})

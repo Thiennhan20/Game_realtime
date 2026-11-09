@@ -6,12 +6,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Award,
+  Bot,
   Calendar,
   ChevronDown,
   ChevronUp,
   Clock,
+  Gamepad2,
   LoaderCircle,
   Shield,
+  Swords,
   Trophy,
   Users,
   Zap,
@@ -400,26 +403,26 @@ function HistoryPageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#090a0f] text-white">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
-          className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full mb-4"
+          className="w-10 h-10 border-3 border-cyan-500 border-t-transparent rounded-full mb-4"
         />
-        <p className="text-slate-400 font-medium">{t('loading')}</p>
+        <p className="text-slate-400 font-mono text-sm">{t('loading')}</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-4">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center space-y-4 shadow-xl">
-          <p className="text-red-400 font-bold text-lg">⚠️ Error</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#090a0f] text-white p-4">
+        <div className="max-w-md w-full bg-[#0d1017] border border-white/[0.08] p-8 rounded-2xl text-center space-y-4 shadow-xl">
+          <p className="text-rose-400 font-mono font-bold text-lg">⚠️ Error</p>
           <p className="text-slate-300 text-sm">{error}</p>
           <button
             onClick={() => window.location.href = `/?locale=${locale}`}
-            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition duration-200 cursor-pointer"
+            className="px-6 py-2.5 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] text-white font-mono font-bold rounded-xl transition duration-200 cursor-pointer"
           >
             {t('back')}
           </button>
@@ -429,38 +432,38 @@ function HistoryPageContent() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
+    <div className="min-h-[100dvh] bg-[#090a0f] text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
       {/* Header Info - Fixed Top Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0d1017] border-b border-white/[0.08] px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
         <div className="max-w-[1700px] w-full mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <button
               onClick={() => router.push(`/?locale=${locale}`)}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
+              className="p-2 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] rounded-xl text-slate-300 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
               title={t('back')}
             >
               <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
             </button>
 
-            <div className="hidden xs:block p-2 bg-purple-500/10 text-purple-400 rounded-xl shrink-0 border border-purple-500/20">
+            <div className="hidden xs:block p-2 bg-cyan-500/15 text-cyan-400 rounded-xl shrink-0 border border-cyan-500/30">
               <Clock size={18} className="sm:w-5 sm:h-5" />
             </div>
 
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm sm:text-lg tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
-                {t('title')}
+              <h1 className="font-mono font-bold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
+                <span>{t('title')}</span>
               </h1>
-              <p className="hidden sm:block text-[11px] text-slate-400">{t('subtitle')}</p>
+              <p className="hidden sm:block text-[11px] text-slate-400 font-mono">{t('subtitle')}</p>
             </div>
           </div>
 
           {/* User Profile & Language Dropdown */}
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-            <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-[10px] font-bold">
+            <div className="flex items-center bg-[#121622] border border-white/[0.08] p-0.5 rounded-xl text-[10px] font-mono font-bold">
               <button
                 onClick={() => toggleLocale('en')}
                 className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
-                  locale === 'en' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  locale === 'en' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 EN
@@ -468,7 +471,7 @@ function HistoryPageContent() {
               <button
                 onClick={() => toggleLocale('vi')}
                 className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
-                  locale === 'vi' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  locale === 'vi' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 VI
@@ -482,17 +485,17 @@ function HistoryPageContent() {
                   onClick={() => setShowUserDropdown((isOpen) => !isOpen)}
                   aria-label={userProfile.name}
                   aria-expanded={showUserDropdown}
-                  className="flex items-center justify-center bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex items-center justify-center bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
                 >
                   {userProfile.avatar && !avatarError ? (
                     <img
                       src={userProfile.avatar}
                       alt={userProfile.name}
                       onError={() => setAvatarError(true)}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 shrink-0 object-cover"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-white/[0.1] shrink-0 object-cover"
                     />
                   ) : (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white shrink-0">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-cyan-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white shrink-0">
                       {userProfile.name.slice(0, 2)}
                     </div>
                   )}
@@ -508,16 +511,16 @@ function HistoryPageContent() {
                   <div
                     role="menu"
                     aria-label="User navigation"
-                    className="absolute right-0 mt-2 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                    className="absolute right-0 mt-2 w-52 bg-[#0c1017] border border-white/[0.08] rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
-                        navigateTopWindow(getMainSiteUrl('/profile', locale));
+                        router.push(`/profile?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.05] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Users size={16} className="text-purple-400" />
                       <span>{locale === 'vi' ? 'Hồ sơ cá nhân' : 'User Profile'}</span>
@@ -529,7 +532,7 @@ function HistoryPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/history?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.05] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Clock size={16} className="text-cyan-400" />
                       <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
@@ -541,7 +544,7 @@ function HistoryPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/leaderboard?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.05] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Trophy size={16} className="text-amber-400" />
                       <span>{locale === 'vi' ? 'Bảng xếp hạng' : 'Leaderboard'}</span>
@@ -553,7 +556,7 @@ function HistoryPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/achievements?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.05] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Award size={16} className="text-emerald-400" />
                       <span>{locale === 'vi' ? 'Thành tích' : 'Achievements'}</span>
@@ -562,7 +565,7 @@ function HistoryPageContent() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-center bg-slate-900/60 border border-slate-800/80 p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
+              <div className="flex items-center justify-center bg-[#121622] border border-white/[0.08] p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800/80 rounded-full shrink-0" />
                 <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md sm:ml-2" />
               </div>
@@ -574,51 +577,51 @@ function HistoryPageContent() {
       {/* Main Content Body */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 pt-16 sm:pt-20 pb-24 sm:pb-28 pb-[calc(6rem+env(safe-area-inset-bottom))] space-y-4">
         {/* Mode Filter Tabs: All, PvP, AI */}
-        <div className="flex items-center gap-2 p-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl w-fit">
+        <div className="flex items-center gap-1.5 p-1 bg-[#0d1017] border border-white/[0.08] rounded-xl w-fit">
           <button
             type="button"
             onClick={() => setHistoryMode('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
               historyMode === 'all'
-                ? 'bg-purple-600 text-white shadow-md'
+                ? 'bg-cyan-600 text-white shadow-sm border border-cyan-400/30'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>🎮</span>
+            <Gamepad2 size={14} />
             <span>{locale === 'vi' ? 'Tất cả' : 'All Matches'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setHistoryMode('pvp')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
               historyMode === 'pvp'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
+                ? 'bg-amber-500 text-slate-950 shadow-sm border border-amber-300/40'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>⚔️</span>
+            <Swords size={14} />
             <span>{locale === 'vi' ? 'Đấu Người (PvP)' : 'PvP Matches'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setHistoryMode('ai')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
               historyMode === 'ai'
-                ? 'bg-cyan-500 text-slate-950 shadow-md'
+                ? 'bg-violet-600 text-white shadow-sm border border-violet-400/30'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>🤖</span>
+            <Bot size={14} />
             <span>{locale === 'vi' ? 'Chơi Với Máy (PvE)' : 'Bot Matches'}</span>
           </button>
         </div>
 
         {/* Matches list container */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {history.length === 0 ? (
-            <div className="text-center py-20 bg-slate-900/20 border border-slate-800/80 rounded-2xl text-slate-500 font-medium">
+            <div className="text-center py-20 bg-[#0d1017] border border-white/[0.08] rounded-2xl text-slate-400 font-mono text-sm">
               {t('noMatches')}
             </div>
           ) : (
@@ -681,41 +684,41 @@ function HistoryPageContent() {
               return (
                 <div 
                   key={match._id}
-                  className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl overflow-hidden transition-all duration-200 hover:border-slate-700/60 shadow-lg"
+                  className="bg-[#0d1017] hover:bg-[#10141f] border border-white/[0.08] hover:border-cyan-500/30 rounded-2xl overflow-hidden transition-all duration-200 shadow-md"
                 >
                   {/* Brief horizontal summary row */}
                   <div 
                     onClick={() => toggleExpand(match._id)}
-                    className="flex cursor-pointer select-none items-center justify-between gap-2 p-3 sm:p-5"
+                    className="flex cursor-pointer select-none items-center justify-between gap-2 p-3 sm:p-4"
                   >
                     {/* Left: Outcome badge + Match basic info */}
                     <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                       {/* Winner / Loser Badge */}
-                      <div className={`shrink-0 px-2 py-1.5 sm:px-3 rounded-xl font-black text-[10px] sm:text-xs tracking-wider ${statusBadgeStyle}`}>
+                      <div className={`shrink-0 px-2.5 py-1 sm:px-3 rounded-lg font-mono font-bold text-[10px] sm:text-xs tracking-wider uppercase ${statusBadgeStyle}`}>
                         {statusBadgeText}
                       </div>
 
                       {/* Opponent Info */}
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-                          <span className="hidden text-xs text-slate-400 sm:inline">{t('opponent')}:</span>
+                          <span className="hidden text-xs text-slate-400 font-mono sm:inline">{t('opponent')}:</span>
                           {opponent?.avatar ? (
-                            <img src={opponent.avatar} alt={opponent.username} className="w-5 h-5 rounded-full border border-slate-700 object-cover" />
+                            <img src={opponent.avatar} alt={opponent.username} className="w-5 h-5 rounded-full border border-white/[0.1] object-cover" />
                           ) : (
-                            <div className="w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center font-bold text-[10px]">
+                            <div className="w-5 h-5 bg-cyan-600 rounded-full flex items-center justify-center font-bold text-[10px] text-white">
                               {opponent?.username?.slice(0, 1) || '?'}
                             </div>
                           )}
-                          <span className="max-w-[64px] truncate text-xs font-bold text-slate-100 sm:max-w-none sm:text-sm">{opponent?.username || 'Unknown'}</span>
+                          <span className="max-w-[70px] truncate text-xs font-bold text-slate-100 sm:max-w-none sm:text-sm">{opponent?.username || 'Unknown'}</span>
                         </div>
-                        <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-slate-500 sm:gap-3 sm:text-xs">
+                        <div className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-slate-500 font-mono sm:gap-3 sm:text-xs">
                           <span className="flex min-w-0 items-center gap-1 truncate">
-                            <Calendar size={12} />
+                            <Calendar size={12} className="text-slate-400" />
                             <span className="truncate">{formatDate(match.finishedAt)}</span>
                           </span>
-                          <span className="hidden sm:inline">•</span>
+                          <span className="hidden sm:inline text-slate-600">•</span>
                           <span className="hidden items-center space-x-1 sm:flex">
-                            <Clock size={12} />
+                            <Clock size={12} className="text-slate-400" />
                             <span>{formatDuration(match.duration)}</span>
                           </span>
                         </div>
@@ -725,24 +728,24 @@ function HistoryPageContent() {
                     {/* Right: XP & Rating Badges + Expand Toggle Button */}
                     <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                       <div
-                        className={`rounded-lg border px-1.5 py-1 font-mono text-[10px] font-black sm:px-2 sm:text-xs ${
+                        className={`rounded-lg border px-1.5 py-1 font-mono text-[10px] font-bold sm:px-2 sm:text-xs ${
                           typeof xpEarned === 'number' && xpEarned > 0
-                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                            : 'border-slate-700 bg-slate-800/70 text-slate-400'
+                            ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                            : 'border-white/[0.08] bg-[#121622] text-slate-400'
                         }`}
                       >
                         {typeof xpEarned === 'number' ? `+${xpEarned} XP` : '-- XP'}
                       </div>
 
                       <div
-                        className={`rounded-lg border px-1.5 py-1 font-mono text-[10px] font-black sm:px-2 sm:text-xs ${
+                        className={`rounded-lg border px-1.5 py-1 font-mono text-[10px] font-bold sm:px-2 sm:text-xs ${
                           typeof ratingDelta === 'number'
                             ? ratingDelta > 0
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                              ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
                               : ratingDelta < 0
-                              ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
-                              : 'border-amber-500/25 bg-amber-500/10 text-amber-300'
-                            : 'border-slate-700 bg-slate-800/70 text-slate-400'
+                              ? 'border-rose-500/30 bg-rose-500/15 text-rose-400'
+                              : 'border-amber-500/25 bg-amber-500/15 text-amber-300'
+                            : 'border-white/[0.08] bg-[#121622] text-slate-400'
                         }`}
                       >
                         {typeof ratingDelta === 'number'
@@ -750,11 +753,11 @@ function HistoryPageContent() {
                           : '-- Rating'}
                       </div>
 
-                      <div className="hidden sm:block text-right text-xs">
-                        <span className="font-bold text-purple-400">{currentGuessCount}</span>
+                      <div className="hidden sm:block text-right text-xs font-mono">
+                        <span className="font-bold text-cyan-300">{currentGuessCount}</span>
                         <span className="text-slate-500"> {t('turns')}</span>
                       </div>
-                      <div className="rounded-lg bg-slate-800/60 p-1 text-slate-400 sm:p-1.5">
+                      <div className="rounded-lg bg-[#121622] border border-white/[0.08] p-1 text-slate-400 sm:p-1.5">
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
                     </div>
@@ -768,26 +771,27 @@ function HistoryPageContent() {
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="border-t border-slate-800/60 bg-slate-950/60 p-4 sm:p-5 space-y-4"
+                        className="border-t border-white/[0.06] bg-[#090a0f]/80 p-4 sm:p-5 space-y-4"
                       >
                         {isEarlyForfeitNote && (
-                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold">
-                            ⚡ {t('earlyForfeitRatingDesc')}
+                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-medium flex items-center gap-2">
+                            <Zap size={14} className="text-amber-400 shrink-0" />
+                            <span>{t('earlyForfeitRatingDesc')}</span>
                           </div>
                         )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                           {/* Rating details */}
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
-                            <span className="text-slate-500 block text-[11px] mb-1">{t('ratingChange')}</span>
-                            <div className="flex items-center gap-1.5 font-bold">
+                          <div className="bg-[#121622] border border-white/[0.08] p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] font-mono mb-1">{t('ratingChange')}</span>
+                            <div className="flex items-center gap-1.5 font-bold font-mono">
                               <Zap size={13} className="text-cyan-400" />
                               <span className="text-slate-400">{ratingBefore ?? '--'}</span>
                               <span className="text-slate-600">→</span>
                               <span className="text-white">{ratingAfter ?? '--'}</span>
                               {typeof ratingDelta === 'number' && (
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                                  ratingDelta > 0 ? 'bg-emerald-500/20 text-emerald-300' : ratingDelta < 0 ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-400'
+                                  ratingDelta > 0 ? 'bg-emerald-500/20 text-emerald-300' : ratingDelta < 0 ? 'bg-rose-500/20 text-rose-300' : 'bg-[#181d2c] text-slate-400'
                                 }`}>
                                   {ratingDelta > 0 ? `+${ratingDelta}` : `${ratingDelta}`}
                                 </span>
@@ -796,11 +800,11 @@ function HistoryPageContent() {
                           </div>
 
                           {/* Rank details */}
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
-                            <span className="text-slate-500 block text-[11px] mb-1">{t('rankBeforeAfter')}</span>
+                          <div className="bg-[#121622] border border-white/[0.08] p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] font-mono mb-1">{t('rankBeforeAfter')}</span>
                             <div className="flex items-center gap-1.5 font-bold text-slate-200">
                               <Shield size={13} className="text-amber-400" />
-                              <span>
+                              <span className="font-mono">
                                 {locale === 'vi'
                                   ? (currentPlayer?.rankBefore || 'Đồng')
                                   : (currentPlayer?.rankBeforeEn || 'Bronze')}
@@ -809,7 +813,7 @@ function HistoryPageContent() {
                                 (currentPlayer?.rankBeforeEn && currentPlayer?.rankAfterEn && currentPlayer.rankBeforeEn !== currentPlayer.rankAfterEn)) && (
                                 <>
                                   <span className="text-slate-600">→</span>
-                                  <span className="text-amber-300">
+                                  <span className="text-amber-300 font-mono">
                                     {locale === 'vi'
                                       ? (currentPlayer?.rankAfter || 'Đồng')
                                       : (currentPlayer?.rankAfterEn || 'Bronze')}
@@ -820,19 +824,19 @@ function HistoryPageContent() {
                           </div>
 
                           {/* Stat 1: Guess Breakdown */}
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
-                            <span className="text-slate-500 block text-[11px] mb-1">{locale === 'vi' ? 'Số lượt đoán chi tiết' : 'Guess Count Breakdown'}</span>
-                            <div className="font-bold text-slate-200 text-xs">
-                              {locale === 'vi' ? 'Bạn' : 'You'}: <strong className="text-purple-300 font-mono">{currentGuessCount}</strong>
-                              <span className="mx-1 text-slate-600">·</span>
-                              {locale === 'vi' ? 'Đối thủ' : 'Opponent'}: <strong className="text-slate-400 font-mono">{opponentGuessCount}</strong>
+                          <div className="bg-[#121622] border border-white/[0.08] p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] font-mono mb-1">{locale === 'vi' ? 'Số lượt đoán chi tiết' : 'Guess Count Breakdown'}</span>
+                            <div className="font-bold text-slate-200 text-xs font-mono">
+                              {locale === 'vi' ? 'Bạn' : 'You'}: <strong className="text-cyan-300">{currentGuessCount}</strong>
+                              <span className="mx-1.5 text-slate-600">·</span>
+                              {locale === 'vi' ? 'Đối thủ' : 'Opponent'}: <strong className="text-slate-400">{opponentGuessCount}</strong>
                             </div>
                           </div>
 
                           {/* Stat 2: First move */}
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
-                            <span className="text-slate-500 block text-[11px] mb-1">{t('firstMove')}</span>
-                            <span className="font-bold text-slate-200">
+                          <div className="bg-[#121622] border border-white/[0.08] p-3 rounded-xl">
+                            <span className="text-slate-500 block text-[11px] font-mono mb-1">{t('firstMove')}</span>
+                            <span className="font-bold text-slate-200 text-xs">
                               {match.rpsWinnerIndex === (currentPlayer?.playerIndex ?? 0)
                                 ? (locale === 'vi' ? 'Bạn (thắng oẳn tù tì)' : 'You (won RPS)')
                                 : match.rpsWinnerIndex !== null && match.rpsWinnerIndex !== -1
@@ -855,7 +859,7 @@ function HistoryPageContent() {
         {(hasMoreHistory || loadMoreError) && history.length > 0 && (
           <div className="flex flex-col items-center gap-2 py-2">
             {loadMoreError && (
-              <p role="status" className="text-center text-xs font-medium text-rose-400">
+              <p role="status" className="text-center text-xs font-mono font-medium text-rose-400">
                 {t('loadMoreError')}
               </p>
             )}
@@ -863,7 +867,7 @@ function HistoryPageContent() {
               type="button"
               onClick={() => void loadMoreHistory()}
               disabled={loadingMore}
-              className="inline-flex min-w-44 items-center justify-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-5 py-2.5 text-sm font-bold text-purple-200 transition hover:border-purple-400/50 hover:bg-purple-500/20 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+              className="inline-flex min-w-44 items-center justify-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-2.5 text-sm font-mono font-bold text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
             >
               {loadingMore ? (
                 <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />

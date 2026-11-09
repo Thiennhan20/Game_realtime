@@ -46,7 +46,7 @@ export function FloatingEmoteOverlay({
             }`}
           >
             <div
-              className={`relative flex items-center justify-center px-2 py-1.5 rounded-2xl bg-slate-900/95 border backdrop-blur-md ${
+              className={`relative flex items-center justify-center px-2 py-1.5 rounded-2xl bg-[#0c1017] border ${
                 side === 'right'
                   ? 'border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.45)]'
                   : 'border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.45)]'

@@ -33,6 +33,7 @@ interface LobbyScreenProps {
   onViewAllRooms: () => void;
   onViewLeaderboard: () => void;
   onSpectateRoom?: (roomId: string) => void;
+  onOpenProfile?: (userId: string | null) => void;
 }
 
 export const LobbyScreen = memo(function LobbyScreen({
@@ -58,6 +59,7 @@ export const LobbyScreen = memo(function LobbyScreen({
   onViewAllRooms,
   onViewLeaderboard,
   onSpectateRoom,
+  onOpenProfile,
 }: LobbyScreenProps) {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -100,7 +102,7 @@ export const LobbyScreen = memo(function LobbyScreen({
       >
         {!isDesktop && statsCard('mb-3')}
         <MobileHowToPlay locale={locale} />
-        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-2xl space-y-4 sm:space-y-6">
+        <div className="bg-[#0d1017] border border-white/[0.08] p-4 sm:p-6 rounded-xl shadow-xl space-y-4 sm:space-y-6">
           <ModeSelector
             locale={locale}
             t={t}
@@ -124,6 +126,7 @@ export const LobbyScreen = memo(function LobbyScreen({
             onJoin={onJoinRoom}
             onSpectate={onSpectateRoom}
             onViewAll={onViewAllRooms}
+            onOpenProfile={onOpenProfile}
           />
         </div>
       </motion.div>
@@ -131,7 +134,13 @@ export const LobbyScreen = memo(function LobbyScreen({
       {/* Right Column: Arena Performance (Top) & Leaderboard (Bottom) */}
       <div className="hidden lg:flex flex-col flex-1 gap-4 min-w-0">
         {isDesktop && statsCard('shrink-0')}
-        {isDesktop && <LeaderboardPreview locale={locale} onViewAll={onViewLeaderboard} />}
+        {isDesktop && (
+          <LeaderboardPreview
+            locale={locale}
+            onViewAll={onViewLeaderboard}
+            onOpenProfile={onOpenProfile}
+          />
+        )}
       </div>
     </div>
   );

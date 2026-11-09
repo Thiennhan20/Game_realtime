@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617;
+  --background: #090a0f;
   --foreground: #f8fafc;
-  --primary-purple: #8b5cf6;
+  --primary-purple: #7c3aed;
   --secondary-cyan: #06b6d4;
   --success-emerald: #10b981;
   --danger-rose: #f43f5e;
@@ -18,7 +18,7 @@
 }
 
 body {
-  background: #020617;
+  background: #090a0f;
   color: #f8fafc;
   font-family: var(--font-geist-sans), var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -115,5 +115,20 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Mobile Performance Optimizations for Budget Android & Touch Devices */
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Simplify heavy glow shadows on low-end mobile GPUs */
+  [class*="shadow-[0_0_"],
+  [class*="shadow-[0_8px_"],
+  [class*="shadow-[0_10px_"] {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
   }
 }

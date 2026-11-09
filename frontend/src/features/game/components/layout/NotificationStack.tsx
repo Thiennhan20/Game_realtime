@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Award, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Award, Trophy, WifiOff, X } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { Locale, UnlockedAchievementNotice } from '../../types';
@@ -7,6 +7,7 @@ import type { Locale, UnlockedAchievementNotice } from '../../types';
 interface NotificationStackProps {
   error: string | null;
   isReconnecting: boolean;
+  reconnectCountdown?: number;
   disconnectedOpponent: string | null;
   unlockedAchievements?: UnlockedAchievementNotice[];
   locale: Locale;
@@ -19,6 +20,7 @@ interface NotificationStackProps {
 export function NotificationStack({
   error,
   isReconnecting,
+  reconnectCountdown = 60,
   disconnectedOpponent,
   unlockedAchievements = [],
   locale,
@@ -38,18 +40,21 @@ export function NotificationStack({
             transition={{ type: 'spring', stiffness: 380, damping: 26 }}
             role="status"
             aria-atomic="true"
-            className="bg-slate-900/95 backdrop-blur-md border border-amber-400/55 p-3.5 rounded-2xl text-xs sm:text-sm text-amber-100 shadow-[0_8px_30px_rgba(245,158,11,0.28)] flex items-start gap-3 pointer-events-auto"
+            className="bg-[#0c1017] border border-amber-400/50 p-3.5 rounded-2xl text-xs sm:text-sm text-amber-100 shadow-[0_8px_30px_rgba(245,158,11,0.25)] flex items-start gap-3 pointer-events-auto"
           >
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-lg shrink-0">
-              {unlockedAchievements[0]?.icon || <Award size={18} className="text-amber-300" />}
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-400/30 flex items-center justify-center text-lg shrink-0">
+              {unlockedAchievements[0]?.icon || <Award size={18} className="text-amber-400" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-wider text-amber-400">
-                {locale === 'vi'
-                  ? `🎖️ Mở khóa ${unlockedAchievements.length} thành tích mới!`
-                  : `🎖️ Unlocked ${unlockedAchievements.length} new achievement${unlockedAchievements.length > 1 ? 's' : ''}!`}
+              <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                <Award size={12} className="text-amber-400" />
+                <span>
+                  {locale === 'vi'
+                    ? `Mở khóa ${unlockedAchievements.length} thành tích mới!`
+                    : `Unlocked ${unlockedAchievements.length} new achievement${unlockedAchievements.length > 1 ? 's' : ''}!`}
+                </span>
               </p>
-              <p className="font-extrabold text-white truncate mt-0.5">
+              <p className="font-mono font-bold text-white truncate mt-0.5">
                 {locale === 'vi'
                   ? unlockedAchievements[0]?.titleVi
                   : unlockedAchievements[0]?.titleEn}
@@ -57,7 +62,7 @@ export function NotificationStack({
                   ? ` (+${unlockedAchievements.length - 1})`
                   : ''}
               </p>
-              <p className="text-[11px] text-slate-300 line-clamp-1 mt-0.5">
+              <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                 {locale === 'vi'
                   ? unlockedAchievements[0]?.descVi
                   : unlockedAchievements[0]?.descEn}
@@ -67,7 +72,7 @@ export function NotificationStack({
               <button
                 type="button"
                 onClick={onDismissAchievements}
-                className="p-1 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
+                className="p-1 text-slate-400 hover:text-white bg-[#121622] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
                 title={locale === 'vi' ? 'Đóng' : 'Close'}
               >
                 <X size={13} />
@@ -88,15 +93,21 @@ export function NotificationStack({
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               className={`${
                 isPositiveNotice
-                  ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100 shadow-[0_8px_30px_rgba(16,185,129,0.3)]'
-                  : 'bg-red-950/90 border-red-500/50 text-red-200 shadow-2xl'
-              } backdrop-blur-md border p-3.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-3 pointer-events-auto`}
+                  ? 'bg-[#0c1017] border-emerald-500/50 text-emerald-100 shadow-[0_8px_30px_rgba(16,185,129,0.25)]'
+                  : 'bg-[#0c1017] border-rose-500/50 text-rose-200 shadow-[0_8px_30px_rgba(244,63,94,0.25)]'
+              } border p-3.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-3 pointer-events-auto`}
             >
-              <span className="shrink-0 text-base">{isPositiveNotice ? '🏆' : '⚠️'}</span>
+              <span className="shrink-0">
+                {isPositiveNotice ? (
+                  <Trophy size={16} className="text-emerald-400" />
+                ) : (
+                  <AlertTriangle size={16} className="text-rose-400" />
+                )}
+              </span>
               <span className="flex-1 leading-snug">{error}</span>
               <button
                 onClick={onDismissError}
-                className="p-1 text-white bg-slate-950/25 hover:bg-white hover:text-slate-950 border border-white/70 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
+                className="p-1 text-slate-400 hover:text-white bg-[#121622] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
                 title={locale === 'vi' ? 'Đóng' : 'Close'}
               >
                 <X size={13} />
@@ -113,10 +124,14 @@ export function NotificationStack({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 50, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="bg-yellow-950/90 backdrop-blur-md border border-yellow-500/50 p-3 rounded-xl text-xs sm:text-sm font-semibold text-yellow-200 shadow-2xl flex items-center gap-2.5 pointer-events-auto"
+            className="bg-[#0c1017] border border-amber-500/50 p-3 rounded-xl text-xs sm:text-sm font-mono font-semibold text-amber-200 shadow-2xl flex items-center gap-2.5 pointer-events-auto"
           >
-            <WifiOff size={15} className="animate-pulse shrink-0" />
-            <span className="flex-1 leading-snug">{t('reconnecting')}</span>
+            <WifiOff size={15} className="animate-pulse shrink-0 text-amber-400" />
+            <span className="flex-1 leading-snug">
+              {locale === 'vi'
+                ? `Mất kết nối. Đang tự động kết nối lại... (${reconnectCountdown}s)`
+                : `Connection interrupted. Auto-reconnecting... (${reconnectCountdown}s)`}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -128,15 +143,15 @@ export function NotificationStack({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 50, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="bg-orange-950/90 backdrop-blur-md border border-orange-500/50 p-3 rounded-xl text-xs sm:text-sm font-semibold text-orange-200 shadow-2xl flex items-center gap-3 pointer-events-auto"
+            className="bg-[#0c1017] border border-orange-500/50 p-3 rounded-xl text-xs sm:text-sm font-mono font-semibold text-orange-200 shadow-2xl flex items-center gap-3 pointer-events-auto"
           >
-            <WifiOff size={15} className="animate-pulse shrink-0" />
+            <WifiOff size={15} className="animate-pulse shrink-0 text-orange-400" />
             <span className="flex-1 leading-snug">
               {t('opponentReconnecting').replace('{username}', disconnectedOpponent)}
             </span>
             <button
               onClick={onDismissOpponent}
-              className="p-1 text-white bg-slate-950/25 hover:bg-white hover:text-slate-950 border border-white/70 rounded-full transition duration-200 cursor-pointer shrink-0 flex items-center justify-center"
+              className="p-1 text-slate-400 hover:text-white bg-[#121622] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
               title={locale === 'vi' ? 'Đóng' : 'Close'}
             >
               <X size={13} />

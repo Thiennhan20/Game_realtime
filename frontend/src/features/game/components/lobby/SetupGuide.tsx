@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { BookOpen } from 'lucide-react';
 import type { Locale } from '../../types';
 
 export const SetupGuide = memo(function SetupGuide({ locale }: { locale: Locale }) {
@@ -38,11 +39,11 @@ export const SetupGuide = memo(function SetupGuide({ locale }: { locale: Locale 
         ];
 
   return (
-    <div className="flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 sm:p-5 lg:p-6 rounded-2xl shadow-xl flex flex-col justify-between">
+    <div className="flex-1 bg-[#0d1017] border border-white/[0.08] p-4 sm:p-5 lg:p-6 rounded-xl shadow-xl flex flex-col justify-between">
       <div className="space-y-4">
-        <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider pb-2.5 border-b border-slate-700/80 flex items-center gap-1.5">
-          <span className="text-sm">📖</span>
-          <span className="bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text">
+        <h3 className="text-xs sm:text-sm font-mono font-bold uppercase tracking-wider pb-2.5 border-b border-white/[0.06] flex items-center gap-2 text-white">
+          <BookOpen size={16} className="text-violet-400" />
+          <span>
             {locale === 'vi' ? 'Hướng Dẫn Luật Chơi' : 'How To Play Guide'}
           </span>
         </h3>
@@ -50,19 +51,21 @@ export const SetupGuide = memo(function SetupGuide({ locale }: { locale: Locale 
           {steps.map(([title, description], index) => (
             <div key={title} className="space-y-0.5">
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center font-black text-[11px] text-white shrink-0 shadow-sm">
-                  {index + 1}
+                <div className="w-5 h-5 bg-violet-500/15 border border-violet-500/30 rounded flex items-center justify-center font-mono font-bold text-[11px] text-violet-300 shrink-0 shadow-sm">
+                  0{index + 1}
                 </div>
-                <h4 className="font-extrabold text-xs text-slate-200">{title}</h4>
+                <h4 className="font-bold text-xs text-slate-100">{title}</h4>
               </div>
-              <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed pl-7">{description}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed pl-7">{description}</p>
             </div>
           ))}
         </div>
       </div>
-      <div className="border-t border-slate-850 pt-3 mt-4 text-[10px] sm:text-[11px] text-slate-400 font-extrabold uppercase tracking-wider flex justify-between items-center">
+      <div className="border-t border-white/[0.06] pt-3 mt-4 text-[10px] sm:text-[11px] text-slate-400 font-mono font-bold uppercase tracking-wider flex justify-between items-center">
         <span>{locale === 'vi' ? 'Đấu trường đoán số 4 chữ số' : '4-Digit Numbers Duel'}</span>
-        <span className="text-purple-400 font-mono">LIVE</span>
+        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] font-bold">
+          LIVE
+        </span>
       </div>
     </div>
   );

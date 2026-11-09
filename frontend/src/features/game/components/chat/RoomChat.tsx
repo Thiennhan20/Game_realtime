@@ -19,6 +19,14 @@ function formatChatTime(timestamp: string | number): string {
   }
 }
 
+const QUICK_CHAT_SUGGESTIONS = [
+  { vi: '👋 Xin chào!', en: '👋 Hello!' },
+  { vi: '⚔️ Chúc may mắn!', en: '⚔️ Good luck!' },
+  { vi: '🤔 Căng não thế!', en: '🤔 Brain melt!' },
+  { vi: '🔥 Chiến nào!', en: "🔥 Let's go!" },
+  { vi: '🤝 Trận hay lắm!', en: '🤝 Well played!' },
+];
+
 interface RoomChatProps {
   messages: ChatMessage[];
   currentUsername: string;
@@ -110,19 +118,26 @@ export const RoomChat = memo(function RoomChat({
 
   return (
     <div
-      className={`relative w-full lg:w-80 lg:flex-none bg-slate-900/70 border border-slate-800/80 rounded-2xl flex flex-col h-[calc(100dvh-8rem)] max-h-[600px] lg:h-[536px] 2xl:lg:h-[650px] lg:max-h-[calc(100vh-140px)] overflow-hidden ${className}`}
+      className={`relative w-full lg:w-80 lg:flex-none bg-[#0d1017] border border-white/[0.08] rounded-2xl flex flex-col h-[calc(100dvh-8rem)] max-h-[600px] lg:h-[536px] 2xl:lg:h-[650px] lg:max-h-[calc(100vh-140px)] shadow-xl overflow-hidden ${className}`}
     >
-      <div className="p-4 border-b border-slate-800 flex items-center space-x-2 shrink-0 bg-slate-950/20">
-        <MessageSquare size={16} className="text-purple-400" />
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-          {t('roomChat')}
-        </h3>
+      <div className="p-3.5 border-b border-white/[0.06] flex items-center justify-between shrink-0 bg-[#090a0f]/40">
+        <div className="flex items-center space-x-2">
+          <MessageSquare size={15} className="text-violet-400" />
+          <h3 className="text-xs sm:text-sm font-mono font-bold uppercase tracking-wider text-slate-200">
+            {t('roomChat')}
+          </h3>
+        </div>
+        {messages.length > 0 && (
+          <span className="text-[10px] font-mono text-slate-500 bg-[#121622] px-2 py-0.5 rounded border border-white/[0.06]">
+            {messages.length}
+          </span>
+        )}
       </div>
 
       <div
         ref={messagesRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 min-h-0 bg-slate-950/10"
+        className="flex-1 overflow-y-auto custom-scrollbar p-3.5 space-y-3 min-h-0 bg-transparent"
       >
         {messages.map((message, index) => {
           const isMe = message.username === currentUsername;
@@ -132,31 +147,31 @@ export const RoomChat = memo(function RoomChat({
               key={`${message.timestamp}-${index}`}
               className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
             >
-              <div className="flex items-center space-x-1.5 mb-0.5">
-                <span className="text-[10px] font-bold text-slate-500">
+              <div className="flex items-center space-x-1.5 mb-1">
+                <span className="text-[10px] font-mono font-bold text-slate-400">
                   {message.username}
                 </span>
                 {message.isSpectator && (
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">
+                  <span className="text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
                     {t('spectator')}
                   </span>
                 )}
-                <span className="text-[9px] text-slate-600">
+                <span className="text-[9px] font-mono text-slate-600">
                   {formatChatTime(message.timestamp)}
                 </span>
               </div>
               {isReaction ? (
                 <div
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border backdrop-blur-sm shadow-sm select-none transition-transform hover:scale-105 ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs border shadow-sm select-none transition-transform hover:scale-105 ${
                     isMe
-                      ? 'bg-purple-600/20 border-purple-500/40 text-purple-200 rounded-tr-none'
-                      : 'bg-slate-800/90 border-slate-700/70 text-slate-300 rounded-tl-none'
+                      ? 'bg-violet-500/15 border-violet-500/35 text-violet-200 rounded-tr-none'
+                      : 'bg-[#121622] border-white/[0.08] text-slate-300 rounded-tl-none'
                   }`}
                 >
                   <span className="text-lg leading-none filter drop-shadow-sm">
                     {message.emoji || message.content}
                   </span>
-                  <span className="text-[10px] font-medium opacity-85">
+                  <span className="text-[10px] font-mono font-medium opacity-80">
                     {locale === 'vi'
                       ? isMe
                         ? 'Đã thả'
@@ -168,10 +183,10 @@ export const RoomChat = memo(function RoomChat({
                 </div>
               ) : (
                 <div
-                  className={`px-3 py-2 rounded-xl text-sm max-w-[85%] break-words ${
+                  className={`px-3.5 py-2 rounded-2xl text-xs sm:text-sm max-w-[85%] break-words shadow-sm font-sans leading-relaxed ${
                     isMe
-                      ? 'bg-purple-600 text-white rounded-tr-none'
-                      : 'bg-slate-800 text-slate-200 rounded-tl-none'
+                      ? 'bg-violet-600 text-white rounded-tr-sm border border-violet-400/30'
+                      : 'bg-[#121622] text-slate-200 border border-white/[0.08] rounded-tl-sm'
                   }`}
                 >
                   {message.content}
@@ -180,9 +195,33 @@ export const RoomChat = memo(function RoomChat({
             </div>
           );
         })}
+
         {messages.length === 0 && (
-          <div className="h-full flex items-center justify-center text-slate-700 text-xs py-12">
-            {t('sayHi')}
+          <div className="h-full flex flex-col items-center justify-center text-center p-4 my-auto">
+            <div className="w-10 h-10 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center mb-2.5">
+              <MessageSquare size={18} />
+            </div>
+            <p className="text-xs font-mono font-bold text-slate-300 mb-1">
+              {locale === 'vi' ? 'Chưa có tin nhắn nào' : 'No messages yet'}
+            </p>
+            <p className="text-[11px] text-slate-500 font-sans mb-3.5 max-w-[200px]">
+              {locale === 'vi' ? 'Bấm tin nhắn nhanh hoặc gõ bên dưới:' : 'Tap a quick message or type below:'}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-[260px]">
+              {QUICK_CHAT_SUGGESTIONS.map((sug) => {
+                const text = locale === 'vi' ? sug.vi : sug.en;
+                return (
+                  <button
+                    key={text}
+                    type="button"
+                    onClick={() => onSubmit(text)}
+                    className="px-2.5 py-1 rounded-lg bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-violet-500/40 text-[11px] font-mono text-slate-300 hover:text-white transition active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    {text}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -191,7 +230,7 @@ export const RoomChat = memo(function RoomChat({
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-xl border border-purple-400/40 flex items-center space-x-1.5 transition-all duration-200 animate-bounce cursor-pointer z-20"
+          className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-mono font-bold px-3 py-1.5 rounded-full shadow-xl border border-violet-400/40 flex items-center space-x-1.5 transition-all duration-200 animate-bounce cursor-pointer z-20"
         >
           <ArrowDown size={14} />
           <span>{t('newMessages')}</span>
@@ -200,7 +239,7 @@ export const RoomChat = memo(function RoomChat({
 
       <form
         onSubmit={handleFormSubmit}
-        className="relative p-3 border-t border-slate-800 flex items-center gap-2 shrink-0 bg-slate-950/20"
+        className="relative p-2.5 sm:p-3 border-t border-white/[0.06] flex items-center gap-2 shrink-0 bg-[#090a0f]/60"
       >
         {onSendReaction && (
           <div className="relative shrink-0">
@@ -209,10 +248,10 @@ export const RoomChat = memo(function RoomChat({
               onClick={() => setShowEmotePicker((prev) => !prev)}
               aria-label={locale === 'vi' ? 'Mở bảng biểu cảm' : 'Toggle quick emotes'}
               title={locale === 'vi' ? 'Biểu cảm nhanh' : 'Quick Emotes'}
-              className={`w-10 h-10 border rounded-xl transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0 ${
+              className={`w-9 h-9 sm:w-10 sm:h-10 border rounded-xl transition duration-150 flex items-center justify-center cursor-pointer shrink-0 ${
                 showEmotePicker
-                  ? 'bg-purple-600 border-purple-400 text-white shadow-md shadow-purple-500/25 ring-2 ring-purple-500/30'
-                  : 'bg-slate-800/80 hover:bg-purple-600/20 border-slate-700/60 hover:border-purple-500/40 text-purple-300 hover:text-white'
+                  ? 'bg-violet-600 border-violet-400 text-white shadow-md shadow-violet-500/25 ring-2 ring-violet-500/30'
+                  : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-violet-300 hover:text-white'
               }`}
             >
               <Smile size={18} aria-hidden="true" />
@@ -239,15 +278,15 @@ export const RoomChat = memo(function RoomChat({
           aria-label={t('chatPlaceholder')}
           value={localInput}
           onChange={(event) => setLocalInput(event.target.value)}
-          className="h-10 flex-1 min-w-0 bg-slate-950 border border-slate-800 focus:border-purple-500 focus:outline-none px-3.5 rounded-xl text-base md:text-sm placeholder-slate-600"
+          className="h-9 sm:h-10 flex-1 min-w-0 bg-[#090a0f] border border-white/[0.08] focus:border-violet-500/50 focus:outline-none px-3.5 rounded-xl text-xs sm:text-sm text-slate-200 placeholder-slate-500 font-sans"
         />
         <button
           type="submit"
           disabled={!localInput.trim()}
           aria-label="Send message"
-          className="w-10 h-10 bg-purple-600 hover:bg-purple-500 text-white border border-purple-400/40 rounded-xl disabled:opacity-40 transition duration-150 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0 shadow-sm shadow-purple-950/40"
+          className="w-9 h-9 sm:w-10 sm:h-10 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 active:translate-y-0.5 text-white border border-violet-400/30 rounded-xl disabled:opacity-30 disabled:pointer-events-none transition duration-150 flex items-center justify-center cursor-pointer shrink-0 shadow-sm shadow-violet-950/40"
         >
-          <Send size={18} aria-hidden="true" />
+          <Send size={16} aria-hidden="true" />
         </button>
       </form>
     </div>

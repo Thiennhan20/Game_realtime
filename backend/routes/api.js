@@ -4,7 +4,7 @@ const GameHistory = require('../models/GameHistory');
 const GameProfile = require('../models/GameProfile');
 const User = require('../models/User');
 const { getGameProfileSummary } = require('../services/matchSettlement');
-const { calculateUserAchievements, resolveEquippedTitle } = require('../services/achievements');
+const { calculateUserAchievements, resolveEquippedTitle, ACHIEVEMENTS_DEFINITIONS } = require('../services/achievements');
 const { getRank } = require('../services/rating');
 const {
   getCachedJson,
@@ -82,6 +82,130 @@ function createApiRouter(roomManager, healthHandler) {
       }
       console.error('[MongoDB] Failed to load game profile:', error.message);
       return res.status(500).json({ error: 'Failed to load game profile' });
+    }
+  });
+
+  // GET /api/profile/:userId - Public Game Profile (Supports :userId or 'me')
+  router.get('/profile/:userId', async (req, res) => {
+    try {
+      const rawUserId = req.params.userId;
+      let targetUserId = rawUserId;
+
+      if (rawUserId === 'me') {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return res.status(401).json({ error: 'Unauthorized: Missing token' });
+        }
+        try {
+          const token = authHeader.split(' ')[1];
+          const decoded = jwt.verify(token, JWT_SECRET);
+          targetUserId = String(decoded.userId);
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+        }
+      }
+
+      if (!targetUserId || !/^[a-f\d]{24}$/i.test(targetUserId)) {
+        return res.status(400).json({ error: 'Invalid user ID format' });
+      }
+
+      const cacheKey = `${PROFILE_CACHE_PREFIX}full:${targetUserId}`;
+      const cached = await getCachedJson(cacheKey);
+      if (cached) {
+        return res.json({ profile: cached, cached: true });
+      }
+
+      const [userDoc, profileDoc, recentMatches] = await Promise.all([
+        User.findById(targetUserId).select('name email avatar createdAt').lean(),
+        GameProfile.findOne({ userId: targetUserId }).lean(),
+        GameHistory.find({ 'players.userId': targetUserId })
+          .sort({ finishedAt: -1, _id: -1 })
+          .limit(5)
+          .lean()
+      ]);
+
+      if (!userDoc) {
+        return res.status(404).json({ error: 'Người chơi không tồn tại.' });
+      }
+
+      const summary = await getGameProfileSummary(targetUserId);
+      const totalPvpMatches = summary.wins + summary.losses;
+      const pvpWinRate = totalPvpMatches > 0 ? Math.round((summary.wins / totalPvpMatches) * 100) : 0;
+
+      const easyWins = profileDoc?.aiStats?.easy?.wins || 0;
+      const easyLosses = profileDoc?.aiStats?.easy?.losses || 0;
+      const mediumWins = profileDoc?.aiStats?.medium?.wins || 0;
+      const mediumLosses = profileDoc?.aiStats?.medium?.losses || 0;
+      const hardWins = profileDoc?.aiStats?.hard?.wins || 0;
+      const hardLosses = profileDoc?.aiStats?.hard?.losses || 0;
+      const totalAiWins = easyWins + mediumWins + hardWins;
+      const totalAiLosses = easyLosses + mediumLosses + hardLosses;
+      const totalAiMatches = totalAiWins + totalAiLosses;
+      const aiWinRate = totalAiMatches > 0 ? Math.round((totalAiWins / totalAiMatches) * 100) : 0;
+
+      let unlockedAchievementsCount = 0;
+      if (Array.isArray(profileDoc?.unlockedAchievementIds) && profileDoc?.achievementsInitialized) {
+        unlockedAchievementsCount = profileDoc.unlockedAchievementIds.length;
+      } else {
+        const allHistories = await GameHistory.find({ 'players.userId': targetUserId })
+          .sort({ finishedAt: -1 })
+          .limit(250)
+          .lean();
+        const calc = calculateUserAchievements(profileDoc, allHistories);
+        unlockedAchievementsCount = calc.summary?.unlockedCount || 0;
+      }
+
+      const recentForm = recentMatches.map((match) => {
+        const isWinner = String(match.winnerId) === String(targetUserId);
+        const isAbandoned = match.status === 'abandoned' || match.status === 'cancelled';
+        const myPlayer = match.players?.find((p) => String(p.userId) === String(targetUserId));
+        const oppPlayer = match.players?.find((p) => String(p.userId) !== String(targetUserId));
+
+        return {
+          matchId: match.matchId,
+          isAiRoom: Boolean(match.isAiRoom),
+          status: match.status,
+          result: isAbandoned ? 'abandoned' : isWinner ? 'win' : 'loss',
+          opponentName: match.isAiRoom ? 'AI Bot' : (oppPlayer?.username || 'Đối thủ'),
+          opponentAvatar: oppPlayer?.avatar || '',
+          ratingDelta: myPlayer?.ratingDelta || 0,
+          guessCount: myPlayer?.guessCount || 0,
+          finishedAt: match.finishedAt || match.createdAt
+        };
+      });
+
+      const fullProfile = {
+        user: {
+          userId: String(userDoc._id),
+          name: userDoc.name,
+          avatar: userDoc.avatar || '',
+          createdAt: userDoc.createdAt
+        },
+        stats: {
+          ...summary,
+          totalPvpMatches,
+          pvpWinRate,
+          aiStats: {
+            easy: { wins: easyWins, losses: easyLosses },
+            medium: { wins: mediumWins, losses: mediumLosses },
+            hard: { wins: hardWins, losses: hardLosses },
+            totalAiWins,
+            totalAiLosses,
+            totalAiMatches,
+            aiWinRate
+          },
+          unlockedAchievementsCount,
+          totalAchievementsCount: Array.isArray(ACHIEVEMENTS_DEFINITIONS) ? ACHIEVEMENTS_DEFINITIONS.length : 51,
+          recentForm
+        }
+      };
+
+      void setCachedJson(cacheKey, fullProfile, 60);
+
+      return res.json({ profile: fullProfile });
+    } catch (err) {
+      console.error('[API Profile Error]:', err.message);
+      return res.status(500).json({ error: 'Failed to load user profile' });
     }
   });
 

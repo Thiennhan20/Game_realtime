@@ -26,16 +26,16 @@ export const MobileHowToPlay = memo(function MobileHowToPlay({ locale }: { local
         ];
 
   return (
-    <div className="lg:hidden bg-slate-900/50 border border-purple-500/30 p-4 rounded-xl shadow-lg mb-4">
+    <div className="lg:hidden bg-[#0d1017] border border-white/[0.08] p-3.5 rounded-xl shadow-md mb-4">
       <button
         onClick={() => setIsOpen((open) => !open)}
-        className="w-full flex items-center justify-between font-bold text-xs sm:text-sm text-purple-400 focus:outline-none"
+        className="w-full flex items-center justify-between font-mono font-bold text-xs text-slate-200 hover:text-white focus:outline-none cursor-pointer"
       >
         <span className="flex items-center gap-2">
-          <Gamepad2 size={16} />
-          {locale === 'vi' ? '📖 HƯỚNG DẪN CÁCH CHƠI' : '📖 HOW TO PLAY'}
+          <Gamepad2 size={15} className="text-violet-400" />
+          <span>{locale === 'vi' ? 'HƯỚNG DẪN CÁCH CHƠI' : 'HOW TO PLAY'}</span>
         </span>
-        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
       </button>
       <AnimatePresence>
         {isOpen && (
@@ -43,16 +43,21 @@ export const MobileHowToPlay = memo(function MobileHowToPlay({ locale }: { local
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="mt-3 space-y-3.5 text-xs text-slate-300 border-t border-slate-850 pt-3 overflow-hidden text-left"
+            className="mt-3 space-y-3 text-xs text-slate-300 border-t border-white/[0.06] pt-3 overflow-hidden text-left"
           >
             {steps.map(([title, description], index) => (
-              <div key={title}>
-                <span className="font-extrabold text-purple-400 block mb-0.5">
-                  {index + 1}. {title}
+              <div key={title} className="flex gap-2.5 items-start">
+                <span className="font-mono text-[11px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded shrink-0">
+                  0{index + 1}
                 </span>
-                <span className="text-slate-400 text-[11px] leading-relaxed">
-                  {description}
-                </span>
+                <div>
+                  <span className="font-mono font-bold text-slate-100 block text-xs">
+                    {title}
+                  </span>
+                  <span className="text-slate-400 text-[11px] leading-relaxed">
+                    {description}
+                  </span>
+                </div>
               </div>
             ))}
           </motion.div>

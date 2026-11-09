@@ -14,6 +14,7 @@ interface LobbyRoomListProps {
   onJoin: (roomId: string) => void;
   onSpectate?: (roomId: string) => void;
   onViewAll: () => void;
+  onOpenProfile?: (userId: string | null) => void;
 }
 
 export const LobbyRoomList = memo(function LobbyRoomList({
@@ -25,30 +26,31 @@ export const LobbyRoomList = memo(function LobbyRoomList({
   onJoin,
   onSpectate,
   onViewAll,
+  onOpenProfile,
 }: LobbyRoomListProps) {
   return (
     <div className="space-y-2.5 pt-1 sm:pt-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
-          <Users size={12} className="sm:w-3.5 sm:h-3.5 text-purple-400" />
+        <h3 className="text-[10px] sm:text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+          <Users size={12} className="sm:w-3.5 sm:h-3.5 text-violet-400" />
           <span>{t('lobbyRooms')}</span>
-          <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 rounded-md text-[10px] font-mono font-bold">
+          <span className="px-1.5 py-0.2 bg-violet-500/15 border border-violet-500/25 text-violet-300 rounded text-[10px] font-mono font-bold">
             {rooms.length}
           </span>
         </h3>
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
-          className={`flex items-center space-x-1.5 px-3 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-200 border ${
+          className={`flex items-center space-x-1.5 px-3 py-1 text-[10px] sm:text-xs font-mono font-bold rounded-lg transition-all border ${
             isRefreshing
-              ? 'bg-purple-950/60 border-purple-500/60 text-purple-300 shadow-md shadow-purple-900/20 cursor-wait opacity-80'
-              : 'bg-slate-950/80 hover:bg-slate-900 border-slate-800/80 hover:border-purple-500/40 text-slate-300 hover:text-white cursor-pointer active:scale-95'
+              ? 'bg-violet-950/40 border-violet-500/50 text-violet-300 cursor-wait opacity-80'
+              : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-300 hover:text-white cursor-pointer active:scale-95'
           }`}
           title={locale === 'vi' ? 'Làm mới danh sách phòng' : 'Refresh room list'}
         >
           <RefreshCw
-            size={13}
-            className={`shrink-0 transition-transform ${isRefreshing ? 'animate-spin text-purple-400' : ''}`}
+            size={12}
+            className={`shrink-0 transition-transform ${isRefreshing ? 'animate-spin text-violet-400' : ''}`}
           />
           <span>
             {isRefreshing
@@ -76,11 +78,12 @@ export const LobbyRoomList = memo(function LobbyRoomList({
                 locale={locale}
                 onJoin={onJoin}
                 onSpectate={onSpectate}
+                onOpenProfile={onOpenProfile}
               />
             ))}
             <button
               onClick={onViewAll}
-              className="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 text-purple-300 hover:text-purple-200 text-xs font-bold rounded-xl transition duration-200 flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm mt-2"
+              className="w-full py-2 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-violet-500/40 text-violet-300 hover:text-white text-xs font-mono font-bold rounded-lg transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm mt-2"
             >
               <Grid size={14} />
               <span>

@@ -14,6 +14,7 @@ interface FinishedPanelProps {
   locale: Locale;
   t: Translator;
   isSpectator?: boolean;
+  isReconnecting?: boolean;
   winnerName?: string;
   onOpenSummary: () => void;
   onOpenGuessHistory: () => void;
@@ -30,127 +31,152 @@ export function FinishedPanel({
   locale,
   t,
   isSpectator = false,
+  isReconnecting = false,
   winnerName,
   onOpenSummary,
   onOpenGuessHistory,
   onPlayAgain,
-  onLeaveRoom,
 }: FinishedPanelProps) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-6 text-center w-full max-w-sm mx-auto">
-      <div className="space-y-4 w-full">
-        <div className="text-6xl">{isSpectator ? '🏁' : isWinner ? '🏆' : '💀'}</div>
-        <h3
-          className={`text-2xl sm:text-3xl font-black bg-gradient-to-r ${
-            isSpectator
-              ? 'from-blue-400 to-indigo-400'
+      <div className="w-full bg-[#0d1017] border border-white/[0.08] p-6 sm:p-7 rounded-2xl shadow-2xl space-y-5 text-center">
+        {/* Outcome Header */}
+        <div className="space-y-2">
+          <div className="text-5xl sm:text-6xl">{isSpectator ? '🏁' : isWinner ? '🏆' : '💀'}</div>
+          <h3
+            className={`text-2xl sm:text-3xl font-mono font-bold tracking-tight uppercase ${
+              isSpectator
+                ? 'text-cyan-300'
+                : isWinner
+                  ? 'text-amber-300 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                  : 'text-rose-400 drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+            }`}
+          >
+            {isSpectator
+              ? winnerName
+                ? locale === 'vi'
+                  ? `${winnerName} CHIẾN THẮNG!`
+                  : `${winnerName} WON!`
+                : locale === 'vi'
+                  ? 'TRẬN ĐẤU KẾT THÚC'
+                  : 'MATCH FINISHED'
               : isWinner
-                ? 'from-yellow-400 to-amber-500'
-                : 'from-red-500 to-pink-500'
-          } text-transparent bg-clip-text`}
-        >
-          {isSpectator
-            ? winnerName
+                ? t('victory')
+                : t('defeat')}
+          </h3>
+          <p className="text-xs text-slate-400 font-mono">
+            {isSpectator
               ? locale === 'vi'
-                ? `${winnerName} CHIẾN THẮNG!`
-                : `${winnerName} WON!`
-              : locale === 'vi'
-                ? 'TRẬN ĐẤU KẾT THÚC'
-                : 'MATCH FINISHED'
-            : isWinner
-              ? t('victory')
-              : t('defeat')}
-        </h3>
-
-        <div className="space-y-2.5 w-full">
-          <button
-            onClick={onOpenSummary}
-            className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-xl shadow-lg shadow-purple-500/20 transition duration-200 flex items-center justify-center space-x-2 cursor-pointer"
-          >
-            <Trophy size={18} className="text-yellow-400" />
-            <span>{t('matchSummary')}</span>
-          </button>
-          <button
-            onClick={onOpenGuessHistory}
-            className="w-full py-3 bg-slate-900/80 hover:bg-slate-800/90 border border-purple-500/30 text-purple-300 font-extrabold rounded-xl shadow-md transition duration-200 flex items-center justify-center space-x-2 cursor-pointer"
-          >
-            <History size={18} />
-            <span>{locale === 'vi' ? 'Lịch sử lượt đoán' : 'Guess History'}</span>
-          </button>
+                ? 'Trận đấu đối kháng đã khép lại'
+                : 'Match has concluded'
+              : isWinner
+                ? locale === 'vi'
+                  ? 'Bạn đã giải mã thành công trước!'
+                  : 'You cracked the code first!'
+                : locale === 'vi'
+                  ? `${opponentName || 'Đối thủ'} đã giải mã trước!`
+                  : `${opponentName || 'Opponent'} cracked your code first!`}
+          </p>
         </div>
 
+        {/* Primary Action CTA: Play Again / Open Waiting Room */}
         {!isSpectator && (
-          <>
-            <div className="relative my-3 flex items-center justify-center">
-              <div className="border-t border-slate-800 w-full" />
-              <span className="absolute bg-slate-950 px-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                {locale === 'vi' ? 'Thao tác' : 'Actions'}
-              </span>
-            </div>
-
-            <div className="w-full">
-              {canPlayAgain ? (
-                <button
-                  type="button"
-                  onClick={onPlayAgain}
-                  disabled={isRequestingPlayAgain}
-                  className={`w-full py-3 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 text-sm ${
-                    isRequestingPlayAgain
-                      ? 'bg-gradient-to-r from-emerald-600/80 to-teal-700/80 border border-emerald-500/40 cursor-wait shadow-md animate-pulse text-emerald-100'
-                      : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-[0.98]'
-                  }`}
-                >
-                  {isRequestingPlayAgain ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin text-emerald-300" />
-                      <span>
-                        {locale === 'vi' ? 'Đang chờ đối thủ...' : 'Waiting for opponent...'}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw size={16} />
-                      <span>{t('playAgain')}</span>
-                    </>
-                  )}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onPlayAgain}
-                  disabled={isRequestingPlayAgain}
-                  className={`w-full py-3 text-white font-extrabold rounded-xl transition duration-200 flex items-center justify-center space-x-2 text-sm ${
-                    isRequestingPlayAgain
-                      ? 'bg-gradient-to-r from-purple-600/80 to-indigo-700/80 border border-purple-500/40 cursor-wait shadow-md animate-pulse text-purple-100'
-                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-lg shadow-purple-500/20 cursor-pointer active:scale-[0.98]'
-                  }`}
-                >
-                  {isRequestingPlayAgain ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin text-purple-300" />
-                      <span>
-                        {locale === 'vi' ? 'Đang mở phòng chờ...' : 'Opening room...'}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus size={16} />
-                      <span>{t('openWaitingRoom')}</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </>
+          <div className="w-full pt-1">
+            {canPlayAgain ? (
+              <button
+                type="button"
+                onClick={onPlayAgain}
+                disabled={isRequestingPlayAgain || isReconnecting}
+                className={`w-full py-3.5 text-white font-mono font-bold rounded-xl transition flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-lg active:translate-y-0.5 ${
+                  isReconnecting
+                    ? 'bg-emerald-950/40 border border-emerald-500/20 text-emerald-400/50 cursor-not-allowed opacity-60'
+                    : isRequestingPlayAgain
+                    ? 'bg-emerald-800/80 border border-emerald-500/40 cursor-wait text-emerald-200'
+                    : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 border border-emerald-400/30 shadow-emerald-600/25'
+                }`}
+              >
+                {isReconnecting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin text-emerald-400" />
+                    <span>{locale === 'vi' ? 'Đang kết nối lại...' : 'Reconnecting...'}</span>
+                  </>
+                ) : isRequestingPlayAgain ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin text-emerald-300" />
+                    <span>
+                      {locale === 'vi' ? 'Đang chờ đối thủ...' : 'Waiting for opponent...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={18} />
+                    <span>{t('playAgain')}</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onPlayAgain}
+                disabled={isRequestingPlayAgain || isReconnecting}
+                className={`w-full py-3.5 text-white font-mono font-bold rounded-xl transition flex items-center justify-center space-x-2 text-sm sm:text-base cursor-pointer shadow-lg active:translate-y-0.5 ${
+                  isReconnecting
+                    ? 'bg-violet-950/40 border border-violet-500/20 text-violet-400/50 cursor-not-allowed opacity-60'
+                    : isRequestingPlayAgain
+                    ? 'bg-violet-800/80 border border-violet-500/40 cursor-wait text-violet-200'
+                    : 'bg-violet-600 hover:bg-violet-500 active:bg-violet-700 border border-violet-400/30 shadow-violet-600/25'
+                }`}
+              >
+                {isReconnecting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin text-violet-400" />
+                    <span>{locale === 'vi' ? 'Đang kết nối lại...' : 'Reconnecting...'}</span>
+                  </>
+                ) : isRequestingPlayAgain ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin text-violet-300" />
+                    <span>
+                      {locale === 'vi' ? 'Đang mở phòng chờ...' : 'Opening room...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={18} />
+                    <span>{t('openWaitingRoom')}</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         )}
 
-        <div className="min-h-[18px] mt-2">
-          {!isSpectator && opponentWantsPlayAgain && canPlayAgain && (
-            <p className="text-xs text-green-400 font-semibold">
-              {t('rematchRequest').replace('{username}', opponentName || t('enemy'))}
-            </p>
-          )}
+        {/* Secondary Actions: 2-column side-by-side grid */}
+        <div className="grid grid-cols-2 gap-2.5 w-full">
+          <button
+            onClick={onOpenSummary}
+            className="py-2.5 px-2.5 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-violet-500/40 text-violet-200 hover:text-white font-mono text-xs sm:text-sm font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:translate-y-0.5"
+          >
+            <Trophy size={15} className="text-amber-400 shrink-0" />
+            <span className="truncate">{t('matchSummary')}</span>
+          </button>
+
+          <button
+            onClick={onOpenGuessHistory}
+            className="py-2.5 px-2.5 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-violet-500/40 text-violet-200 hover:text-white font-mono text-xs sm:text-sm font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:translate-y-0.5"
+          >
+            <History size={15} className="text-violet-400 shrink-0" />
+            <span className="truncate">{locale === 'vi' ? 'Lịch sử đoán' : 'Guess History'}</span>
+          </button>
         </div>
+
+        {/* Rematch Request Callout */}
+        {!isSpectator && opponentWantsPlayAgain && canPlayAgain && (
+          <div className="pt-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold animate-pulse">
+              <span>🤝 {t('rematchRequest').replace('{username}', opponentName || t('enemy'))}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

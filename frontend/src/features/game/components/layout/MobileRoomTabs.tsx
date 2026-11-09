@@ -11,7 +11,7 @@ interface MobileRoomTabsProps {
 
 export function MobileRoomTabs({ activeTab, unreadCount = 0, t, onChange }: MobileRoomTabsProps) {
   return (
-    <div className="max-w-[1700px] w-full mx-auto lg:hidden flex border border-slate-800 bg-slate-900/60 backdrop-blur-md rounded-xl p-1 mb-4 shrink-0 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
+    <div className="max-w-[1700px] w-full mx-auto lg:hidden flex border border-white/[0.08] bg-[#0d1017] shadow-lg rounded-xl p-1 mb-4 shrink-0 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
       <button
         type="button"
         onClick={() => onChange('arena')}

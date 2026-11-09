@@ -6,7 +6,7 @@ const { syncAndDetectNewAchievements } = require('./achievements');
 const { invalidateUserAndLeaderboardCache } = require('../config/redis');
 const { syncRoomToRedis } = require('./roomManager');
 
-function handleAiTurn(room, io) {
+function handleAiTurn(room, io, delayMs = 1200) {
   if (!room || room.state !== 'PLAYING' || room.activeTurnIndex !== 1) return;
 
   setTimeout(async () => {
@@ -171,7 +171,7 @@ function handleAiTurn(room, io) {
         console.error(`[AI CRITICAL] Even fallback failed:`, e2);
       }
     }
-  }, 1200);
+  }, delayMs);
 }
 
 module.exports = {

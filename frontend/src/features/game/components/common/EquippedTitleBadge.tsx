@@ -7,6 +7,7 @@ interface EquippedTitleBadgeProps {
   locale: Locale;
   size?: 'xs' | 'sm' | 'md';
   className?: string;
+  onClick?: () => void;
 }
 
 const RARITY_STYLES: Record<AchievementRarity, string> = {
@@ -31,6 +32,7 @@ export function EquippedTitleBadge({
   locale,
   size = 'sm',
   className = '',
+  onClick,
 }: EquippedTitleBadgeProps) {
   if (!title) return null;
 
@@ -40,6 +42,7 @@ export function EquippedTitleBadge({
 
   return (
     <span
+      onClick={onClick}
       title={`${title.icon} ${label}`}
       aria-label={`${locale === 'vi' ? 'Danh hiệu' : 'Title'}: ${label}`}
       className={`inline-flex items-center rounded-full border font-extrabold tracking-tight whitespace-nowrap min-w-0 select-none ${rarityClass} ${sizeClass} ${className}`}

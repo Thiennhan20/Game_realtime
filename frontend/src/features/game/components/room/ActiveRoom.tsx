@@ -13,10 +13,10 @@ import type {
   PlayerXpResult,
   Room,
   RpsChoice,
+  RpsClashInfo,
   UnlockedAchievementNotice,
 } from '../../types';
-import { GuessHistoryModal } from '../modals/GuessHistoryModal';
-import { MatchSummaryModal } from '../modals/MatchSummaryModal';
+import dynamic from 'next/dynamic';
 import { NumberPadModal } from '../modals/NumberPadModal';
 import { StartCountdownOverlay } from '../modals/StartCountdownOverlay';
 import { ConfettiCanvas } from '../common/ConfettiCanvas';
@@ -27,6 +27,16 @@ import { PlayingArena } from './PlayingArena';
 import { RpsDecisionPanel } from './RpsDecisionPanel';
 import { SecretSetupPanel } from './SecretSetupPanel';
 import { WaitingForOpponentPanel } from './WaitingForOpponentPanel';
+
+const GuessHistoryModal = dynamic(
+  () => import('../modals/GuessHistoryModal').then((mod) => mod.GuessHistoryModal),
+  { ssr: false }
+);
+
+const MatchSummaryModal = dynamic(
+  () => import('../modals/MatchSummaryModal').then((mod) => mod.MatchSummaryModal),
+  { ssr: false }
+);
 
 interface ActiveRoomProps {
   room: Room;
@@ -39,6 +49,7 @@ interface ActiveRoomProps {
   guessInput: string;
   opponentSecretSet: boolean;
   opponentRpsSubmitted: boolean;
+  rpsClash?: RpsClashInfo | null;
   opponentWantsPlayAgain: boolean;
   isRequestingPlayAgain?: boolean;
   copied: boolean;
@@ -56,13 +67,14 @@ interface ActiveRoomProps {
   locale: Locale;
   t: Translator;
   isSpectator?: boolean;
+  isReconnecting?: boolean;
   spectatorCount?: number;
   floatingEmotes?: FloatingEmote[];
-  onSecretInputChange: (value: string) => void;
-  onGuessInputChange: (value: string) => void;
-  onSetSecret: (event: FormEvent<HTMLFormElement>) => void;
+  onSecretInputChange?: (value: string) => void;
+  onGuessInputChange?: (value: string) => void;
+  onSetSecret: (event?: FormEvent<HTMLFormElement>, overrideSecret?: string) => void;
   onRpsChoice: (choice: RpsChoice) => void;
-  onSendGuess: () => void;
+  onSendGuess: (overrideGuess?: string) => void;
   onPlayAgain: () => void;
   onLeaveRoom: () => void;
   onCopyRoomId: () => void;
@@ -71,6 +83,8 @@ interface ActiveRoomProps {
   onShowMatchModalChange: (isOpen: boolean) => void;
   onShowGuessHistoryModalChange: (isOpen: boolean) => void;
   onShowNumberPadChange: (isOpen: boolean) => void;
+  onShowStartCountdownChange?: (isOpen: boolean) => void;
+  onOpenProfile?: (userId: string | null) => void;
 }
 
 export function ActiveRoom({
@@ -84,6 +98,7 @@ export function ActiveRoom({
   guessInput,
   opponentSecretSet,
   opponentRpsSubmitted,
+  rpsClash = null,
   opponentWantsPlayAgain,
   isRequestingPlayAgain = false,
   copied,
@@ -101,6 +116,7 @@ export function ActiveRoom({
   locale,
   t,
   isSpectator = false,
+  isReconnecting = false,
   spectatorCount = 0,
   floatingEmotes = [],
   onSecretInputChange,
@@ -116,6 +132,8 @@ export function ActiveRoom({
   onShowMatchModalChange,
   onShowGuessHistoryModalChange,
   onShowNumberPadChange,
+  onShowStartCountdownChange,
+  onOpenProfile,
 }: ActiveRoomProps) {
   const effectiveMe = me || room.players[0] || null;
   const effectiveOpponent =
@@ -160,10 +178,12 @@ export function ActiveRoom({
         locale={locale}
         t={t}
         isSpectator={isSpectator}
+        isReconnecting={isReconnecting}
         spectatorCount={spectatorCount}
         floatingEmotes={floatingEmotes}
         onCopyRoomId={onCopyRoomId}
         onLeaveRoom={onLeaveRoom}
+        onOpenProfile={onOpenProfile}
       />
 
       <section className="flex-1 flex flex-col min-h-[440px] sm:min-h-[470px] h-full">
@@ -203,7 +223,7 @@ export function ActiveRoom({
               secretInput={secretInput}
               t={t}
               onSecretInputChange={onSecretInputChange}
-              onSubmit={onSetSecret}
+              onSubmit={(e, code) => onSetSecret(e, code)}
             />
           )
         )}
@@ -227,6 +247,10 @@ export function ActiveRoom({
             <RpsDecisionPanel
               selectedChoice={me?.rpsChoice || null}
               opponentSubmitted={opponentRpsSubmitted}
+              clashResult={rpsClash}
+              myPlayerIndex={myPlayerIndex}
+              opponentName={effectiveOpponent?.username || ''}
+              locale={locale}
               t={t}
               onChoose={onRpsChoice}
             />
@@ -254,6 +278,7 @@ export function ActiveRoom({
                   ? (room.players[room.activeTurnIndex]?.username || 'Player')
                   : (opponent?.username || '')
               }
+              currentGuessInput={guessInput}
               locale={locale}
               t={t}
               onOpenNumberPad={() => onShowNumberPadChange(true)}
@@ -276,6 +301,7 @@ export function ActiveRoom({
             t={t}
             canPlayAgain={canPlayAgain}
             isSpectator={isSpectator}
+            isReconnecting={isReconnecting}
             winnerName={room.players[room.winnerIndex]?.username || ''}
             onOpenSummary={() => onShowMatchModalChange(true)}
             onOpenGuessHistory={() => onShowGuessHistoryModalChange(true)}
@@ -307,6 +333,7 @@ export function ActiveRoom({
           onShowGuessHistoryModalChange(true);
         }}
         onEquipTitle={onEquipTitle}
+        onOpenProfile={onOpenProfile}
       />
 
       <GuessHistoryModal
@@ -332,6 +359,7 @@ export function ActiveRoom({
         isMyTurn={isMyTurn}
         opponentName={opponent?.username || ''}
         locale={locale}
+        onComplete={() => onShowStartCountdownChange?.(false)}
       />
 
       <NumberPadModal
@@ -340,7 +368,7 @@ export function ActiveRoom({
         locale={locale}
         pastGuesses={myPastGuesses}
         onChange={onGuessInputChange}
-        onSubmit={onSendGuess}
+        onSubmit={(guess) => onSendGuess(guess)}
         onClose={() => onShowNumberPadChange(false)}
       />
     </div>

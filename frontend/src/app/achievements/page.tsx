@@ -5,10 +5,12 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Award,
+  Bot,
   Check,
   ChevronDown,
   Clock,
   Flame,
+  Gamepad2,
   Lock,
   Search,
   ShieldCheck,
@@ -16,6 +18,7 @@ import {
   Swords,
   Target,
   Timer,
+  TrendingUp,
   Trophy,
   Users,
   X,
@@ -78,34 +81,34 @@ const RARITY_STYLES: Record<RarityTier, {
   common: {
     labelVi: 'Phổ thông',
     labelEn: 'Common',
-    pillClass: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
-    unlockedCardClass: 'bg-gradient-to-b from-slate-900/90 to-emerald-950/30 border-emerald-500/40 shadow-lg shadow-emerald-950/20',
+    pillClass: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+    unlockedCardClass: 'bg-[#0d1017] border-emerald-500/30 shadow-[0_4px_20px_rgba(16,185,129,0.06)] hover:border-emerald-500/50',
     barClass: 'bg-gradient-to-r from-emerald-500 to-teal-400',
-    iconBoxClass: 'border-emerald-500/30 bg-emerald-950/30'
+    iconBoxClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
   },
   rare: {
     labelVi: 'Hiếm',
     labelEn: 'Rare',
-    pillClass: 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300',
-    unlockedCardClass: 'bg-gradient-to-b from-slate-900/90 to-cyan-950/30 border-cyan-500/45 shadow-lg shadow-cyan-950/25',
+    pillClass: 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400',
+    unlockedCardClass: 'bg-[#0d1017] border-cyan-500/35 shadow-[0_4px_20px_rgba(6,182,212,0.06)] hover:border-cyan-500/55',
     barClass: 'bg-gradient-to-r from-cyan-500 to-sky-400',
-    iconBoxClass: 'border-cyan-500/30 bg-cyan-950/30'
+    iconBoxClass: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
   },
   epic: {
     labelVi: 'Sử thi',
     labelEn: 'Epic',
-    pillClass: 'bg-purple-500/15 border-purple-500/35 text-purple-300',
-    unlockedCardClass: 'bg-gradient-to-b from-slate-900/90 to-purple-950/35 border-purple-500/50 shadow-lg shadow-purple-950/30',
+    pillClass: 'bg-purple-500/15 border-purple-500/35 text-purple-400',
+    unlockedCardClass: 'bg-[#0d1017] border-purple-500/35 shadow-[0_4px_20px_rgba(168,85,247,0.08)] hover:border-purple-500/60',
     barClass: 'bg-gradient-to-r from-purple-500 to-fuchsia-400',
-    iconBoxClass: 'border-purple-500/35 bg-purple-950/30'
+    iconBoxClass: 'border-purple-500/35 bg-purple-500/10 text-purple-400'
   },
   legendary: {
     labelVi: 'Huyền thoại',
     labelEn: 'Legendary',
-    pillClass: 'bg-amber-500/20 border-amber-400/45 text-amber-300',
-    unlockedCardClass: 'bg-gradient-to-b from-slate-900/90 via-amber-950/20 to-amber-950/40 border-amber-400/60 shadow-xl shadow-amber-950/30 ring-1 ring-amber-400/20',
+    pillClass: 'bg-amber-500/15 border-amber-400/40 text-amber-300',
+    unlockedCardClass: 'bg-[#0d1017] border-amber-400/50 shadow-[0_4px_25px_rgba(245,158,11,0.12)] ring-1 ring-amber-400/20 hover:border-amber-400/70',
     barClass: 'bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400',
-    iconBoxClass: 'border-amber-400/40 bg-amber-950/35'
+    iconBoxClass: 'border-amber-400/40 bg-amber-500/10 text-amber-300'
   }
 };
 
@@ -324,31 +327,31 @@ function AchievementsPageContent() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
-        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#090a0f] text-white">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col">
+    <div className="min-h-[100dvh] bg-[#090a0f] text-white font-sans flex flex-col">
       {/* Header Bar */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#090a0f] border-b border-white/[0.08] px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl">
         <div className="max-w-[1700px] w-full mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <button
               type="button"
               onClick={() => router.push(`/?locale=${locale}`)}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-300 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
+              className="p-2 bg-[#0d1017] hover:bg-[#121622] border border-white/[0.08] hover:border-white/[0.16] rounded-xl text-slate-300 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
               title={locale === 'vi' ? 'Quay lại game' : 'Back to game'}
             >
               <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
             </button>
-            <div className="hidden xs:block p-2 sm:p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl shrink-0">
+            <div className="hidden xs:block p-2 sm:p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl shrink-0 border border-emerald-500/20">
               <Award size={20} className="sm:w-6 sm:h-6" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm sm:text-lg tracking-tight bg-gradient-to-r from-emerald-400 to-teal-400 text-transparent bg-clip-text">
+              <h1 className="font-extrabold text-sm sm:text-base tracking-wider uppercase font-mono text-white">
                 {locale === 'vi' ? 'THÀNH TÍCH & DANH HIỆU' : 'ACHIEVEMENTS & BADGES'}
               </h1>
               <p className="hidden sm:block text-xs text-slate-400">
@@ -358,11 +361,11 @@ function AchievementsPageContent() {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-            <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-[10px] font-bold">
+            <div className="flex items-center bg-[#0d1017] border border-white/[0.08] p-0.5 rounded-xl text-[10px] font-bold">
               <button
                 onClick={() => toggleLocale('en')}
                 className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
-                  locale === 'en' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  locale === 'en' ? 'bg-emerald-500 text-slate-950 font-black shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 EN
@@ -370,7 +373,7 @@ function AchievementsPageContent() {
               <button
                 onClick={() => toggleLocale('vi')}
                 className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
-                  locale === 'vi' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  locale === 'vi' ? 'bg-emerald-500 text-slate-950 font-black shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 VI
@@ -384,17 +387,17 @@ function AchievementsPageContent() {
                   onClick={() => setShowUserDropdown((isOpen) => !isOpen)}
                   aria-label={userProfile.name}
                   aria-expanded={showUserDropdown}
-                  className="flex items-center justify-center bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex items-center justify-center bg-[#0d1017] hover:bg-[#121622] border border-white/[0.08] p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                 >
                   {userProfile.avatar && !avatarError ? (
                     <img
                       src={userProfile.avatar}
                       alt={userProfile.name}
                       onError={() => setAvatarError(true)}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 shrink-0 object-cover"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-white/[0.12] shrink-0 object-cover"
                     />
                   ) : (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white shrink-0">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-slate-950 shrink-0">
                       {userProfile.name.slice(0, 2)}
                     </div>
                   )}
@@ -410,16 +413,16 @@ function AchievementsPageContent() {
                   <div
                     role="menu"
                     aria-label="User navigation"
-                    className="absolute right-0 mt-2 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                    className="absolute right-0 mt-2 w-52 bg-[#0c1017] border border-white/[0.12] rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
-                        navigateTopWindow(getMainSiteUrl('/profile', locale));
+                        router.push(`/profile?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Users size={16} className="text-purple-400" />
                       <span>{locale === 'vi' ? 'Hồ sơ cá nhân' : 'User Profile'}</span>
@@ -431,7 +434,7 @@ function AchievementsPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/history?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Clock size={16} className="text-cyan-400" />
                       <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
@@ -443,7 +446,7 @@ function AchievementsPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/leaderboard?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Trophy size={16} className="text-amber-400" />
                       <span>{locale === 'vi' ? 'Bảng xếp hạng' : 'Leaderboard'}</span>
@@ -455,7 +458,7 @@ function AchievementsPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/achievements?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Award size={16} className="text-emerald-400" />
                       <span>{locale === 'vi' ? 'Thành tích' : 'Achievements'}</span>
@@ -464,9 +467,9 @@ function AchievementsPageContent() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-center bg-slate-900/60 border border-slate-800/80 p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800/80 rounded-full shrink-0" />
-                <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md sm:ml-2" />
+              <div className="flex items-center justify-center bg-[#0d1017] border border-white/[0.08] p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/[0.05] rounded-full shrink-0" />
+                <div className="hidden sm:block w-20 h-3.5 bg-white/[0.05] rounded-md sm:ml-2" />
               </div>
             )}
           </div>
@@ -476,17 +479,17 @@ function AchievementsPageContent() {
       {/* Main Content Body */}
       <main className="flex-1 max-w-[1700px] w-full mx-auto p-4 pt-16 sm:pt-20 pb-24 sm:pb-28 pb-[calc(6rem+env(safe-area-inset-bottom))] space-y-6">
         {/* Hero Progress Banner */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-emerald-950/60 via-slate-900/80 to-slate-950 border border-emerald-500/30 p-5 sm:p-6 rounded-3xl shadow-2xl">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative overflow-hidden bg-[#0d1017] border border-white/[0.08] p-5 sm:p-6 rounded-3xl shadow-xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
           
           <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-2 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
                 <Sparkles size={14} />
                 <span>{locale === 'vi' ? 'Tiến độ Danh hiệu' : 'Badge Collection'}</span>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white">
-                {locale === 'vi' ? 'DANH HIỆU ĐÃ ĐẠT DƯỢC' : 'UNLOCKED ACHIEVEMENTS'}
+              <h2 className="text-xl sm:text-2xl font-mono font-bold text-white uppercase tracking-wider">
+                {locale === 'vi' ? 'DANH HIỆU ĐÃ ĐẠT ĐƯỢC' : 'UNLOCKED ACHIEVEMENTS'}
               </h2>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md">
                 {locale === 'vi'
@@ -507,13 +510,13 @@ function AchievementsPageContent() {
                       disabled={equippingId !== null}
                       onClick={() => void handleEquipTitle(null)}
                       title={locale === 'vi' ? 'Tháo danh hiệu' : 'Unequip title'}
-                      className="p-1 rounded-full bg-slate-800 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-300 transition cursor-pointer"
+                      className="p-1 rounded-full bg-[#121622] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/40 text-slate-400 hover:text-rose-300 transition cursor-pointer"
                     >
                       <X size={12} />
                     </button>
                   </div>
                 ) : (
-                  <span className="text-xs italic text-slate-500">
+                  <span className="text-xs italic text-slate-500 font-mono">
                     {locale === 'vi'
                       ? 'Chưa trang bị (Chọn 1 danh hiệu đã mở khóa bên dưới)'
                       : 'None equipped (Pick an unlocked badge below)'}
@@ -522,20 +525,20 @@ function AchievementsPageContent() {
               </div>
             </div>
 
-            <div className="w-full md:w-72 bg-slate-950/80 border border-slate-800 p-4 rounded-2xl text-center space-y-2 shrink-0">
+            <div className="w-full md:w-72 bg-[#121622] border border-white/[0.06] p-4 rounded-2xl text-center space-y-2 shrink-0">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-400">{locale === 'vi' ? 'Đã mở khóa:' : 'Unlocked:'}</span>
                 <span className="text-emerald-400 font-mono text-base">{summary.unlockedCount} / {summary.totalCount}</span>
               </div>
               
-              <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden p-0.5 border border-slate-800">
+              <div className="w-full bg-[#090a0f] h-2.5 rounded-full overflow-hidden p-0.5 border border-white/[0.06]">
                 <div
                   className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
                   style={{ width: `${summary.overallPercentage}%` }}
                 />
               </div>
 
-              <div className="text-[11px] font-bold text-slate-500">
+              <div className="text-[11px] font-bold text-slate-500 font-mono">
                 {summary.overallPercentage}% {locale === 'vi' ? 'Hoàn thành' : 'Completed'}
               </div>
             </div>
@@ -543,8 +546,8 @@ function AchievementsPageContent() {
 
           {/* Career Records Overview Strip */}
           {careerStats && (
-            <div className="relative mt-5 pt-5 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
-              <div className="bg-slate-950/70 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
+            <div className="relative mt-5 pt-5 border-t border-white/[0.08] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+              <div className="bg-[#121622] border border-white/[0.06] rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Zap size={12} className="text-purple-400 shrink-0" />
                   {locale === 'vi' ? 'Cấp độ & XP' : 'Level & XP'}
@@ -559,7 +562,7 @@ function AchievementsPageContent() {
                 </div>
               </div>
 
-              <div className="bg-slate-950/70 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
+              <div className="bg-[#121622] border border-white/[0.06] rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Swords size={12} className="text-emerald-400 shrink-0" />
                   {locale === 'vi' ? 'Tổng trận thắng' : 'Total Wins'}
@@ -574,7 +577,7 @@ function AchievementsPageContent() {
                 </div>
               </div>
 
-              <div className="bg-slate-950/70 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
+              <div className="bg-[#121622] border border-white/[0.06] rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Trophy size={12} className="text-amber-400 shrink-0" />
                   {locale === 'vi' ? 'Đỉnh Rating' : 'Peak Rating'}
@@ -583,28 +586,29 @@ function AchievementsPageContent() {
                   <span className="text-base sm:text-lg font-black font-mono text-amber-300">
                     {careerStats.highestRating}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-medium">
+                  <span className="text-[10px] text-slate-500 font-mono">
                     PvP Elo
                   </span>
                 </div>
               </div>
 
-              <div className="bg-slate-950/70 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
+              <div className="bg-[#121622] border border-white/[0.06] rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Flame size={12} className="text-orange-400 shrink-0" />
+                  <Flame size={12} className="text-amber-400 shrink-0" />
                   {locale === 'vi' ? 'Chuỗi thắng đỉnh' : 'Best Streak'}
                 </span>
                 <div className="mt-1 flex items-baseline justify-between gap-1">
-                  <span className="text-base sm:text-lg font-black font-mono text-orange-400">
-                    {careerStats.bestWinStreak}🔥
+                  <span className="text-base sm:text-lg font-black font-mono text-amber-300 flex items-center gap-1">
+                    {careerStats.bestWinStreak}
+                    <Flame size={12} className="text-amber-400" />
                   </span>
-                  <span className="text-[10px] text-slate-500 font-medium">
+                  <span className="text-[10px] text-slate-500 font-mono">
                     {locale === 'vi' ? 'Liên tiếp' : 'In a row'}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-slate-950/70 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
+              <div className="bg-[#121622] border border-white/[0.06] rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Target size={12} className="text-cyan-400 shrink-0" />
                   {locale === 'vi' ? 'Đoán ít lượt nhất' : 'Best Guess'}
@@ -615,13 +619,13 @@ function AchievementsPageContent() {
                       ? `${careerStats.bestGuessCount} ${locale === 'vi' ? 'lượt' : 'turns'}`
                       : '—'}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-medium">
+                  <span className="text-[10px] text-slate-500 font-mono">
                     {locale === 'vi' ? 'Kỷ lục' : 'Record'}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-slate-950/70 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
+              <div className="bg-[#121622] border border-white/[0.06] rounded-2xl px-3.5 py-2.5 flex flex-col justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Timer size={12} className="text-rose-400 shrink-0" />
                   {locale === 'vi' ? 'Thắng nhanh nhất' : 'Fastest Win'}
@@ -632,7 +636,7 @@ function AchievementsPageContent() {
                       ? `${careerStats.fastestWinSeconds}s`
                       : '—'}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-medium">
+                  <span className="text-[10px] text-slate-500 font-mono">
                     {locale === 'vi' ? 'Tốc độ' : 'Speed'}
                   </span>
                 </div>
@@ -642,19 +646,19 @@ function AchievementsPageContent() {
         </div>
 
         {/* Filter Categories + Status + Search Bar */}
-        <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-3 rounded-2xl">
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 bg-[#0d1017] border border-white/[0.08] p-3 rounded-2xl">
           {/* Category Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={() => setFilterCategory('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                 filterCategory === 'all'
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
+                  : 'bg-[#090a0f] text-slate-400 hover:text-slate-200 border border-white/[0.06]'
               }`}
             >
-              <span>🎮</span>
+              <Gamepad2 size={14} />
               <span>{locale === 'vi' ? 'Tất cả' : 'All'}</span>
               <span className="text-[10px] opacity-75 font-mono">({achievements.length})</span>
             </button>
@@ -662,13 +666,13 @@ function AchievementsPageContent() {
             <button
               type="button"
               onClick={() => setFilterCategory('pve')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                 filterCategory === 'pve'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
+                  : 'bg-[#090a0f] text-slate-400 hover:text-slate-200 border border-white/[0.06]'
               }`}
             >
-              <span>🤖</span>
+              <Bot size={14} />
               <span>{locale === 'vi' ? 'Chơi Với Máy' : 'PvE Bot'}</span>
               <span className="text-[10px] opacity-75 font-mono">({pveCount})</span>
             </button>
@@ -676,13 +680,13 @@ function AchievementsPageContent() {
             <button
               type="button"
               onClick={() => setFilterCategory('pvp')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                 filterCategory === 'pvp'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                  : 'bg-[#090a0f] text-slate-400 hover:text-slate-200 border border-white/[0.06]'
               }`}
             >
-              <span>⚔️</span>
+              <Swords size={14} />
               <span>{locale === 'vi' ? 'Đấu Người (PvP)' : 'PvP Arena'}</span>
               <span className="text-[10px] opacity-75 font-mono">({pvpCount})</span>
             </button>
@@ -690,13 +694,13 @@ function AchievementsPageContent() {
             <button
               type="button"
               onClick={() => setFilterCategory('general')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                 filterCategory === 'general'
-                  ? 'bg-fuchsia-500 text-white shadow-md'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  ? 'bg-purple-500 text-white font-black shadow-md'
+                  : 'bg-[#090a0f] text-slate-400 hover:text-slate-200 border border-white/[0.06]'
               }`}
             >
-              <span>⚡</span>
+              <Zap size={14} />
               <span>{locale === 'vi' ? 'Kỹ Năng & Đột Biến' : 'Mastery'}</span>
               <span className="text-[10px] opacity-75 font-mono">({generalCount})</span>
             </button>
@@ -704,13 +708,13 @@ function AchievementsPageContent() {
             <button
               type="button"
               onClick={() => setFilterCategory('progression')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                 filterCategory === 'progression'
-                  ? 'bg-orange-500 text-slate-950 shadow-md'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                  ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
+                  : 'bg-[#090a0f] text-slate-400 hover:text-slate-200 border border-white/[0.06]'
               }`}
             >
-              <span>🌟</span>
+              <TrendingUp size={14} />
               <span>{locale === 'vi' ? 'Cấp Độ & Chuỗi Thắng' : 'Progression'}</span>
               <span className="text-[10px] opacity-75 font-mono">({progressionCount})</span>
             </button>
@@ -718,13 +722,13 @@ function AchievementsPageContent() {
 
           {/* Right Side: Status Filter + Search Input */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex items-center bg-[#090a0f] p-1 rounded-xl border border-white/[0.06]">
               <button
                 type="button"
                 onClick={() => setStatusFilter('all')}
                 className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                   statusFilter === 'all'
-                    ? 'bg-slate-800 text-white shadow-sm'
+                    ? 'bg-white/[0.1] text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -735,11 +739,11 @@ function AchievementsPageContent() {
                 onClick={() => setStatusFilter('unlocked')}
                 className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1 ${
                   statusFilter === 'unlocked'
-                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                    ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <span>🔓</span>
+                <ShieldCheck size={12} />
                 <span>{locale === 'vi' ? 'Đã đạt' : 'Unlocked'}</span>
                 <span className="text-[10px] opacity-80 font-mono">({summary.unlockedCount})</span>
               </button>
@@ -748,11 +752,11 @@ function AchievementsPageContent() {
                 onClick={() => setStatusFilter('locked')}
                 className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1 ${
                   statusFilter === 'locked'
-                    ? 'bg-slate-700 text-white shadow-sm'
+                    ? 'bg-white/[0.12] text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <span>🔒</span>
+                <Lock size={12} />
                 <span>{locale === 'vi' ? 'Chưa đạt' : 'Locked'}</span>
                 <span className="text-[10px] opacity-80 font-mono">({lockedCount})</span>
               </button>
@@ -765,7 +769,7 @@ function AchievementsPageContent() {
                 placeholder={locale === 'vi' ? 'Tìm danh hiệu...' : 'Search badge...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none pl-8 pr-3 py-1.5 rounded-xl text-xs placeholder-slate-600 text-white"
+                className="w-full bg-[#090a0f] border border-white/[0.08] focus:border-emerald-500/50 focus:outline-none pl-8 pr-3 py-1.5 rounded-xl text-xs placeholder-slate-600 text-white"
               />
             </div>
           </div>
@@ -775,14 +779,14 @@ function AchievementsPageContent() {
         {loading ? (
           <div className="py-20 text-center space-y-3">
             <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-slate-400 text-xs font-medium">{locale === 'vi' ? 'Đang tải danh sách thành tích...' : 'Loading achievements...'}</p>
+            <p className="text-slate-400 text-xs font-mono">{locale === 'vi' ? 'Đang tải danh sách thành tích...' : 'Loading achievements...'}</p>
           </div>
         ) : error ? (
-          <div className="py-16 text-center text-rose-400 font-bold text-sm bg-slate-900/40 border border-slate-800 rounded-2xl">
+          <div className="py-16 text-center text-rose-400 font-bold text-sm bg-[#0d1017] border border-rose-500/30 rounded-2xl">
             {error}
           </div>
         ) : filteredAchievements.length === 0 ? (
-          <div className="py-16 text-center text-slate-500 font-medium text-xs bg-slate-900/40 border border-slate-800 rounded-2xl">
+          <div className="py-16 text-center text-slate-500 font-medium text-xs bg-[#0d1017] border border-white/[0.08] rounded-2xl">
             {locale === 'vi' ? 'Chưa có danh hiệu nào trong danh mục này.' : 'No achievements found in this category.'}
           </div>
         ) : (
@@ -800,14 +804,14 @@ function AchievementsPageContent() {
                   className={`relative p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
                     item.isUnlocked
                       ? rarityStyle.unlockedCardClass
-                      : 'bg-slate-900/35 border-slate-800/80 opacity-80 hover:opacity-100'
+                      : 'bg-[#0d1017] border-white/[0.06] hover:border-white/[0.12] opacity-85 hover:opacity-100'
                   }`}
                 >
                   <div>
                     {/* Top Row: Icon & Rarity + Status Badges */}
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className={`text-3xl sm:text-4xl p-2.5 rounded-2xl border shadow-inner ${
-                        item.isUnlocked ? rarityStyle.iconBoxClass : 'bg-slate-950/60 border-slate-800/80'
+                        item.isUnlocked ? rarityStyle.iconBoxClass : 'bg-[#090a0f] border-white/[0.08] text-slate-500'
                       }`}>
                         {item.icon}
                       </div>
@@ -823,7 +827,7 @@ function AchievementsPageContent() {
                             <span>{locale === 'vi' ? 'ĐÃ ĐẠT' : 'UNLOCKED'}</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-400 text-[10px] font-extrabold">
+                          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-slate-400 text-[10px] font-extrabold">
                             <Lock size={11} />
                             <span>{locale === 'vi' ? 'CHƯA ĐẠT' : 'LOCKED'}</span>
                           </div>
@@ -837,20 +841,20 @@ function AchievementsPageContent() {
                   </div>
 
                   {/* Progress Bar & Counter */}
-                  <div className="space-y-1.5 pt-3 border-t border-slate-800/60">
+                  <div className="space-y-1.5 pt-3 border-t border-white/[0.06]">
                     <div className="flex justify-between text-[11px] font-bold">
                       <span className="text-slate-500">{locale === 'vi' ? 'Tiến độ:' : 'Progress:'}</span>
-                      <span className={item.isUnlocked ? 'text-emerald-400 font-mono' : 'text-slate-300 font-mono'}>
+                      <span className={item.isUnlocked ? 'text-emerald-400 font-mono' : 'text-slate-400 font-mono'}>
                         {item.progress} / {item.target} ({item.percentage}%)
                       </span>
                     </div>
 
-                    <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                    <div className="w-full bg-[#090a0f] h-2 rounded-full overflow-hidden p-0.5 border border-white/[0.06]">
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${
                           item.isUnlocked
                             ? rarityStyle.barClass
-                            : 'bg-purple-500/60'
+                            : 'bg-white/[0.2]'
                         }`}
                         style={{ width: `${item.percentage}%` }}
                       />
@@ -869,7 +873,7 @@ function AchievementsPageContent() {
                           className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
                             equippedTitleId === item.id
                               ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                              : 'bg-slate-950/80 hover:bg-slate-800 border-slate-700/80 hover:border-emerald-500/40 text-slate-200 hover:text-white'
+                              : 'bg-[#121622] hover:bg-white/[0.06] border-white/[0.08] hover:border-emerald-500/40 text-slate-200 hover:text-white'
                           }`}
                         >
                           {equippedTitleId === item.id ? (
@@ -909,7 +913,7 @@ export default function AchievementsPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#090a0f] text-white">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         </div>
       }

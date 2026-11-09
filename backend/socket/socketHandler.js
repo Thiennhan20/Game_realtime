@@ -67,6 +67,29 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     }, 300);
   }
 
+  function cleanupSoloWaitingRoomsForUser(userId, exceptRoomId = null) {
+    if (!userId) return;
+    const targetUid = String(userId);
+    rooms.forEach((candidateRoom, candidateId) => {
+      if (exceptRoomId && candidateId === exceptRoomId) return;
+      const isUserInRoom = candidateRoom.players?.some(p => String(p.userId) === targetUid);
+      if (
+        isUserInRoom &&
+        (candidateRoom.state === 'WAITING_FOR_PLAYERS' || candidateRoom.state === 'FINISHED') &&
+        candidateRoom.players.length <= 1
+      ) {
+        const timerKey = `${candidateId}:${userId}`;
+        const timerId = disconnectTimers.get(timerKey);
+        if (timerId) {
+          clearTimeout(timerId);
+          disconnectTimers.delete(timerKey);
+        }
+        rooms.delete(candidateId);
+        deleteRoomFromRedis(candidateId);
+      }
+    });
+  }
+
   function convertRoomToWaiting(room, leavingUserId = null) {
     if (!room) return null;
     if (leavingUserId) {
@@ -76,6 +99,20 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     } else {
       room.players = (room.players || []).filter(p => !p.hasLeft);
     }
+
+    if (!room.players || room.players.length === 0) {
+      rooms.delete(room.roomId);
+      deleteRoomFromRedis(room.roomId);
+      return null;
+    }
+
+    const remainingPlayer = room.players[0];
+    if (remainingPlayer?.disconnectedAt && Date.now() - remainingPlayer.disconnectedAt > 60000) {
+      rooms.delete(room.roomId);
+      deleteRoomFromRedis(room.roomId);
+      return null;
+    }
+
     room.state = 'WAITING_FOR_PLAYERS';
     room.guesses = [];
     room.rpsWinnerIndex = -1;
@@ -91,6 +128,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     room.xpSettlement = null;
     room.resultFinalized = false;
     room.roundNumber = 1;
+    room.createdAt = Date.now();
 
     (room.players || []).forEach(p => {
       p.secretNumber = null;
@@ -214,9 +252,17 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       }
       const activeRoom = findActiveRoomForUser(socket.userId);
       if (activeRoom) {
-        reconnectPlayerToRoom(socket, activeRoom);
-        return;
+        if (activeRoom.state === 'WAITING_FOR_PLAYERS' && activeRoom.players?.length === 1) {
+          reconnectPlayerToRoom(socket, activeRoom);
+          return;
+        }
+        if (activeRoom.state !== 'FINISHED') {
+          reconnectPlayerToRoom(socket, activeRoom);
+          return;
+        }
       }
+
+      cleanupSoloWaitingRoomsForUser(socket.userId);
 
       const now = Date.now();
       const lastCreated = userRoomCooldowns.get(socket.userId);
@@ -476,6 +522,8 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         socket.emit('GAME_ERROR', 'You are already in this room.');
         return;
       }
+
+      cleanupSoloWaitingRoomsForUser(socket.userId, roomId);
 
       const { currentWinStreak, equippedTitle } = await getPlayerProfileMeta(socket.userId);
 

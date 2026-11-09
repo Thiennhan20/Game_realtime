@@ -660,19 +660,25 @@ function prepareRestoredRoomForReconnect(room, io) {
 
 function getJoinableRooms() {
   const list = [];
+  const now = Date.now();
   rooms.forEach((room) => {
-    const hasActiveHost = room.players?.some(
-      player => !player.hasLeft
-    );
+    const hostPlayer = room.players?.[0];
+    const hasActiveHost = hostPlayer && !hostPlayer.hasLeft;
+    const isHostDisconnectedStale = Boolean(hostPlayer?.disconnectedAt && (now - hostPlayer.disconnectedAt > 60000));
+    const isWaitingRoomStale = room.state === 'WAITING_FOR_PLAYERS' && room.createdAt && (now - room.createdAt > 15 * 60 * 1000);
+
     if (
       !room.isAiRoom
       && room.state !== 'FINISHED'
       && room.players
       && room.players.length > 0
       && hasActiveHost
+      && !isHostDisconnectedStale
+      && !isWaitingRoomStale
     ) {
       list.push({
         roomId: room.roomId,
+        hostId: room.players[0]?.userId ? String(room.players[0].userId) : null,
         hostName: room.players[0]?.username || 'Host',
         hostAvatar: room.players[0]?.avatar || '',
         hostEquippedTitle: room.players[0]?.equippedTitle || null,
@@ -680,7 +686,7 @@ function getJoinableRooms() {
         maxPlayers: 2,
         state: room.state,
         spectatorCount: (room.spectators || []).length,
-        createdAt: room.createdAt || Date.now()
+        createdAt: room.createdAt || now
       });
     }
   });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { RoomChat } from './components/chat/RoomChat';
@@ -13,12 +14,25 @@ import {
 } from './components/layout/MobileRoomTabs';
 import { NotificationStack } from './components/layout/NotificationStack';
 import { LobbyScreen } from './components/lobby/LobbyScreen';
-import { AiDifficultyModal } from './components/modals/AiDifficultyModal';
-import { AllRoomsModal } from './components/modals/AllRoomsModal';
 import { ActiveRoom } from './components/room/ActiveRoom';
 import { useGameController } from './hooks/useGameController';
 import type { AiDifficulty } from './types';
 import { getMainSiteUrl, navigateTopWindow } from './utils';
+
+const AllRoomsModal = dynamic(
+  () => import('./components/modals/AllRoomsModal').then((mod) => mod.AllRoomsModal),
+  { ssr: false }
+);
+
+const AiDifficultyModal = dynamic(
+  () => import('./components/modals/AiDifficultyModal').then((mod) => mod.AiDifficultyModal),
+  { ssr: false }
+);
+
+const PlayerProfileModal = dynamic(
+  () => import('./components/modals/PlayerProfileModal').then((mod) => mod.PlayerProfileModal),
+  { ssr: false }
+);
 
 export default function GameClient() {
   const router = useRouter();
@@ -26,7 +40,14 @@ export default function GameClient() {
   const [activeMobileTab, setActiveMobileTab] = useState<MobileRoomTab>('arena');
   const [showAllRoomsModal, setShowAllRoomsModal] = useState(false);
   const [showAiDifficultyModal, setShowAiDifficultyModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState('');
+
+  const handleOpenProfile = (targetUserId: string | null = null) => {
+    setProfileModalUserId(targetUserId || game.user?.id || game.user?.userId || 'me');
+    setShowProfileModal(true);
+  };
 
   const isAiMatch = Boolean(game.room?.isAiRoom);
   const effectiveMobileTab: MobileRoomTab = isAiMatch ? 'arena' : activeMobileTab;
@@ -49,12 +70,12 @@ export default function GameClient() {
   }, [game.mounted, game.loadingUser, game.user, game.authError]);
 
   if (!game.mounted) {
-    return isInIframe ? <div className="min-h-screen bg-slate-950" /> : <LoadingScreen />;
+    return isInIframe ? <div className="min-h-screen bg-[#090a0f]" /> : <LoadingScreen />;
   }
 
   if (game.loadingUser) {
     return isInIframe ? (
-      <div className="min-h-screen bg-slate-950" />
+      <div className="min-h-screen bg-[#090a0f]" />
     ) : (
       <LoadingScreen label={game.t('loadingProfile')} animated />
     );
@@ -76,7 +97,7 @@ export default function GameClient() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
+    <div className="min-h-screen bg-[#090a0f] text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
       {!game.room && (
         <GameHeader
           user={user}
@@ -84,7 +105,7 @@ export default function GameClient() {
           t={game.t}
           onLocaleChange={game.toggleLocale}
           onBackHome={() => navigateTopWindow(getMainSiteUrl())}
-          onOpenProfile={() => navigateTopWindow(getMainSiteUrl('/profile'))}
+          onOpenProfile={() => handleOpenProfile(user?.userId || 'me')}
           onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
           onOpenLeaderboard={() => router.push(`/leaderboard?locale=${game.locale}`)}
           onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
@@ -94,6 +115,7 @@ export default function GameClient() {
       <NotificationStack
         error={game.errorMsg}
         isReconnecting={game.isReconnecting}
+        reconnectCountdown={game.reconnectCountdown}
         disconnectedOpponent={game.opponentTempDisconnected}
         unlockedAchievements={game.toastAchievements}
         locale={game.locale}
@@ -154,6 +176,7 @@ export default function GameClient() {
               onViewLeaderboard={() =>
                 router.push(`/leaderboard?locale=${game.locale}`)
               }
+              onOpenProfile={handleOpenProfile}
             />
           ) : (
             <ActiveRoom
@@ -164,12 +187,14 @@ export default function GameClient() {
               myPlayerIndex={game.myPlayerIndex}
               opponentPlayerIndex={game.opponentPlayerIndex}
               isSpectator={game.isSpectator}
+              isReconnecting={game.isReconnecting}
               spectatorCount={game.spectatorCount}
               floatingEmotes={game.floatingEmotes}
               secretInput={game.secretInput}
               guessInput={game.guessInput}
               opponentSecretSet={game.opponentSecretSet}
               opponentRpsSubmitted={game.opponentRpsSubmitted}
+              rpsClash={game.rpsClash}
               opponentWantsPlayAgain={game.opponentWantsPlayAgain}
               isRequestingPlayAgain={game.isRequestingPlayAgain}
               copied={game.copied}
@@ -199,6 +224,8 @@ export default function GameClient() {
               onShowMatchModalChange={game.setShowMatchModal}
               onShowGuessHistoryModalChange={game.setShowGuessHistoryModal}
               onShowNumberPadChange={game.setShowNumPad}
+              onShowStartCountdownChange={game.setShowStartCountdown}
+              onOpenProfile={handleOpenProfile}
             />
           )}
         </div>
@@ -230,6 +257,7 @@ export default function GameClient() {
         onJoinRoom={game.handleJoinRoom}
         onSpectateRoom={game.handleJoinSpectator}
         onClose={() => setShowAllRoomsModal(false)}
+        onOpenProfile={handleOpenProfile}
       />
 
       <AiDifficultyModal
@@ -244,6 +272,16 @@ export default function GameClient() {
           )
         }
         onClose={() => setShowAiDifficultyModal(false)}
+      />
+
+      <PlayerProfileModal
+        isOpen={showProfileModal}
+        userId={profileModalUserId}
+        currentUserId={user?.id || user?.userId || null}
+        locale={game.locale}
+        onClose={() => setShowProfileModal(false)}
+        onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
+        onOpenHistory={() => router.push(`/history?locale=${game.locale}`)}
       />
     </div>
   );

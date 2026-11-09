@@ -34,6 +34,7 @@ interface MatchSummaryModalProps {
   onLeaveRoom?: () => void;
   onOpenGuessHistory?: () => void;
   onEquipTitle?: (achievementId: string | null) => void;
+  onOpenProfile?: (userId: string | null) => void;
 }
 
 export function MatchSummaryModal({
@@ -55,6 +56,7 @@ export function MatchSummaryModal({
   onLeaveRoom,
   onOpenGuessHistory,
   onEquipTitle,
+  onOpenProfile,
 }: MatchSummaryModalProps) {
   useEffect(() => {
     if (!isOpen) return;
@@ -174,7 +176,7 @@ export function MatchSummaryModal({
             if (event.target === event.currentTarget) onClose();
           }}
         >
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-black/85" />
 
           <motion.div
             role="dialog"
@@ -184,7 +186,7 @@ export function MatchSummaryModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-lg max-h-[90dvh] bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden flex flex-col transform-gpu"
+            className="relative w-full max-w-lg max-h-[90dvh] bg-[#0d1017] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden flex flex-col transform-gpu"
           >
             <div
               className={`p-6 pb-4 text-center shrink-0 bg-gradient-to-b ${headerGradient}`}
@@ -192,11 +194,15 @@ export function MatchSummaryModal({
               <div className="text-5xl mb-3">{headlineIcon}</div>
               <h3
                 id="match-summary-title"
-                className={`text-2xl font-black bg-gradient-to-r ${titleGradient} text-transparent bg-clip-text`}
+                className={`text-2xl font-mono font-bold uppercase tracking-tight ${
+                  isWinner
+                    ? 'text-amber-300 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                    : 'text-rose-400 drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                }`}
               >
                 {headlineTitle}
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-400 mt-1 font-mono">
                 {headlineDesc}
               </p>
               {showXpResult ? (
@@ -351,7 +357,7 @@ export function MatchSummaryModal({
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                <div className="bg-[#121622] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
                   <div className="p-2 bg-blue-500/10 rounded-lg">
                     <Clock size={18} className="text-blue-400" />
                   </div>
@@ -364,9 +370,9 @@ export function MatchSummaryModal({
                     </span>
                   </div>
                 </div>
-                <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
-                  <div className="p-2 bg-purple-500/10 rounded-lg">
-                    <Target size={18} className="text-purple-400" />
+                <div className="bg-[#121622] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 bg-violet-500/10 rounded-lg">
+                    <Target size={18} className="text-violet-400" />
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold uppercase block">
@@ -379,7 +385,7 @@ export function MatchSummaryModal({
                 </div>
               </div>
 
-              <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4">
+              <div className="bg-[#121622] border border-white/[0.08] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     {me?.avatar ? (
@@ -422,7 +428,7 @@ export function MatchSummaryModal({
                   </div>
                 </div>
 
-                <div className="border-t border-slate-700/40 my-2" />
+                <div className="border-t border-white/[0.06] my-2" />
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
@@ -430,16 +436,31 @@ export function MatchSummaryModal({
                       <img
                         src={opponent.avatar}
                         alt={opponent.username}
-                        className="w-8 h-8 rounded-full border border-slate-600 shrink-0"
+                        onClick={() => !room.isAiRoom && opponent?.userId && onOpenProfile?.(String(opponent.userId))}
+                        className={`w-8 h-8 rounded-full border border-slate-600 shrink-0 ${
+                          !room.isAiRoom && opponent?.userId ? 'cursor-pointer hover:border-violet-400 hover:scale-105 transition' : ''
+                        }`}
+                        title={!room.isAiRoom && opponent?.userId ? (locale === 'vi' ? 'Xem hồ sơ' : 'View profile') : undefined}
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase shrink-0">
+                      <div
+                        onClick={() => !room.isAiRoom && opponent?.userId && onOpenProfile?.(String(opponent.userId))}
+                        className={`w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-xs font-bold uppercase shrink-0 ${
+                          !room.isAiRoom && opponent?.userId ? 'cursor-pointer hover:scale-105 transition' : ''
+                        }`}
+                        title={!room.isAiRoom && opponent?.userId ? (locale === 'vi' ? 'Xem hồ sơ' : 'View profile') : undefined}
+                      >
                         {(opponent?.username || '??').slice(0, 2)}
                       </div>
                     )}
                     <div className="text-sm min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-slate-200 truncate">
+                        <span
+                          onClick={() => !room.isAiRoom && opponent?.userId && onOpenProfile?.(String(opponent.userId))}
+                          className={`font-bold text-slate-200 truncate ${
+                            !room.isAiRoom && opponent?.userId ? 'cursor-pointer hover:text-violet-300 transition' : ''
+                          }`}
+                        >
                           {opponent?.username || t('enemy')}
                         </span>
                         {!isWinner && (
@@ -470,7 +491,7 @@ export function MatchSummaryModal({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                <div className="bg-[#121622] border border-white/[0.08] rounded-xl p-3">
                   <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">
                     {t('yourSecret')}
                   </span>
@@ -478,11 +499,11 @@ export function MatchSummaryModal({
                     {isWinner ? stats.winnerSecret : stats.loserSecret}
                   </span>
                 </div>
-                <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                <div className="bg-[#121622] border border-white/[0.08] rounded-xl p-3">
                   <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">
                     {t('enemySecret')}
                   </span>
-                  <span className="font-mono text-xl font-extrabold tracking-widest text-purple-400">
+                  <span className="font-mono text-xl font-extrabold tracking-widest text-violet-300">
                     {(isWinner ? stats.loserSecret : stats.winnerSecret) ||
                       secretReveal ||
                       '????'}
@@ -490,7 +511,7 @@ export function MatchSummaryModal({
                 </div>
               </div>
 
-              <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+              <div className="bg-[#121622] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
                 <div className="p-2 bg-amber-500/10 rounded-lg">
                   <Swords size={18} className="text-amber-400" />
                 </div>
@@ -509,11 +530,11 @@ export function MatchSummaryModal({
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-950/30 border-t border-slate-850 shrink-0 flex items-center justify-center">
+            <div className="px-6 py-4 bg-[#090a0f]/80 border-t border-white/[0.06] shrink-0 flex items-center justify-center">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto min-w-[200px] py-3 px-8 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold rounded-xl transition duration-200 cursor-pointer shadow-lg shadow-purple-500/25 text-sm flex items-center justify-center tracking-wide"
+                className="w-full sm:w-auto min-w-[200px] py-3 px-8 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 active:translate-y-0.5 text-white font-mono font-bold rounded-xl transition duration-150 cursor-pointer shadow-md shadow-violet-600/25 border border-violet-400/30 text-sm flex items-center justify-center tracking-wide"
               >
                 {locale === 'vi' ? 'Đóng' : 'Close'}
               </button>

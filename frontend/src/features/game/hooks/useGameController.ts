@@ -19,6 +19,7 @@ import type {
   QuickEmote,
   Room,
   RpsChoice,
+  RpsClashInfo,
   UnlockedAchievementNotice,
 } from '../types';
 import {
@@ -120,6 +121,7 @@ export function useGameController() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [opponentRpsSubmitted, setOpponentRpsSubmitted] = useState(false);
+  const [rpsClash, setRpsClash] = useState<RpsClashInfo | null>(null);
   const [opponentSecretSet, setOpponentSecretSet] = useState(false);
   const [opponentWantsPlayAgain, setOpponentWantsPlayAgain] = useState(false);
   const [isRequestingPlayAgain, setIsRequestingPlayAgain] = useState(false);
@@ -131,6 +133,7 @@ export function useGameController() {
   const [isLoadingGameProfile, setIsLoadingGameProfile] = useState(true);
   const [gameProfileError, setGameProfileError] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectCountdown, setReconnectCountdown] = useState(60);
   const [opponentTempDisconnected, setOpponentTempDisconnected] = useState<string | null>(
     null,
   );
@@ -253,36 +256,10 @@ export function useGameController() {
       return;
     }
 
-    let countdownInterval: ReturnType<typeof setInterval> | undefined;
     if (roomState === 'PLAYING' && previousRoomStateRef.current === 'RPS_DECISION') {
       setShowStartCountdown(true);
-      setCountdownVal(3);
-      sound.playCountdownTick(3);
-      triggerHaptic([30]);
-      countdownInterval = setInterval(() => {
-        setCountdownVal((previousValue) => {
-          if (previousValue <= 1) {
-            if (countdownInterval) clearInterval(countdownInterval);
-            setShowStartCountdown(false);
-            sound.playBattleStart();
-            triggerHaptic([60, 40, 100]);
-            return 0;
-          }
-          const nextVal = previousValue - 1;
-          sound.playCountdownTick(nextVal);
-          triggerHaptic([30]);
-          return nextVal;
-        });
-      }, 1000);
     }
     previousRoomStateRef.current = roomState;
-
-    return () => {
-      if (countdownInterval) {
-        clearInterval(countdownInterval);
-        setShowStartCountdown(false);
-      }
-    };
   }, [roomState]);
 
   const previousTurnRef = useRef<{ state?: string; turn?: number }>({});
@@ -350,6 +327,33 @@ export function useGameController() {
       active = false;
     };
   }, []);
+
+  // 60-second reconnect grace period countdown
+  useEffect(() => {
+    if (!isReconnecting) {
+      setReconnectCountdown(60);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setReconnectCountdown((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(timer);
+          setIsReconnecting(false);
+          setRoom(null);
+          setErrorMsg(
+            localeRef.current === 'vi'
+              ? 'Mất kết nối quá 60 giây, đã trở về sảnh chính.'
+              : 'Connection lost for more than 60s, returned to lobby.'
+          );
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isReconnecting]);
 
   const userId = user?.id;
 
@@ -436,6 +440,17 @@ export function useGameController() {
         setRoom(null);
       }
       setIsReconnecting(false);
+      setReconnectCountdown(60);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+      setIsReconnecting(true);
+      setReconnectCountdown(60);
+    });
+
+    socket.io.on('reconnect_attempt', () => {
+      setIsReconnecting(true);
     });
 
     socket.on('connect', () => {
@@ -443,6 +458,7 @@ export function useGameController() {
       clearTimeout(connectionTimer);
       setErrorMsg(null);
       setIsReconnecting(false);
+      setReconnectCountdown(60);
       socket.emit('GET_LOBBY_ROOMS');
       socket.emit('CHECK_ACTIVE_ROOM');
     });
@@ -469,6 +485,7 @@ export function useGameController() {
       clearTimeout(connectionTimer);
       setErrorMsg(translate()('cannotConnect'));
       setIsReconnecting(false);
+      setReconnectCountdown(60);
     });
 
     socket.on('ROOM_CREATED', (createdRoom: Room) => {
@@ -618,31 +635,66 @@ export function useGameController() {
     socket.on('OPPONENT_RPS_SUBMITTED', handleOpponentRpsSubmitted);
     socket.on('OPPONENT_RPS_READY', handleOpponentRpsSubmitted);
 
-    socket.on('RPS_TIE', (data: { players: Player[] }) => {
-      setOpponentRpsSubmitted(false);
-      setRoom((previousRoom) =>
-        previousRoom ? { ...previousRoom, players: data.players } : null,
-      );
-      sound.playRpsTie();
-      triggerHaptic([50, 50]);
-      setErrorMsg(translate()('drawChooseAgain'));
-      setTimeout(() => setErrorMsg(null), 3000);
-    });
+    socket.on(
+      'RPS_TIE',
+      (data: { players: Player[]; p1Choice?: string; p2Choice?: string }) => {
+        setOpponentRpsSubmitted(false);
+        sound.playRpsTie();
+        triggerHaptic([50, 50]);
 
-    socket.on('RPS_RESULT', (data: { roomState: Room }) => {
-      setRoom(data.roomState);
-      setErrorMsg(null);
-      const myIndex = data.roomState.players.findIndex(
-        (player) => String(player.userId) === String(userRef.current?.id),
-      );
-      if (data.roomState.activeTurnIndex === myIndex) {
-        sound.playRpsWin();
-        triggerHaptic([60, 40, 100]);
-      } else {
-        sound.playRpsLose();
-        triggerHaptic([40]);
-      }
-    });
+        if (data.p1Choice && data.p2Choice) {
+          setRpsClash({
+            winnerIndex: -1,
+            p1Choice: data.p1Choice,
+            p2Choice: data.p2Choice,
+          });
+          setTimeout(() => {
+            setRpsClash(null);
+            setRoom((previousRoom) =>
+              previousRoom ? { ...previousRoom, players: data.players } : null,
+            );
+            setErrorMsg(translate()('drawChooseAgain'));
+            setTimeout(() => setErrorMsg(null), 3000);
+          }, 1200);
+        } else {
+          setRoom((previousRoom) =>
+            previousRoom ? { ...previousRoom, players: data.players } : null,
+          );
+          setErrorMsg(translate()('drawChooseAgain'));
+          setTimeout(() => setErrorMsg(null), 3000);
+        }
+      },
+    );
+
+    socket.on(
+      'RPS_RESULT',
+      (data: { winnerIndex: number; p1Choice: string; p2Choice: string; roomState: Room }) => {
+        setErrorMsg(null);
+        const myIndex = data.roomState.players.findIndex(
+          (player) => String(player.userId) === String(userRef.current?.id),
+        );
+        const isWinner = data.winnerIndex === myIndex;
+        if (isWinner) {
+          sound.playRpsWin();
+          triggerHaptic([60, 40, 100]);
+        } else {
+          sound.playRpsLose();
+          triggerHaptic([40]);
+        }
+
+        setRpsClash({
+          winnerIndex: data.winnerIndex,
+          p1Choice: data.p1Choice,
+          p2Choice: data.p2Choice,
+        });
+
+        setTimeout(() => {
+          setRpsClash(null);
+          setRoom((curr) => (curr ? data.roomState : null));
+          setShowStartCountdown(true);
+        }, 1500);
+      },
+    );
 
     socket.on('GUESS_RESULT', (data: { roomState: Room }) => {
       setRoom(data.roomState);
@@ -1133,6 +1185,14 @@ export function useGameController() {
       : null;
 
   const handleCreateRoom = () => {
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
+      return;
+    }
     setIsQuickMatching(false);
     setQuickMatchElapsedSeconds(0);
     setQuickMatchFoundRoom(null);
@@ -1140,6 +1200,14 @@ export function useGameController() {
   };
 
   const handleQuickMatch = () => {
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
+      return;
+    }
     if (isQuickMatching || quickMatchFoundRoom) return;
     sound.playClick();
     triggerHaptic(25);
@@ -1159,6 +1227,14 @@ export function useGameController() {
   };
 
   const handleStartAiMatch = (difficulty: AiDifficulty) => {
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
+      return;
+    }
     setIsQuickMatching(false);
     setQuickMatchElapsedSeconds(0);
     setQuickMatchFoundRoom(null);
@@ -1256,6 +1332,14 @@ export function useGameController() {
   }, [toastAchievements]);
 
   const handleJoinRoom = (roomId: string) => {
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
+      return;
+    }
     if (!roomId.trim()) {
       setErrorMsg(locale === 'vi' ? 'Vui lòng nhập ID phòng.' : 'Please enter a Room ID.');
       return;
@@ -1299,17 +1383,18 @@ export function useGameController() {
     }
   };
 
-  const handleSetSecret = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSetSecret = (event?: FormEvent<HTMLFormElement>, overrideSecret?: string) => {
+    if (event?.preventDefault) event.preventDefault();
     if (!room || isSpectator) return;
-    if (!isUniqueFourDigitCode(secretInput)) {
+    const targetSecret = overrideSecret || secretInput;
+    if (!isUniqueFourDigitCode(targetSecret)) {
       setErrorMsg(t('invalidCode'));
       return;
     }
     sound.playSecretLocked();
     triggerHaptic([60, 30, 80]);
-    localStorage.setItem(`secret:${room.roomId}`, secretInput);
-    socketRef.current?.emit('SET_SECRET', { roomId: room.roomId, secret: secretInput });
+    localStorage.setItem(`secret:${room.roomId}`, targetSecret);
+    socketRef.current?.emit('SET_SECRET', { roomId: room.roomId, secret: targetSecret });
   };
 
   const handleRpsChoice = (choice: RpsChoice) => {
@@ -1332,18 +1417,19 @@ export function useGameController() {
     });
   };
 
-  const handleSendGuess = () => {
+  const handleSendGuess = (overrideGuess?: string) => {
     if (!room || !user || isSpectator) return;
+    const targetGuess = overrideGuess || guessInput;
     const now = Date.now();
     if (isSubmittingGuess || now - lastGuessSubmitTimeRef.current < 500) return;
 
-    if (!isUniqueFourDigitCode(guessInput)) {
+    if (!isUniqueFourDigitCode(targetGuess)) {
       setErrorMsg(t('invalidGuess'));
       return;
     }
     const myPlayerIndex = room.players.findIndex((p) => p.userId === user.id);
     const isDuplicate = room.guesses?.some(
-      (g) => g.playerIndex === myPlayerIndex && g.guess === guessInput
+      (g) => g.playerIndex === myPlayerIndex && g.guess === targetGuess
     );
     if (isDuplicate) {
       sound.playWarning();
@@ -1360,12 +1446,20 @@ export function useGameController() {
 
     socketRef.current?.emit('SUBMIT_GUESS', {
       roomId: room.roomId,
-      guess: guessInput,
+      guess: targetGuess,
     });
   };
 
   const handlePlayAgain = () => {
     if (!room || isSpectator || isRequestingPlayAgain) return;
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
+      return;
+    }
     sound.playClick();
     triggerHaptic(25);
     setIsRequestingPlayAgain(true);
@@ -1374,6 +1468,14 @@ export function useGameController() {
 
   const handleJoinSpectator = (targetRoomId: string) => {
     if (!targetRoomId.trim()) return;
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
+      return;
+    }
     const normalized = normalizeRoomId(targetRoomId);
     if (!normalized) return;
     socketRef.current?.emit('JOIN_SPECTATOR', normalized);
@@ -1392,6 +1494,14 @@ export function useGameController() {
   const handleLeaveRoom = () => {
     if (isSpectator) {
       handleLeaveSpectator();
+      return;
+    }
+    if (isReconnecting || !socketRef.current?.connected) {
+      setErrorMsg(
+        localeRef.current === 'vi'
+          ? 'Đang kết nối lại, vui lòng chờ trong giây lát...'
+          : 'Reconnecting, please wait a moment...'
+      );
       return;
     }
     sound.playLeaveRoom();
@@ -1464,6 +1574,7 @@ export function useGameController() {
     unreadChatCount,
     setUnreadChatCount,
     opponentRpsSubmitted,
+    rpsClash,
     opponentSecretSet,
     opponentWantsPlayAgain,
     isRequestingPlayAgain,
@@ -1475,6 +1586,7 @@ export function useGameController() {
     isLoadingGameProfile,
     gameProfileError,
     isReconnecting,
+    reconnectCountdown,
     opponentTempDisconnected,
     setOpponentTempDisconnected,
     showMatchModal,
@@ -1482,6 +1594,7 @@ export function useGameController() {
     showGuessHistoryModal,
     setShowGuessHistoryModal,
     showStartCountdown,
+    setShowStartCountdown,
     countdownVal,
     showNumPad,
     setShowNumPad,

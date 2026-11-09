@@ -7,23 +7,33 @@ import type { Locale } from '../../types';
 
 interface NumberPadModalProps {
   isOpen: boolean;
-  value: string;
+  value?: string;
   locale: Locale;
   pastGuesses?: string[];
-  onChange: (value: string) => void;
-  onSubmit: () => void;
+  onChange?: (value: string) => void;
+  onSubmit: (guess: string) => void;
   onClose: () => void;
 }
 
 export function NumberPadModal({
   isOpen,
-  value,
+  value: initialValue = '',
   locale,
   pastGuesses = [],
   onChange,
   onSubmit,
   onClose,
 }: NumberPadModalProps) {
+  const [localValue, setLocalValue] = useState(initialValue);
+
+  // Synchronize/reset local value when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setLocalValue(initialValue || '');
+    }
+  }, [isOpen, initialValue]);
+
+  const value = localValue;
   const isDuplicate = value.length === 4 && pastGuesses.includes(value);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const lastSubmitTimeRef = useRef(0);
@@ -35,28 +45,32 @@ export function NumberPadModal({
     setIsSubmitting(true);
     sound.playSubmitGuess();
     triggerHaptic(35);
-    onSubmit();
+    onSubmit(value);
     onClose();
     setTimeout(() => {
       setIsSubmitting(false);
     }, 500);
-  }, [isDuplicate, isSubmitting, onSubmit, onClose]);
+  }, [value, isDuplicate, isSubmitting, onSubmit, onClose]);
 
   const appendDigit = useCallback(
     (digit: string) => {
-      if (value.length < 4 && !value.includes(digit)) {
-        const nextValue = `${value}${digit}`;
-        onChange(nextValue);
-        if (nextValue.length === 4 && pastGuesses.includes(nextValue)) {
-          sound.playWarning();
-          triggerHaptic([60, 40, 60]);
-        } else {
-          sound.playDigitKey(nextValue.length);
-          triggerHaptic(20);
+      setLocalValue((prev) => {
+        if (prev.length < 4 && !prev.includes(digit)) {
+          const nextValue = `${prev}${digit}`;
+          if (nextValue.length === 4 && pastGuesses.includes(nextValue)) {
+            sound.playWarning();
+            triggerHaptic([60, 40, 60]);
+          } else {
+            sound.playDigitKey(nextValue.length);
+            triggerHaptic(20);
+          }
+          onChange?.(nextValue);
+          return nextValue;
         }
-      }
+        return prev;
+      });
     },
-    [value, pastGuesses, onChange],
+    [pastGuesses, onChange],
   );
 
   useEffect(() => {
@@ -87,7 +101,11 @@ export function NumberPadModal({
         if (value.length > 0) {
           sound.playDigitDelete();
           triggerHaptic(15);
-          onChange(value.slice(0, -1));
+          setLocalValue((prev) => {
+            const next = prev.slice(0, -1);
+            onChange?.(next);
+            return next;
+          });
         }
         return;
       }
@@ -116,30 +134,30 @@ export function NumberPadModal({
             if (event.target === event.currentTarget) onClose();
           }}
         >
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-[#090a0f]/90" />
 
           <motion.div
             role="dialog"
             aria-modal="true"
             aria-labelledby="numberpad-title"
             aria-describedby="numberpad-desc"
-            initial={{ opacity: 0, scale: 0.9, y: 30 }}
+            initial={{ opacity: 0, scale: 0.94, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 30 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 26 }}
-            className="relative w-full max-w-sm sm:max-w-md bg-slate-900/95 border border-purple-500/35 rounded-[2.5rem] shadow-2xl p-6 sm:p-8 flex flex-col space-y-6 overflow-hidden z-10"
+            exit={{ opacity: 0, scale: 0.94, y: 20 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            className="relative w-full max-w-sm sm:max-w-md bg-[#0d1017] border border-white/[0.08] rounded-2xl shadow-2xl p-5 sm:p-7 flex flex-col space-y-5 overflow-hidden z-10"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 z-10">
-              <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden="true">🔥</span>
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 z-10">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.7)] shrink-0" />
                 <div>
                   <h3
                     id="numberpad-title"
-                    className="text-sm font-black uppercase text-purple-400 tracking-wider"
+                    className="text-xs sm:text-sm font-mono font-bold uppercase text-white tracking-wider"
                   >
-                    {locale === 'vi' ? 'LƯỢT ĐOÁN CỦA BẠN' : 'YOUR GUESS TURN'}
+                    {locale === 'vi' ? 'BÀN PHÍM DỰ ĐOÁN' : 'DECISION KEYPAD'}
                   </h3>
-                  <p id="numberpad-desc" className="text-[10px] text-slate-400">
+                  <p id="numberpad-desc" className="text-[10px] text-slate-400 font-mono">
                     {locale === 'vi' ? 'Chọn 4 chữ số khác nhau (hoặc gõ phím 0-9)' : 'Select 4 unique digits (or type 0-9)'}
                   </p>
                 </div>
@@ -148,25 +166,25 @@ export function NumberPadModal({
                 type="button"
                 onClick={onClose}
                 aria-label={locale === 'vi' ? 'Đóng bàn phím' : 'Close keypad'}
-                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 hover:text-white border border-slate-800 hover:border-slate-700 text-slate-300 rounded-full transition cursor-pointer flex items-center justify-center shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
+                className="w-8 h-8 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-white/[0.15] text-slate-400 hover:text-white rounded-lg transition cursor-pointer flex items-center justify-center shrink-0"
               >
-                <X size={18} aria-hidden="true" />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
-            <div className="flex justify-center items-center gap-3 py-2 z-10">
+            <div className="flex justify-center items-center gap-3 py-1 z-10">
               {[0, 1, 2, 3].map((index) => {
                 const digit = value[index];
                 const isActive = value.length === index;
                 return (
                   <div
                     key={index}
-                    className={`w-12 h-14 sm:w-14 sm:h-16 rounded-2xl border flex items-center justify-center font-mono text-2xl sm:text-3xl font-black shadow-inner transition-all duration-150 ${
+                    className={`w-12 h-14 sm:w-14 sm:h-16 rounded-xl border flex items-center justify-center font-mono text-2xl sm:text-3xl font-bold transition-all duration-150 ${
                       digit
-                        ? 'bg-purple-500/10 border-purple-500/60 text-purple-300'
+                        ? 'bg-violet-500/15 border-violet-400/60 text-white shadow-sm'
                         : isActive
-                          ? 'bg-slate-950 border-pink-500/60 text-white animate-pulse shadow-pink-500/10'
-                          : 'bg-slate-950 border-slate-800 text-slate-800'
+                          ? 'bg-[#121622] border-violet-400 text-violet-300 ring-2 ring-violet-500/25 animate-pulse'
+                          : 'bg-[#090a0f] border-white/[0.06] text-slate-700'
                     }`}
                   >
                     {digit || (isActive ? '|' : '·')}
@@ -175,7 +193,7 @@ export function NumberPadModal({
               })}
             </div>
 
-            <div className="grid grid-cols-3 gap-3 z-10">
+            <div className="grid grid-cols-3 gap-2.5 z-10">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => {
                 const digit = String(number);
                 const isUsed = value.includes(digit);
@@ -186,10 +204,10 @@ export function NumberPadModal({
                     disabled={isUsed || value.length >= 4}
                     onClick={() => appendDigit(digit)}
                     aria-label={`Digit ${number}${isUsed ? ' (already used)' : ''}`}
-                    className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                    className={`py-3 rounded-xl font-mono text-xl sm:text-2xl font-bold flex items-center justify-center border transition-all duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
                       isUsed
-                        ? 'bg-slate-950/60 border-slate-900 text-slate-600 opacity-40 cursor-not-allowed'
-                        : 'bg-slate-800/70 hover:bg-slate-700 border-slate-700/80 hover:border-purple-500/50 text-slate-100'
+                        ? 'bg-white/[0.02] border-white/[0.03] text-slate-600 opacity-30 cursor-not-allowed'
+                        : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-100 shadow-sm'
                     }`}
                   >
                     {number}
@@ -202,11 +220,12 @@ export function NumberPadModal({
                 onClick={() => {
                   sound.playDigitClear();
                   triggerHaptic(15);
-                  onChange('');
+                  setLocalValue('');
+                  onChange?.('');
                 }}
                 disabled={value.length === 0}
                 aria-label={locale === 'vi' ? 'Xóa toàn bộ số đã nhập' : 'Clear all entered digits'}
-                className="py-3.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center bg-slate-950/40 border border-slate-800 hover:bg-red-500/15 hover:border-red-500/35 hover:text-red-300 text-slate-400 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                className="py-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center bg-[#121622] border border-white/[0.08] hover:bg-rose-500/15 hover:border-rose-500/35 hover:text-rose-300 text-slate-400 transition duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {locale === 'vi' ? 'XÓA HẾT' : 'CLEAR'}
               </button>
@@ -216,10 +235,10 @@ export function NumberPadModal({
                 disabled={value.includes('0') || value.length >= 4}
                 onClick={() => appendDigit('0')}
                 aria-label={`Digit 0${value.includes('0') ? ' (already used)' : ''}`}
-                className={`py-3.5 rounded-2xl font-mono text-xl sm:text-2xl font-extrabold flex items-center justify-center border shadow-sm transition-all duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                className={`py-3 rounded-xl font-mono text-xl sm:text-2xl font-bold flex items-center justify-center border transition-all duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
                   value.includes('0')
-                    ? 'bg-slate-950/60 border-slate-900 text-slate-600 opacity-40 cursor-not-allowed'
-                    : 'bg-slate-800/70 hover:bg-slate-700 border-slate-700/80 hover:border-purple-500/50 text-slate-100'
+                    ? 'bg-white/[0.02] border-white/[0.03] text-slate-600 opacity-30 cursor-not-allowed'
+                    : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-100 shadow-sm'
                 }`}
               >
                 0
@@ -230,11 +249,15 @@ export function NumberPadModal({
                 onClick={() => {
                   sound.playDigitDelete();
                   triggerHaptic(15);
-                  onChange(value.slice(0, -1));
+                  setLocalValue((prev) => {
+                    const next = prev.slice(0, -1);
+                    onChange?.(next);
+                    return next;
+                  });
                 }}
                 disabled={value.length === 0}
                 aria-label={locale === 'vi' ? 'Xóa 1 chữ số' : 'Delete digit'}
-                className="py-3.5 rounded-2xl text-base sm:text-lg font-bold flex items-center justify-center bg-slate-950/40 border border-slate-800 hover:bg-amber-500/15 hover:border-amber-500/35 hover:text-amber-300 text-slate-400 transition duration-150 active:scale-95 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                className="py-3 rounded-xl font-mono text-base font-bold flex items-center justify-center bg-[#121622] border border-white/[0.08] hover:bg-amber-500/15 hover:border-amber-500/35 hover:text-amber-300 text-slate-400 transition duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Backspace"
               >
                 ⌫
@@ -245,9 +268,9 @@ export function NumberPadModal({
               <motion.div
                 initial={{ opacity: 0, y: -4, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                className="flex items-center justify-center gap-2 text-xs font-bold text-amber-300 bg-amber-500/15 border border-amber-500/40 rounded-xl py-2 px-3 text-center shadow-lg shadow-amber-500/10 z-10"
+                className="flex items-center justify-center gap-2 text-xs font-mono font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded-xl py-2 px-3 text-center z-10"
               >
-                <AlertTriangle size={15} className="text-amber-400 shrink-0" />
+                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
                 <span>
                   {locale === 'vi'
                     ? 'Bạn đã từng đoán dãy số này trong trận rồi!'
@@ -259,22 +282,17 @@ export function NumberPadModal({
             <button
               onClick={handleSubmit}
               disabled={value.length !== 4 || isDuplicate || isSubmitting}
-              className={`w-full py-4 text-white text-base font-black rounded-2xl shadow-xl transition-all duration-200 flex items-center justify-center gap-2 z-10 ${
+              className={`w-full py-3.5 text-sm sm:text-base font-mono font-bold rounded-xl shadow-lg transition-all duration-150 flex items-center justify-center gap-2 z-10 cursor-pointer ${
                 isDuplicate
-                  ? 'bg-amber-600/30 border border-amber-500/50 text-amber-300 cursor-not-allowed opacity-75'
-                  : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-40 disabled:pointer-events-none shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
+                  ? 'bg-amber-500/15 border border-amber-500/35 text-amber-300 cursor-not-allowed'
+                  : 'bg-violet-600 hover:bg-violet-500 active:bg-violet-700 active:translate-y-0.5 border border-violet-400/40 text-white shadow-violet-600/25 disabled:opacity-30 disabled:pointer-events-none'
               }`}
             >
-              <span>{isDuplicate ? '⚠️' : '🚀'}</span>
-              <span>
-                {isDuplicate
-                  ? locale === 'vi'
-                    ? 'ĐÃ ĐOÁN DÃY SỐ NÀY'
-                    : 'ALREADY GUESSED'
-                  : locale === 'vi'
-                    ? 'GỬI ĐOÁN MẬT MÃ'
-                    : 'SUBMIT GUESS'}
-              </span>
+              {isDuplicate ? (
+                <span>⚠️ {locale === 'vi' ? 'ĐÃ ĐOÁN DÃY SỐ NÀY' : 'ALREADY GUESSED'}</span>
+              ) : (
+                <span>{locale === 'vi' ? 'XÁC NHẬN DỰ ĐOÁN' : 'CONFIRM GUESS'}</span>
+              )}
             </button>
           </motion.div>
         </motion.div>

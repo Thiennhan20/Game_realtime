@@ -78,7 +78,7 @@ export function GuessHistoryModal({
             if (event.target === event.currentTarget) onClose();
           }}
         >
-          <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
+          <div className="absolute inset-0 bg-black/85" />
 
           <motion.div
             role="dialog"
@@ -88,17 +88,17 @@ export function GuessHistoryModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-4xl max-h-[90dvh] bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden flex flex-col transform-gpu"
+            className="relative w-full max-w-4xl max-h-[90dvh] bg-[#0d1017] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden flex flex-col transform-gpu"
           >
-            <div className="p-5 sm:p-6 pb-4 border-b border-slate-800/80 flex items-center gap-3 shrink-0">
-              <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400">
-                <History size={22} />
+            <div className="p-4 sm:p-5 pb-3 border-b border-white/[0.06] flex items-center gap-3 shrink-0 bg-[#090a0f]/40">
+              <div className="p-2 bg-violet-500/10 border border-violet-500/20 rounded-xl text-violet-400">
+                <History size={20} />
               </div>
               <div>
-                <h3 id="guess-history-title" className="text-lg sm:text-xl font-black text-white">
+                <h3 id="guess-history-title" className="text-base sm:text-lg font-mono font-bold text-white uppercase tracking-tight">
                   {locale === 'vi' ? 'Lịch sử lượt đoán trận đấu' : 'Match Guessing History'}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-400 font-mono mt-0.5">
                   {locale === 'vi'
                     ? `Chi tiết tất cả lượt đoán giữa ${me?.username || t('you')} và ${opponentName}`
                     : `All guess records between ${me?.username || t('you')} and ${opponentName}`}
@@ -106,12 +106,12 @@ export function GuessHistoryModal({
               </div>
             </div>
 
-            <div className="flex md:hidden border-b border-slate-800 bg-slate-950/60 p-1.5 shrink-0 gap-1.5 px-4">
+            <div className="flex md:hidden border-b border-white/[0.06] bg-[#090a0f]/60 p-1.5 shrink-0 gap-1.5 px-4">
               <button
                 onClick={() => setActiveTab('mine')}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition duration-200 ${
+                className={`flex-1 py-2 rounded-xl text-xs font-mono font-bold transition duration-200 ${
                   activeTab === 'mine'
-                    ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300'
+                    ? 'bg-violet-600/20 border border-violet-500/40 text-violet-300'
                     : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
@@ -119,9 +119,9 @@ export function GuessHistoryModal({
               </button>
               <button
                 onClick={() => setActiveTab('opponent')}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition duration-200 ${
+                className={`flex-1 py-2 rounded-xl text-xs font-mono font-bold transition duration-200 ${
                   activeTab === 'opponent'
-                    ? 'bg-pink-500/20 border border-pink-500/40 text-pink-300'
+                    ? 'bg-violet-600/20 border border-violet-500/40 text-violet-300'
                     : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
@@ -154,19 +154,19 @@ export function GuessHistoryModal({
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-950/60 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+            <div className="px-5 py-3.5 bg-[#090a0f]/80 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               {hasSummary && (
                 <button
                   onClick={onOpenSummary}
-                  className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  className="w-full sm:w-auto px-4 py-2 bg-[#121622] hover:bg-[#181d2c] border border-white/[0.08] hover:border-violet-500/40 text-violet-200 hover:text-white text-xs font-mono font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:translate-y-0.5"
                 >
-                  <Trophy size={14} className="text-yellow-400" />
+                  <Trophy size={14} className="text-amber-400" />
                   <span>{locale === 'vi' ? 'Xem tổng kết kết quả' : 'View Summary'}</span>
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-extrabold text-sm rounded-xl transition cursor-pointer"
+                className="w-full sm:w-auto px-6 py-2 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 active:translate-y-0.5 text-white font-mono font-bold text-xs sm:text-sm rounded-xl transition cursor-pointer border border-violet-400/30 shadow-md shadow-violet-600/20"
               >
                 {locale === 'vi' ? 'Đóng' : 'Close'}
               </button>

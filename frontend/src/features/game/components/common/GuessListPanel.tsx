@@ -21,20 +21,20 @@ interface GuessListPanelProps {
 
 const toneStyles = {
   purple: {
-    dot: 'text-purple-400',
-    header: 'bg-purple-950/10',
-    title: 'text-purple-300',
-    count: 'text-purple-400 bg-purple-500/10',
-    guess: 'text-purple-300',
-    hover: 'hover:border-purple-500/30',
+    dot: 'text-violet-400',
+    header: 'bg-violet-950/20',
+    title: 'text-violet-200 font-mono font-bold',
+    count: 'text-violet-300 bg-violet-500/15 border border-violet-500/25',
+    guess: 'text-violet-100',
+    hover: 'hover:border-violet-500/30',
   },
   pink: {
-    dot: 'text-pink-400',
-    header: 'bg-pink-950/10',
-    title: 'text-pink-300',
-    count: 'text-pink-400 bg-pink-500/10',
-    guess: 'text-pink-300',
-    hover: 'hover:border-pink-500/30',
+    dot: 'text-rose-400',
+    header: 'bg-rose-950/20',
+    title: 'text-rose-200 font-mono font-bold',
+    count: 'text-rose-300 bg-rose-500/15 border border-rose-500/25',
+    guess: 'text-rose-100',
+    hover: 'hover:border-rose-500/30',
   },
 } satisfies Record<GuessListTone, Record<string, string>>;
 
@@ -61,8 +61,8 @@ export function GuessListPanel({
   return (
     <div
       className={`flex-1 flex-col ${
-        isModal ? 'bg-slate-900/40' : 'bg-slate-900/20'
-      } border border-slate-800/80 ${
+        isModal ? 'bg-[#0d1017]' : 'bg-[#0d1017]'
+      } border border-white/[0.08] ${
         isModal
           ? 'rounded-2xl overflow-hidden min-h-0'
           : 'rounded-xl sm:rounded-2xl overflow-hidden h-[398px] max-h-[398px] min-h-[398px] md:h-[366px] md:min-h-[366px] md:max-h-[366px] 2xl:h-[480px] 2xl:min-h-[480px] 2xl:max-h-[480px] shrink-0'
@@ -71,20 +71,20 @@ export function GuessListPanel({
       <div
         className={`${isModal ? 'p-3' : 'p-2.5 sm:p-3'} ${
           isModal
-            ? tone === 'purple' ? 'bg-purple-950/20' : 'bg-pink-950/20'
+            ? tone === 'purple' ? 'bg-violet-950/25' : 'bg-rose-950/25'
             : styles.header
-        } border-b border-slate-800 flex items-center justify-between shrink-0`}
+        } border-b border-white/[0.06] flex items-center justify-between shrink-0`}
       >
         <div className="flex items-center space-x-2 min-w-0 flex-1">
-          <span className={`${styles.dot} shrink-0`}>●</span>
+          <span className={`${styles.dot} shrink-0 text-xs`}>●</span>
           <h4
-            className={`${isModal ? 'text-xs sm:text-sm' : 'text-xs'} font-extrabold uppercase tracking-wider ${isModal ? styles.title : ''} truncate`}
+            className={`${isModal ? 'text-xs sm:text-sm' : 'text-xs'} font-bold uppercase tracking-wider ${styles.title} truncate`}
           >
             {title}
           </h4>
         </div>
         <span
-          className={`${isModal ? 'text-xs px-2.5' : 'text-[10px] px-2'} font-bold ${styles.count} py-0.5 rounded-full shrink-0`}
+          className={`${isModal ? 'text-xs px-2.5' : 'text-[10px] px-2'} font-mono font-bold ${styles.count} py-0.5 rounded-full shrink-0`}
         >
           {isModal
             ? `${guesses.length} ${locale === 'vi' ? 'lượt' : 'guesses'}`
@@ -105,8 +105,8 @@ export function GuessListPanel({
             key={`${guess.timestamp}-${index}`}
             className={`flex items-center justify-between ${
               isModal
-                ? `p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl ${styles.hover} transition`
-                : 'p-2 sm:p-2.5 bg-slate-950/50 border border-slate-900 rounded-lg sm:rounded-xl'
+                ? `p-3 bg-[#121622] border border-white/[0.06] rounded-xl ${styles.hover} transition`
+                : 'p-2 sm:p-2.5 bg-[#121622] border border-white/[0.06] rounded-lg'
             } text-sm`}
           >
             <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">

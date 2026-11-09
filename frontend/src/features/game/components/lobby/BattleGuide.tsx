@@ -33,7 +33,7 @@ export function BattleGuide({ locale }: { locale: Locale }) {
         ];
 
   return (
-    <div className="hidden lg:flex flex-col flex-1 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl shadow-xl justify-between">
+    <div className="hidden lg:flex flex-col flex-1 bg-[#0d1017] border border-white/[0.08] p-5 rounded-2xl shadow-xl justify-between">
       <div className="space-y-4">
         <h3 className="text-xs font-black uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text pb-2 border-b border-slate-850">
           {locale === 'vi' ? '📖 Hướng Dẫn: Đối Chiến' : '📖 Guide: Battle'}

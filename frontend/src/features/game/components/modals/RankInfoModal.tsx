@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Crown, Lock, Shield, Trophy, X, Zap } from 'lucide-react';
+import { Check, Crown, Lock, Shield, Trophy, X, Zap } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { RANK_TIERS, getRankBadgePath, getRankProgress } from '../../ranks';
@@ -78,7 +78,7 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.18 }}
-        className="fixed inset-0 z-[320] flex items-center justify-center p-2.5 sm:p-5 bg-slate-950/85 backdrop-blur-md"
+        className="fixed inset-0 z-[320] flex items-center justify-center p-2.5 sm:p-5 bg-[#090a0f]/90"
         onClick={onClose}
       >
         <motion.div
@@ -90,16 +90,16 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
           role="dialog"
           aria-modal="true"
           aria-label={text.title}
-          className="bg-slate-900 border border-slate-800 w-full max-w-4xl h-[88vh] max-h-[800px] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col min-w-0"
+          className="bg-[#0d1017] border border-white/[0.08] w-full max-w-4xl h-auto max-h-[88vh] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col min-w-0"
         >
-          {/* Header matching room list modal style */}
-          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 shrink-0 gap-2">
+          {/* Header */}
+          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#090a0f]/90 shrink-0 gap-2">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl shrink-0 border border-amber-500/30">
+              <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl shrink-0 border border-amber-500/20">
                 <Crown size={20} />
               </div>
               <div className="min-w-0 flex-1">
-                <h2 className="text-xs sm:text-base font-black text-white uppercase tracking-wider truncate">
+                <h2 className="text-xs sm:text-base font-mono font-bold text-white uppercase tracking-wider truncate">
                   {text.title}
                 </h2>
                 <p className="text-[11px] text-slate-400 leading-tight truncate sm:whitespace-normal">
@@ -108,12 +108,11 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
               </div>
             </div>
 
-            {/* Close Button styled like room list modal top-right rose button */}
             <button
               type="button"
               onClick={onClose}
               aria-label={text.close}
-              className="p-1.5 sm:p-2 bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl transition cursor-pointer shrink-0 ml-1"
+              className="p-1.5 sm:p-2 bg-[#121622] hover:bg-white/[0.08] text-slate-400 hover:text-white border border-white/[0.08] rounded-xl transition duration-150 cursor-pointer shrink-0 ml-1 flex items-center justify-center"
             >
               <X size={18} />
             </button>
@@ -122,19 +121,19 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
           {/* Main Content Area - Responsive Container */}
           <div className="p-3 sm:p-5 overflow-y-auto custom-scrollbar flex-1 space-y-3.5 sm:space-y-4">
             {/* User Current Rank Overview Banner */}
-            <div className="p-3.5 sm:p-4 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-950 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 min-w-0">
+            <div className="p-3.5 sm:p-4 rounded-2xl border border-amber-400/40 bg-[#121622] shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 min-w-0">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <RankBadge tier={current} locale={locale} size="md" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-400">
                       {text.youAreHere}
                     </span>
-                    <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-2 py-0.2 rounded-full uppercase">
+                    <span className="bg-amber-400 text-slate-950 font-black font-mono text-[9px] px-2 py-0.5 rounded-md uppercase">
                       {locale === 'vi' ? current.nameVi : current.nameEn}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs sm:text-sm font-black text-white leading-snug">
+                  <p className="mt-0.5 text-xs sm:text-sm font-bold text-white leading-snug">
                     {next
                       ? text.pointsNeeded
                           .replace('{points}', formatter.format(pointsToNext))
@@ -145,12 +144,12 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0 font-mono text-xs">
-                <div className="px-2.5 py-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 font-bold flex items-center gap-1">
+                <div className="px-2.5 py-1 rounded-xl border border-white/[0.08] bg-[#090a0f] text-cyan-300 font-bold flex items-center gap-1.5 shadow-inner">
                   <Zap size={12} className="text-cyan-400 shrink-0" />
                   <span>{text.currentRating}: {formatter.format(rating)}</span>
                 </div>
-                <div className="px-2.5 py-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 font-bold flex items-center gap-1">
-                  <Trophy size={12} className="text-yellow-400 shrink-0" />
+                <div className="px-2.5 py-1 rounded-xl border border-white/[0.08] bg-[#090a0f] text-amber-300 font-bold flex items-center gap-1.5 shadow-inner">
+                  <Trophy size={12} className="text-amber-400 shrink-0" />
                   <span>{text.peakLabel}: {formatter.format(profile.highestRating ?? rating)}</span>
                 </div>
               </div>
@@ -162,25 +161,15 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
                 const isCurrent = tier.key === current.key;
                 const isAchieved = rating >= tier.minRating;
 
-                const tierGradients: Record<string, string> = {
-                  bronze: 'from-amber-950/40 border-amber-800/40 text-amber-300',
-                  silver: 'from-slate-900/60 border-slate-700/60 text-slate-300',
-                  gold: 'from-yellow-950/40 border-yellow-600/40 text-yellow-300',
-                  platinum: 'from-cyan-950/40 border-cyan-500/40 text-cyan-300',
-                  diamond: 'from-sky-950/40 border-sky-500/40 text-sky-300',
-                  master: 'from-fuchsia-950/40 border-fuchsia-500/40 text-fuchsia-300',
-                };
-                const tierAccent = tierGradients[tier.key] || 'from-slate-900/60 border-slate-800 text-slate-300';
-
                 return (
                   <div
                     key={tier.key}
                     className={`p-3.5 rounded-2xl border transition duration-200 flex flex-col justify-between gap-3 min-w-0 ${
                       isCurrent
-                        ? 'border-2 border-amber-400/90 bg-gradient-to-b from-amber-500/25 via-slate-900 to-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/60'
+                        ? 'border-2 border-amber-400/80 bg-[#121622] shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-400/30'
                         : isAchieved
-                        ? `bg-gradient-to-b ${tierAccent} hover:brightness-110`
-                        : 'border-slate-800/80 bg-slate-950/30 opacity-70 hover:opacity-90'
+                        ? 'bg-[#121622] border-white/[0.08] hover:border-white/[0.16]'
+                        : 'border-white/[0.06] bg-[#0d1017] opacity-70 hover:opacity-90'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 min-w-0">
@@ -188,29 +177,30 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
                         <img
                           src={getRankBadgePath(tier.key)}
                           alt={locale === 'vi' ? tier.nameVi : tier.nameEn}
-                          className="w-9 h-9 object-contain shrink-0 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                          className="w-9 h-9 object-contain shrink-0 drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
                         />
                         <RankBadge tier={tier} locale={locale} size="sm" />
                       </div>
                       {isCurrent ? (
-                        <span className="px-2 py-1 rounded-md bg-amber-400 text-slate-950 text-[9px] sm:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 ml-auto">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[9px] font-black font-mono uppercase tracking-wider flex items-center gap-1 shadow-sm shrink-0 ml-auto">
                           <Shield size={10} />
                           {text.youAreHere}
                         </span>
                       ) : isAchieved ? (
-                        <span className="px-2 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 ml-auto">
-                          ✓ {text.achieved}
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ml-auto">
+                          <Check size={11} className="text-emerald-400" />
+                          <span>{text.achieved}</span>
                         </span>
                       ) : (
-                        <span className="px-1.5 py-1 rounded-md bg-slate-900 text-slate-500 border border-slate-800 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ml-auto">
+                        <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] text-slate-400 border border-white/[0.08] text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ml-auto">
                           <Lock size={9} />
-                          {text.locked}
+                          <span>{text.locked}</span>
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-1 pt-2 border-t border-slate-800/80 min-w-0">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    <div className="space-y-1 pt-2 border-t border-white/[0.06] min-w-0">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block font-mono">
                         {text.minRating}
                       </span>
                       <p className="text-xs sm:text-sm font-mono font-black text-slate-100 truncate">
@@ -225,27 +215,27 @@ export function RankInfoModal({ isOpen, locale, profile, onClose }: RankInfoModa
             </div>
           </div>
 
-          {/* Footer with overall progress bar & close button */}
-          <div className="px-4 py-3 sm:px-5 sm:py-4 border-t border-slate-800 bg-slate-950/90 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* Footer with overall progress bar & target */}
+          <div className="px-4 py-3 sm:px-5 sm:py-4 border-t border-white/[0.08] bg-[#090a0f]/90 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="w-full sm:flex-1 space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 font-mono">
                 <span className="uppercase tracking-wider text-[10px]">
                   {locale === 'vi' ? 'Tiến trình lên hạng' : 'Rank Progress'}
                 </span>
-                <span className="font-mono text-slate-300 text-xs">
+                <span className="text-slate-300 text-xs">
                   {formatter.format(rating)} Rating
                 </span>
               </div>
-              <div className="relative h-2.5 rounded-full bg-slate-950 ring-1 ring-slate-800 overflow-hidden">
+              <div className="relative h-2.5 rounded-full bg-[#090a0f] ring-1 ring-white/[0.08] overflow-hidden p-0.5">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.5)] transition-[width] duration-500"
+                  className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-500"
                   style={{ width: `${progress}%` }}
                 />
               </div>
             </div>
 
-            {/* Right side: Next Rank Target Chip instead of redundant close button */}
-            <div className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 font-bold text-xs flex items-center justify-center sm:justify-start gap-1.5 shrink-0 shadow-sm">
+            {/* Right side: Next Rank Target Chip */}
+            <div className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 font-mono font-bold text-xs flex items-center justify-center sm:justify-start gap-1.5 shrink-0 shadow-sm">
               <Zap size={14} className="text-amber-400 shrink-0" />
               <span>
                 {next

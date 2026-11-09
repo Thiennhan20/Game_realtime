@@ -31,6 +31,7 @@ export interface UnlockedAchievementNotice {
 
 export interface AuthUser {
   id: string;
+  userId?: string;
   name: string;
   avatar: string;
 }
@@ -136,6 +137,7 @@ export interface Room {
 
 export interface LobbyRoom {
   roomId: string;
+  hostId?: string | null;
   hostName: string;
   hostAvatar?: string;
   hostEquippedTitle?: EquippedTitle | null;
@@ -144,6 +146,43 @@ export interface LobbyRoom {
   state?: string;
   createdAt?: number;
   spectatorCount?: number;
+}
+
+export interface RecentFormMatch {
+  matchId: string;
+  isAiRoom: boolean;
+  status: string;
+  result: 'win' | 'loss' | 'abandoned';
+  opponentName: string;
+  opponentAvatar?: string;
+  ratingDelta: number;
+  guessCount: number;
+  finishedAt: string;
+}
+
+export interface PublicGameProfile {
+  user: {
+    userId: string;
+    name: string;
+    avatar: string;
+    createdAt?: string;
+  };
+  stats: GameProfile & {
+    totalPvpMatches: number;
+    pvpWinRate: number;
+    aiStats: {
+      easy: { wins: number; losses: number };
+      medium: { wins: number; losses: number };
+      hard: { wins: number; losses: number };
+      totalAiWins: number;
+      totalAiLosses: number;
+      totalAiMatches: number;
+      aiWinRate: number;
+    };
+    unlockedAchievementsCount: number;
+    totalAchievementsCount: number;
+    recentForm: RecentFormMatch[];
+  };
 }
 
 export interface ChatMessage {
@@ -200,3 +239,10 @@ export interface LeaderboardEntry {
   bestWinStreak: number;
   equippedTitle?: EquippedTitle | null;
 }
+
+export interface RpsClashInfo {
+  winnerIndex: number;
+  p1Choice: string;
+  p2Choice: string;
+}
+

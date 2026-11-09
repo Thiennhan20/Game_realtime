@@ -3,12 +3,33 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trophy, Medal, Crown, Users, ChevronDown, Clock, Search, Award, Flame, Swords, TrendingUp } from 'lucide-react';
+import {
+  ArrowLeft,
+  Trophy,
+  Medal,
+  Crown,
+  Users,
+  ChevronDown,
+  Clock,
+  Search,
+  Award,
+  Flame,
+  Swords,
+  TrendingUp,
+  Shield,
+  Check,
+} from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { getGameApiUrl, getMainSiteUrl, navigateTopWindow } from '@/features/game/utils';
 import { EquippedTitleBadge } from '@/features/game/components/common/EquippedTitleBadge';
 import { RankBadge } from '@/features/game/components/common/RankBadge';
 import { getRankByRating } from '@/features/game/ranks';
 import type { EquippedTitle } from '@/features/game/types';
+
+const PlayerProfileModal = dynamic(
+  () => import('@/features/game/components/modals/PlayerProfileModal').then((mod) => mod.PlayerProfileModal),
+  { ssr: false }
+);
 
 interface LeaderboardEntry {
   rank: number;
@@ -43,6 +64,8 @@ function LeaderboardPageContent() {
   });
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,17 +181,21 @@ function LeaderboardPageContent() {
   const top3 = leaderboard[2];
   const tableDisplayList = cleanQuery ? filteredLeaderboard : filteredLeaderboard.filter(item => item.rank > 3);
 
+  const myRankEntry = userProfile?.name
+    ? leaderboard.find(item => item.username.toLowerCase() === userProfile.name.toLowerCase())
+    : null;
+
   if (!mounted) return null;
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
+    <div className="min-h-[100dvh] bg-[#090a0f] text-white font-sans flex flex-col max-w-full overflow-y-auto no-scrollbar">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
+      <header className="sticky top-0 z-50 bg-[#090a0f] border-b border-white/[0.08] px-3 py-2 sm:px-4 sm:py-2.5 shadow-xl shrink-0">
         <div className="max-w-[1700px] w-full mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <button
               onClick={() => router.push(`/?locale=${locale}`)}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
+              className="p-2 bg-[#0d1017] hover:bg-[#121622] border border-white/[0.08] hover:border-white/[0.16] rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
               title={locale === 'vi' ? 'Quay lại game' : 'Back to arena'}
             >
               <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
@@ -179,7 +206,7 @@ function LeaderboardPageContent() {
             </div>
 
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm sm:text-lg tracking-tight bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 text-transparent bg-clip-text">
+              <h1 className="font-extrabold text-sm sm:text-base tracking-wider uppercase font-mono text-white">
                 {locale === 'vi' ? 'BẢNG XẾP HẠNG CAO THỦ' : 'PVP LEADERBOARD'}
               </h1>
               <p className="hidden sm:block text-[11px] text-slate-400">
@@ -190,11 +217,11 @@ function LeaderboardPageContent() {
 
           {/* Right Section: Language + Profile */}
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-            <div className="flex items-center bg-slate-900/60 border border-slate-800/80 p-0.5 rounded-xl text-[10px] font-bold">
+            <div className="flex items-center bg-[#0d1017] border border-white/[0.08] p-0.5 rounded-xl text-[10px] font-bold">
               <button
                 onClick={() => toggleLocale('en')}
                 className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
-                  locale === 'en' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  locale === 'en' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 EN
@@ -202,7 +229,7 @@ function LeaderboardPageContent() {
               <button
                 onClick={() => toggleLocale('vi')}
                 className={`px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-lg transition-all cursor-pointer ${
-                  locale === 'vi' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  locale === 'vi' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 VI
@@ -216,17 +243,17 @@ function LeaderboardPageContent() {
                   onClick={() => setShowUserDropdown((isOpen) => !isOpen)}
                   aria-label={userProfile.name}
                   aria-expanded={showUserDropdown}
-                  className="flex items-center justify-center bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex items-center justify-center bg-[#0d1017] hover:bg-[#121622] border border-white/[0.08] p-0.5 sm:py-1.5 sm:px-3 sm:gap-2 rounded-full sm:rounded-xl transition duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                 >
                   {userProfile.avatar && !avatarError ? (
                     <img
                       src={userProfile.avatar}
                       alt={userProfile.name}
                       onError={() => setAvatarError(true)}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-700 shrink-0 object-cover"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-white/[0.12] shrink-0 object-cover"
                     />
                   ) : (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-white shrink-0">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-amber-600 rounded-full flex items-center justify-center font-bold text-xs uppercase text-slate-950 shrink-0">
                       {userProfile.name.slice(0, 2)}
                     </div>
                   )}
@@ -242,16 +269,16 @@ function LeaderboardPageContent() {
                   <div
                     role="menu"
                     aria-label="User navigation"
-                    className="absolute right-0 mt-2 w-52 bg-slate-900/95 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                    className="absolute right-0 mt-2 w-52 bg-[#0c1017] border border-white/[0.12] rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => {
                         setShowUserDropdown(false);
-                        navigateTopWindow(getMainSiteUrl('/profile', locale));
+                        router.push(`/profile?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Users size={16} className="text-purple-400" />
                       <span>{locale === 'vi' ? 'Hồ sơ cá nhân' : 'User Profile'}</span>
@@ -263,7 +290,7 @@ function LeaderboardPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/history?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Clock size={16} className="text-cyan-400" />
                       <span>{locale === 'vi' ? 'Lịch sử đấu' : 'Match History'}</span>
@@ -275,7 +302,7 @@ function LeaderboardPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/leaderboard?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Trophy size={16} className="text-amber-400" />
                       <span>{locale === 'vi' ? 'Bảng xếp hạng' : 'Leaderboard'}</span>
@@ -287,7 +314,7 @@ function LeaderboardPageContent() {
                         setShowUserDropdown(false);
                         router.push(`/achievements?locale=${locale}`);
                       }}
-                      className="w-full text-left py-2.5 px-4 hover:bg-slate-800/60 text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
+                      className="w-full text-left py-2.5 px-4 hover:bg-white/[0.04] text-slate-200 hover:text-white text-sm font-semibold flex items-center space-x-2.5 transition duration-150 cursor-pointer"
                     >
                       <Award size={16} className="text-emerald-400" />
                       <span>{locale === 'vi' ? 'Thành tích' : 'Achievements'}</span>
@@ -296,9 +323,9 @@ function LeaderboardPageContent() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-center bg-slate-900/60 border border-slate-800/80 p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800/80 rounded-full shrink-0" />
-                <div className="hidden sm:block w-20 h-3.5 bg-slate-800/80 rounded-md sm:ml-2" />
+              <div className="flex items-center justify-center bg-[#0d1017] border border-white/[0.08] p-0.5 sm:px-3 sm:py-1.5 rounded-full sm:rounded-xl animate-pulse">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/[0.05] rounded-full shrink-0" />
+                <div className="hidden sm:block w-20 h-3.5 bg-white/[0.05] rounded-md sm:ml-2" />
               </div>
             )}
           </div>
@@ -306,18 +333,18 @@ function LeaderboardPageContent() {
       </header>
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto p-3 sm:p-6 pb-24 sm:pb-28 pb-[calc(6rem+env(safe-area-inset-bottom))] space-y-6">
+      <main className="flex-1 max-w-[1700px] w-full mx-auto p-3 sm:p-6 pb-28 sm:pb-32 pb-[calc(7rem+env(safe-area-inset-bottom))] space-y-6">
 
         {/* Top Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-3 sm:p-4 rounded-2xl">
-          <div className="flex items-center space-x-1.5 bg-slate-950 p-1 rounded-xl border border-slate-850 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0d1017] border border-white/[0.08] p-3 sm:p-4 rounded-2xl">
+          <div className="flex items-center space-x-1.5 bg-[#090a0f] p-1 rounded-xl border border-white/[0.06] w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setPeriod('all')}
               className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 period === 'all'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
               }`}
             >
               {locale === 'vi' ? 'Tất cả thời gian' : 'All Time'}
@@ -327,8 +354,8 @@ function LeaderboardPageContent() {
               onClick={() => setPeriod('month')}
               className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 period === 'month'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
               }`}
             >
               {locale === 'vi' ? 'Tháng này' : 'Monthly'}
@@ -338,8 +365,8 @@ function LeaderboardPageContent() {
               onClick={() => setPeriod('week')}
               className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 period === 'week'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
               }`}
             >
               {locale === 'vi' ? 'Tuần này' : 'Weekly'}
@@ -353,7 +380,7 @@ function LeaderboardPageContent() {
               placeholder={locale === 'vi' ? 'Tìm người chơi...' : 'Search player...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-amber-500 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-base sm:text-xs placeholder-slate-600 text-white shadow-inner"
+              className="w-full bg-[#090a0f] border border-white/[0.08] focus:border-amber-500/50 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-base sm:text-xs placeholder-slate-600 text-white shadow-inner"
             />
           </div>
         </div>
@@ -361,24 +388,24 @@ function LeaderboardPageContent() {
         {loading ? (
           <div className="py-20 text-center">
             <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-slate-400 text-xs font-medium">
+            <p className="text-slate-400 text-xs font-mono">
               {locale === 'vi' ? 'Đang tải bảng xếp hạng...' : 'Loading leaderboard...'}
             </p>
           </div>
         ) : error ? (
-          <div className="py-16 text-center text-rose-400 font-bold text-sm bg-slate-900/40 border border-slate-800 rounded-2xl">
+          <div className="py-16 text-center text-rose-400 font-bold text-sm bg-[#0d1017] border border-rose-500/30 rounded-2xl">
             {error}
           </div>
         ) : leaderboard.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="py-14 px-4 text-center bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-slate-800/80 rounded-3xl max-w-xl mx-auto w-full flex flex-col items-center shadow-2xl"
+            className="py-14 px-4 text-center bg-[#0d1017] border border-white/[0.08] rounded-3xl max-w-xl mx-auto w-full flex flex-col items-center shadow-2xl"
           >
             <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 mb-4 shadow-[0_0_25px_rgba(245,158,11,0.15)]">
               <Trophy size={30} />
             </div>
-            <h3 className="text-base sm:text-lg font-extrabold text-white mb-1.5">
+            <h3 className="text-base sm:text-lg font-mono font-bold text-white mb-1.5 uppercase">
               {period === 'week'
                 ? (locale === 'vi' ? 'Chưa có trận đấu nào trong tuần này' : 'No matches played this week yet')
                 : period === 'month'
@@ -402,7 +429,7 @@ function LeaderboardPageContent() {
               <button
                 type="button"
                 onClick={() => router.push(`/?locale=${locale}`)}
-                className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 flex items-center gap-2 transition cursor-pointer"
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 flex items-center gap-2 transition cursor-pointer"
               >
                 <Swords size={15} />
                 <span>{locale === 'vi' ? 'Vào đấu trường ngay' : 'Enter Arena Now'}</span>
@@ -411,7 +438,7 @@ function LeaderboardPageContent() {
                 <button
                   type="button"
                   onClick={() => setPeriod('all')}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-2 transition cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#121622] hover:bg-white/[0.06] text-slate-200 border border-white/[0.08] flex items-center gap-2 transition cursor-pointer"
                 >
                   <Trophy size={14} className="text-amber-400" />
                   <span>{locale === 'vi' ? 'Xem BXH Tất cả thời gian' : 'View All-Time Ranking'}</span>
@@ -431,10 +458,14 @@ function LeaderboardPageContent() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1, duration: 0.35 }}
-                    className="order-2 md:order-1 relative rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-center flex flex-col items-center bg-gradient-to-b from-slate-800/40 via-slate-900/90 to-slate-950 backdrop-blur-xl border border-slate-400/30 shadow-[0_8px_25px_-8px_rgba(203,213,225,0.15)] ring-1 ring-white/5 hover:border-slate-300/60 transition-all duration-300 group"
+                    onClick={() => {
+                      setSelectedProfileUserId(top2.userId);
+                      setShowProfileModal(true);
+                    }}
+                    className="order-2 md:order-1 relative rounded-2xl px-3.5 py-3 text-center flex flex-col items-center bg-[#0d1017] border border-slate-400/30 shadow-[0_8px_25px_-8px_rgba(203,213,225,0.1)] ring-1 ring-white/5 hover:border-slate-300/50 transition-all duration-300 group cursor-pointer"
                   >
                     {/* Ambient light glow behind avatar */}
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-24 bg-slate-300/10 rounded-full blur-2xl pointer-events-none" />
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-24 bg-slate-300/5 rounded-full blur-2xl pointer-events-none" />
 
                     {/* Avatar with Silver Ring & Medal */}
                     <div className="relative mb-1.5 flex flex-col items-center">
@@ -447,22 +478,23 @@ function LeaderboardPageContent() {
                               className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover"
                             />
                           ) : (
-                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-800 flex items-center justify-center font-black text-sm sm:text-base text-slate-200">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#121622] flex items-center justify-center font-black text-sm sm:text-base text-slate-200">
                               {top2.username.slice(0, 2).toUpperCase()}
                             </div>
                           )}
                         </div>
-                        <span className="absolute -bottom-1.5 right-1/2 translate-x-1/2 bg-gradient-to-r from-slate-200 via-zinc-100 to-slate-300 text-slate-950 font-black text-[10px] leading-none px-2 py-0.5 rounded-full border border-white shadow-md flex items-center gap-0.5 whitespace-nowrap">
-                          🥈 #2 {locale === 'vi' ? 'Á Quân' : 'Runner-Up'}
+                        <span className="absolute -bottom-1.5 right-1/2 translate-x-1/2 bg-slate-200 text-slate-950 font-black text-[10px] leading-none px-2 py-0.5 rounded-full border border-white shadow-md flex items-center gap-1 whitespace-nowrap">
+                          <Medal size={11} className="text-slate-700" />
+                          <span>#2 {locale === 'vi' ? 'Á Quân' : 'Runner-Up'}</span>
                         </span>
                       </div>
                     </div>
 
                     {/* Username & Rank */}
-                    <h3 className="font-extrabold text-sm sm:text-base leading-tight text-white mt-0.5 mb-1 truncate max-w-full">
+                    <h3 className="font-extrabold text-sm sm:text-base leading-tight text-white mt-1 mb-1 truncate max-w-full">
                       {top2.username}
                     </h3>
-                    <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1">
+                    <div className="mb-2 flex flex-wrap items-center justify-center gap-1">
                       <RankBadge tier={getRankByRating(top2.rating)} locale={locale} size="sm" />
                       {top2.equippedTitle && (
                         <EquippedTitleBadge title={top2.equippedTitle} locale={locale} size="xs" />
@@ -470,9 +502,9 @@ function LeaderboardPageContent() {
                     </div>
 
                     {/* Stats Grid 2x2 */}
-                    <div className="w-full grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-700/50 text-left">
+                    <div className="w-full grid grid-cols-2 gap-1.5 pt-2 border-t border-white/[0.08] text-left">
                       {/* Rating */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-slate-700/60 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
                           <Trophy size={10} className="text-slate-300 shrink-0" />
                           Rating
@@ -481,14 +513,14 @@ function LeaderboardPageContent() {
                           <span className="text-sm sm:text-base font-black font-mono text-slate-100 leading-none">
                             {top2.rating}
                           </span>
-                          <span className="text-[9px] text-slate-500 font-medium whitespace-nowrap">
+                          <span className="text-[9px] text-slate-500 font-mono whitespace-nowrap">
                             Peak {top2.highestRating || top2.rating}
                           </span>
                         </div>
                       </div>
 
                       {/* Win Rate */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-slate-700/60 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
                           <TrendingUp size={10} className="text-emerald-400 shrink-0" />
                           {locale === 'vi' ? 'Tỷ lệ thắng' : 'Win Rate'}
@@ -497,7 +529,7 @@ function LeaderboardPageContent() {
                           <span className="text-sm sm:text-base font-black font-mono text-emerald-400 leading-none">
                             {top2.winRate}%
                           </span>
-                          <div className="flex-1 bg-slate-800 h-1 rounded-full overflow-hidden max-w-[60px]">
+                          <div className="flex-1 bg-[#090a0f] h-1 rounded-full overflow-hidden max-w-[60px]">
                             <div
                               className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full"
                               style={{ width: `${top2.winRate}%` }}
@@ -507,33 +539,34 @@ function LeaderboardPageContent() {
                       </div>
 
                       {/* Matches */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-slate-700/60 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
                           <Swords size={10} className="text-slate-300 shrink-0" />
                           {locale === 'vi' ? 'Trận đấu' : 'Matches'}
                         </span>
                         <div className="mt-0.5 flex items-center gap-1 font-mono font-bold text-[11px] leading-none">
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
                             {top2.wins}W
                           </span>
                           <span className="text-slate-600 font-light">-</span>
-                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/25">
                             {top2.losses}L
                           </span>
                         </div>
                       </div>
 
                       {/* Streak */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-slate-700/60 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                          <Flame size={10} className="text-orange-400 shrink-0" />
+                          <Flame size={10} className="text-amber-400 shrink-0" />
                           {locale === 'vi' ? 'Chuỗi thắng' : 'Streak'}
                         </span>
                         <div className="mt-0.5 flex items-baseline justify-between gap-1">
-                          <span className="text-sm sm:text-base font-black font-mono text-orange-400 leading-none">
-                            {top2.currentWinStreak || 0}🔥
+                          <span className="text-sm sm:text-base font-black font-mono text-amber-400 leading-none flex items-center gap-0.5">
+                            {top2.currentWinStreak || 0}
+                            <Flame size={11} className="text-amber-400" />
                           </span>
-                          <span className="text-[9px] text-slate-500 font-medium whitespace-nowrap">
+                          <span className="text-[9px] text-slate-500 font-mono whitespace-nowrap">
                             Max {top2.bestWinStreak || top2.currentWinStreak || 0}
                           </span>
                         </div>
@@ -541,14 +574,14 @@ function LeaderboardPageContent() {
                     </div>
                   </motion.div>
                 ) : (
-                  <div className="order-2 md:order-1 rounded-2xl px-4 py-6 text-center flex flex-col items-center justify-center bg-slate-900/20 border border-dashed border-slate-800/80 min-h-[210px]">
-                    <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-2">
-                      🥈
+                  <div className="order-2 md:order-1 rounded-2xl px-4 py-6 text-center flex flex-col items-center justify-center bg-[#0d1017] border border-dashed border-white/[0.08] min-h-[210px]">
+                    <div className="w-12 h-12 rounded-full bg-[#121622] border border-white/[0.08] flex items-center justify-center text-slate-400 mb-2">
+                      <Medal size={20} />
                     </div>
-                    <span className="text-xs font-bold text-slate-400 mb-1">
+                    <span className="text-xs font-mono font-bold text-slate-400 mb-1">
                       #2 {locale === 'vi' ? 'Á Quân đang bỏ trống' : 'Runner-Up Slot Open'}
                     </span>
-                    <p className="text-[11px] text-slate-600 max-w-[200px]">
+                    <p className="text-[11px] text-slate-500 max-w-[200px]">
                       {locale === 'vi' ? 'Tham gia đấu PvP ngay để chiếm vị trí này!' : 'Play a PvP match now to claim this spot!'}
                     </p>
                   </div>
@@ -559,14 +592,17 @@ function LeaderboardPageContent() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="order-1 md:order-2 relative rounded-2xl px-3.5 py-3 sm:px-4 sm:py-3.5 text-center flex flex-col items-center bg-gradient-to-b from-amber-950/30 via-slate-900/90 to-slate-950 backdrop-blur-xl border-2 border-amber-400/70 shadow-[0_10px_35px_-10px_rgba(245,158,11,0.35)] ring-1 ring-amber-400/25 md:-translate-y-1.5 z-10 hover:border-amber-300 transition-all duration-300 group"
+                  onClick={() => {
+                    setSelectedProfileUserId(top1.userId);
+                    setShowProfileModal(true);
+                  }}
+                  className="order-1 md:order-2 relative rounded-2xl px-3.5 py-3.5 text-center flex flex-col items-center bg-gradient-to-b from-amber-950/25 via-[#0d1017] to-[#090a0f] border-2 border-amber-400/70 shadow-[0_10px_35px_-10px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/25 md:-translate-y-1.5 z-10 hover:border-amber-300 transition-all duration-300 group cursor-pointer"
                 >
                   {/* Glowing halo behind avatar */}
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 w-28 h-28 bg-amber-400/20 rounded-full blur-2xl pointer-events-none" />
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 w-28 h-28 bg-amber-400/15 rounded-full blur-2xl pointer-events-none" />
 
                   {/* Crown + Avatar with Radiant Gold Frame */}
                   <div className="relative mb-1.5 flex flex-col items-center">
-                    {/* Crown sitting proudly atop the avatar */}
                     <div className="text-amber-400 mb-0.5 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-pulse">
                       <Crown size={18} className="fill-amber-400" />
                     </div>
@@ -585,17 +621,18 @@ function LeaderboardPageContent() {
                           </div>
                         )}
                       </div>
-                      <span className="absolute -bottom-1.5 right-1/2 translate-x-1/2 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black text-[10px] leading-none px-2.5 py-0.5 rounded-full border border-yellow-100 shadow-lg flex items-center gap-0.5 whitespace-nowrap">
-                        #1 {locale === 'vi' ? 'QUÁN QUÂN' : 'CHAMPION'}
+                      <span className="absolute -bottom-1.5 right-1/2 translate-x-1/2 bg-amber-400 text-slate-950 font-black text-[10px] leading-none px-2.5 py-0.5 rounded-full border border-yellow-200 shadow-lg flex items-center gap-1 whitespace-nowrap">
+                        <Trophy size={11} className="text-slate-950" />
+                        <span>#1 {locale === 'vi' ? 'QUÁN QUÂN' : 'CHAMPION'}</span>
                       </span>
                     </div>
                   </div>
 
                   {/* Username & Rank */}
-                  <h3 className="font-black text-base sm:text-lg leading-tight text-white mt-0.5 mb-1 truncate max-w-full drop-shadow-md">
+                  <h3 className="font-black text-base sm:text-lg leading-tight text-white mt-1 mb-1 truncate max-w-full drop-shadow-md">
                     {top1.username}
                   </h3>
-                  <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1">
+                  <div className="mb-2 flex flex-wrap items-center justify-center gap-1">
                     <RankBadge tier={getRankByRating(top1.rating)} locale={locale} size="sm" />
                     {top1.equippedTitle && (
                       <EquippedTitleBadge title={top1.equippedTitle} locale={locale} size="xs" />
@@ -605,7 +642,7 @@ function LeaderboardPageContent() {
                   {/* Stats Grid 2x2 */}
                   <div className="w-full grid grid-cols-2 gap-1.5 pt-2 border-t border-amber-500/25 text-left">
                     {/* Rating */}
-                    <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-500/35 shadow-inner flex flex-col justify-between">
+                    <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-amber-500/30 shadow-inner flex flex-col justify-between">
                       <span className="text-[9px] sm:text-[10px] leading-tight text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1">
                         <Trophy size={10} className="text-amber-400 shrink-0" />
                         Rating
@@ -614,14 +651,14 @@ function LeaderboardPageContent() {
                         <span className="text-base sm:text-lg font-black font-mono text-yellow-300 leading-none">
                           {top1.rating}
                         </span>
-                        <span className="text-[9px] text-amber-200/60 font-semibold whitespace-nowrap">
+                        <span className="text-[9px] text-amber-200/60 font-mono whitespace-nowrap">
                           Peak {top1.highestRating || top1.rating}
                         </span>
                       </div>
                     </div>
 
                     {/* Win Rate */}
-                    <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-500/35 shadow-inner flex flex-col justify-between">
+                    <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-amber-500/30 shadow-inner flex flex-col justify-between">
                       <span className="text-[9px] sm:text-[10px] leading-tight text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1">
                         <TrendingUp size={10} className="text-emerald-400 shrink-0" />
                         {locale === 'vi' ? 'Tỷ lệ thắng' : 'Win Rate'}
@@ -630,7 +667,7 @@ function LeaderboardPageContent() {
                         <span className="text-base sm:text-lg font-black font-mono text-emerald-400 leading-none">
                           {top1.winRate}%
                         </span>
-                        <div className="flex-1 bg-slate-800 h-1.5 rounded-full overflow-hidden max-w-[65px]">
+                        <div className="flex-1 bg-[#090a0f] h-1.5 rounded-full overflow-hidden max-w-[65px]">
                           <div
                             className="h-full bg-gradient-to-r from-emerald-400 to-yellow-400 rounded-full"
                             style={{ width: `${top1.winRate}%` }}
@@ -640,33 +677,34 @@ function LeaderboardPageContent() {
                     </div>
 
                     {/* Matches */}
-                    <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-500/35 shadow-inner flex flex-col justify-between">
+                    <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-amber-500/30 shadow-inner flex flex-col justify-between">
                       <span className="text-[9px] sm:text-[10px] leading-tight text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1">
                         <Swords size={10} className="text-amber-400 shrink-0" />
                         {locale === 'vi' ? 'Trận đấu' : 'Matches'}
                       </span>
                       <div className="mt-0.5 flex items-center gap-1 font-mono font-bold text-[11px] leading-none">
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-300 border border-emerald-500/40">
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                           {top1.wins}W
                         </span>
                         <span className="text-slate-600 font-light">-</span>
-                        <span className="px-1.5 py-0.5 rounded bg-rose-500/25 text-rose-300 border border-rose-500/40">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
                           {top1.losses}L
                         </span>
                       </div>
                     </div>
 
                     {/* Streak */}
-                    <div className="bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-amber-500/35 shadow-inner flex flex-col justify-between">
+                    <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-amber-500/30 shadow-inner flex flex-col justify-between">
                       <span className="text-[9px] sm:text-[10px] leading-tight text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1">
-                        <Flame size={10} className="text-orange-400 shrink-0" />
+                        <Flame size={10} className="text-amber-400 shrink-0" />
                         {locale === 'vi' ? 'Chuỗi thắng' : 'Streak'}
                       </span>
                       <div className="mt-0.5 flex items-baseline justify-between gap-1">
-                        <span className="text-base sm:text-lg font-black font-mono text-orange-400 leading-none">
-                          {top1.currentWinStreak || 0}🔥
+                        <span className="text-base sm:text-lg font-black font-mono text-amber-300 leading-none flex items-center gap-0.5">
+                          {top1.currentWinStreak || 0}
+                          <Flame size={12} className="text-amber-400" />
                         </span>
-                        <span className="text-[9px] text-amber-200/60 font-semibold whitespace-nowrap">
+                        <span className="text-[9px] text-amber-200/60 font-mono whitespace-nowrap">
                           Max {top1.bestWinStreak || top1.currentWinStreak || 0}
                         </span>
                       </div>
@@ -680,10 +718,14 @@ function LeaderboardPageContent() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2, duration: 0.35 }}
-                    className="order-3 relative rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-center flex flex-col items-center bg-gradient-to-b from-amber-950/20 via-slate-900/90 to-slate-950 backdrop-blur-xl border border-amber-700/40 shadow-[0_8px_25px_-8px_rgba(217,119,6,0.15)] ring-1 ring-amber-700/15 hover:border-amber-600/60 transition-all duration-300 group"
+                    onClick={() => {
+                      setSelectedProfileUserId(top3.userId);
+                      setShowProfileModal(true);
+                    }}
+                    className="order-3 relative rounded-2xl px-3.5 py-3 text-center flex flex-col items-center bg-[#0d1017] border border-amber-700/40 shadow-[0_8px_25px_-8px_rgba(217,119,6,0.1)] ring-1 ring-amber-700/15 hover:border-amber-600/50 transition-all duration-300 group cursor-pointer"
                   >
                     {/* Ambient light glow behind avatar */}
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-24 bg-amber-700/10 rounded-full blur-2xl pointer-events-none" />
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-24 bg-amber-700/5 rounded-full blur-2xl pointer-events-none" />
 
                     {/* Avatar with Bronze Ring & Medal */}
                     <div className="relative mb-1.5 flex flex-col items-center">
@@ -696,22 +738,23 @@ function LeaderboardPageContent() {
                               className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover"
                             />
                           ) : (
-                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-950 flex items-center justify-center font-black text-sm sm:text-base text-amber-200">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#121622] flex items-center justify-center font-black text-sm sm:text-base text-amber-200">
                               {top3.username.slice(0, 2).toUpperCase()}
                             </div>
                           )}
                         </div>
-                        <span className="absolute -bottom-1.5 right-1/2 translate-x-1/2 bg-gradient-to-r from-amber-700 via-orange-600 to-amber-800 text-amber-50 font-black text-[10px] leading-none px-2 py-0.5 rounded-full border border-amber-500/50 shadow-md flex items-center gap-0.5 whitespace-nowrap">
-                          🥉 #3 {locale === 'vi' ? 'Quý Quân' : '3rd Place'}
+                        <span className="absolute -bottom-1.5 right-1/2 translate-x-1/2 bg-amber-800 text-amber-100 font-black text-[10px] leading-none px-2 py-0.5 rounded-full border border-amber-500/50 shadow-md flex items-center gap-1 whitespace-nowrap">
+                          <Medal size={11} className="text-amber-300" />
+                          <span>#3 {locale === 'vi' ? 'Quý Quân' : '3rd Place'}</span>
                         </span>
                       </div>
                     </div>
 
                     {/* Username & Rank */}
-                    <h3 className="font-extrabold text-sm sm:text-base leading-tight text-white mt-0.5 mb-1 truncate max-w-full">
+                    <h3 className="font-extrabold text-sm sm:text-base leading-tight text-white mt-1 mb-1 truncate max-w-full">
                       {top3.username}
                     </h3>
-                    <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1">
+                    <div className="mb-2 flex flex-wrap items-center justify-center gap-1">
                       <RankBadge tier={getRankByRating(top3.rating)} locale={locale} size="sm" />
                       {top3.equippedTitle && (
                         <EquippedTitleBadge title={top3.equippedTitle} locale={locale} size="xs" />
@@ -719,9 +762,9 @@ function LeaderboardPageContent() {
                     </div>
 
                     {/* Stats Grid 2x2 */}
-                    <div className="w-full grid grid-cols-2 gap-1.5 pt-2 border-t border-amber-800/30 text-left">
+                    <div className="w-full grid grid-cols-2 gap-1.5 pt-2 border-t border-white/[0.08] text-left">
                       {/* Rating */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-amber-800/40 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-amber-400/80 font-bold uppercase tracking-wider flex items-center gap-1">
                           <Trophy size={10} className="text-amber-500 shrink-0" />
                           Rating
@@ -730,14 +773,14 @@ function LeaderboardPageContent() {
                           <span className="text-sm sm:text-base font-black font-mono text-amber-200 leading-none">
                             {top3.rating}
                           </span>
-                          <span className="text-[9px] text-slate-500 font-medium whitespace-nowrap">
+                          <span className="text-[9px] text-slate-500 font-mono whitespace-nowrap">
                             Peak {top3.highestRating || top3.rating}
                           </span>
                         </div>
                       </div>
 
                       {/* Win Rate */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-amber-800/40 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-amber-400/80 font-bold uppercase tracking-wider flex items-center gap-1">
                           <TrendingUp size={10} className="text-emerald-400 shrink-0" />
                           {locale === 'vi' ? 'Tỷ lệ thắng' : 'Win Rate'}
@@ -746,7 +789,7 @@ function LeaderboardPageContent() {
                           <span className="text-sm sm:text-base font-black font-mono text-emerald-400 leading-none">
                             {top3.winRate}%
                           </span>
-                          <div className="flex-1 bg-slate-800 h-1 rounded-full overflow-hidden max-w-[60px]">
+                          <div className="flex-1 bg-[#090a0f] h-1 rounded-full overflow-hidden max-w-[60px]">
                             <div
                               className="h-full bg-gradient-to-r from-emerald-500 to-amber-600 rounded-full"
                               style={{ width: `${top3.winRate}%` }}
@@ -756,33 +799,34 @@ function LeaderboardPageContent() {
                       </div>
 
                       {/* Matches */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-amber-800/40 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-amber-400/80 font-bold uppercase tracking-wider flex items-center gap-1">
                           <Swords size={10} className="text-amber-500 shrink-0" />
                           {locale === 'vi' ? 'Trận đấu' : 'Matches'}
                         </span>
                         <div className="mt-0.5 flex items-center gap-1 font-mono font-bold text-[11px] leading-none">
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
                             {top3.wins}W
                           </span>
                           <span className="text-slate-600 font-light">-</span>
-                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/25">
                             {top3.losses}L
                           </span>
                         </div>
                       </div>
 
                       {/* Streak */}
-                      <div className="bg-slate-950/70 px-2.5 py-1.5 rounded-lg border border-amber-800/40 flex flex-col justify-between">
+                      <div className="bg-[#121622] px-2.5 py-1.5 rounded-lg border border-white/[0.06] flex flex-col justify-between">
                         <span className="text-[9px] sm:text-[10px] leading-tight text-amber-400/80 font-bold uppercase tracking-wider flex items-center gap-1">
-                          <Flame size={10} className="text-orange-400 shrink-0" />
+                          <Flame size={10} className="text-amber-500 shrink-0" />
                           {locale === 'vi' ? 'Chuỗi thắng' : 'Streak'}
                         </span>
                         <div className="mt-0.5 flex items-baseline justify-between gap-1">
-                          <span className="text-sm sm:text-base font-black font-mono text-orange-400 leading-none">
-                            {top3.currentWinStreak || 0}🔥
+                          <span className="text-sm sm:text-base font-black font-mono text-amber-400 leading-none flex items-center gap-0.5">
+                            {top3.currentWinStreak || 0}
+                            <Flame size={11} className="text-amber-500" />
                           </span>
-                          <span className="text-[9px] text-slate-500 font-medium whitespace-nowrap">
+                          <span className="text-[9px] text-slate-500 font-mono whitespace-nowrap">
                             Max {top3.bestWinStreak || top3.currentWinStreak || 0}
                           </span>
                         </div>
@@ -790,14 +834,14 @@ function LeaderboardPageContent() {
                     </div>
                   </motion.div>
                 ) : (
-                  <div className="order-3 rounded-2xl px-4 py-6 text-center flex flex-col items-center justify-center bg-slate-900/20 border border-dashed border-slate-800/80 min-h-[210px]">
-                    <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-2">
-                      🥉
+                  <div className="order-3 rounded-2xl px-4 py-6 text-center flex flex-col items-center justify-center bg-[#0d1017] border border-dashed border-white/[0.08] min-h-[210px]">
+                    <div className="w-12 h-12 rounded-full bg-[#121622] border border-white/[0.08] flex items-center justify-center text-slate-400 mb-2">
+                      <Medal size={20} />
                     </div>
-                    <span className="text-xs font-bold text-slate-400 mb-1">
+                    <span className="text-xs font-mono font-bold text-slate-400 mb-1">
                       #3 {locale === 'vi' ? 'Quý Quân đang bỏ trống' : '3rd Place Slot Open'}
                     </span>
-                    <p className="text-[11px] text-slate-600 max-w-[200px]">
+                    <p className="text-[11px] text-slate-500 max-w-[200px]">
                       {locale === 'vi' ? 'Tham gia đấu PvP ngay để chiếm vị trí này!' : 'Play a PvP match now to claim this spot!'}
                     </p>
                   </div>
@@ -808,7 +852,7 @@ function LeaderboardPageContent() {
 
             {/* RANK TABLE / EMPTY STATE */}
             {tableDisplayList.length === 0 && cleanQuery ? (
-              <div className="py-16 text-center bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2">
+              <div className="py-16 text-center bg-[#0d1017] border border-white/[0.08] rounded-2xl space-y-2">
                 <Search size={28} className="mx-auto text-slate-600 mb-1" />
                 <p className="text-slate-300 font-bold text-sm">
                   {locale === 'vi' ? 'Không tìm thấy người chơi' : 'No players found'}
@@ -820,7 +864,7 @@ function LeaderboardPageContent() {
                 </p>
               </div>
             ) : tableDisplayList.length === 0 ? (
-              <div className="py-6 px-4 text-center bg-slate-900/30 border border-slate-800/60 rounded-2xl">
+              <div className="py-6 px-4 text-center bg-[#0d1017] border border-white/[0.08] rounded-2xl">
                 <p className="text-slate-400 text-xs font-medium">
                   {locale === 'vi'
                     ? 'Toàn bộ cao thủ của kỳ này đều đã góp mặt trên Bục Vinh Danh Top 3 phía trên.'
@@ -828,11 +872,11 @@ function LeaderboardPageContent() {
                 </p>
               </div>
             ) : (
-              <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-                <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+              <div className="bg-[#0d1017] border border-white/[0.08] rounded-2xl shadow-xl overflow-hidden">
+                <div className="p-4 border-b border-white/[0.08] flex items-center justify-between bg-[#090a0f]">
                   <h2 className="text-xs sm:text-sm font-bold text-slate-300 flex items-center space-x-2">
                     <Medal size={16} className="text-amber-400" />
-                    <span>{locale === 'vi' ? 'DANH SÁCH BẢNG XẾP HẠNG' : 'RANKING LIST'}</span>
+                    <span className="font-mono uppercase tracking-wider">{locale === 'vi' ? 'DANH SÁCH BẢNG XẾP HẠNG' : 'RANKING LIST'}</span>
                   </h2>
                   <span className="text-[11px] text-slate-500 font-mono">
                     {tableDisplayList.length} {locale === 'vi' ? 'người chơi' : 'players'}
@@ -841,7 +885,7 @@ function LeaderboardPageContent() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[540px] text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/80 text-[10px] text-slate-400 uppercase font-bold tracking-wider border-b border-slate-800">
+                    <thead className="bg-[#090a0f] text-[10px] text-slate-400 uppercase font-mono tracking-wider border-b border-white/[0.08]">
                       <tr>
                         <th className="py-3 px-4 text-center">{locale === 'vi' ? 'HẠNG' : 'RANK'}</th>
                         <th className="py-3 px-4">{locale === 'vi' ? 'NGƯỜI CHƠI' : 'PLAYER'}</th>
@@ -850,9 +894,17 @@ function LeaderboardPageContent() {
                         <th className="py-3 px-4 text-right">{locale === 'vi' ? 'RATING / ĐỈNH' : 'RATING / PEAK'}</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-805">
+                    <tbody className="divide-y divide-white/[0.04]">
                       {tableDisplayList.map((item) => (
-                        <tr key={item.userId} className="hover:bg-slate-800/40 transition duration-150">
+                        <tr
+                          key={item.userId}
+                          onClick={() => {
+                            setSelectedProfileUserId(item.userId);
+                            setShowProfileModal(true);
+                          }}
+                          className="hover:bg-white/[0.04] transition duration-150 cursor-pointer"
+                          title={locale === 'vi' ? 'Bấm để xem hồ sơ người chơi' : 'Click to view player profile'}
+                        >
                           <td className="py-3.5 px-4 text-center font-mono font-extrabold text-sm whitespace-nowrap">
                             {item.rank === 1 ? <span className="text-amber-400">#1</span> :
                              item.rank === 2 ? <span className="text-slate-300">#2</span> :
@@ -862,9 +914,9 @@ function LeaderboardPageContent() {
                           <td className="py-3.5 px-4">
                             <div className="flex items-center space-x-3">
                               {item.avatar ? (
-                                <img src={item.avatar} alt={item.username} className="w-8 h-8 rounded-full border border-slate-700 object-cover shrink-0" />
+                                <img src={item.avatar} alt={item.username} className="w-8 h-8 rounded-full border border-white/[0.12] object-cover shrink-0" />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-xs text-white shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center font-bold text-xs text-slate-950 shrink-0">
                                   {item.username.slice(0, 1)}
                                 </div>
                               )}
@@ -886,8 +938,8 @@ function LeaderboardPageContent() {
                           </td>
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center space-x-2">
-                              <div className="w-16 bg-slate-950 rounded-full h-1.5 overflow-hidden hidden sm:block">
-                                <div className="bg-gradient-to-r from-purple-500 to-amber-400 h-full rounded-full" style={{ width: `${item.winRate}%` }} />
+                              <div className="w-16 bg-[#090a0f] rounded-full h-1.5 overflow-hidden hidden sm:block">
+                                <div className="bg-gradient-to-r from-emerald-500 to-amber-400 h-full rounded-full" style={{ width: `${item.winRate}%` }} />
                               </div>
                               <span className="font-mono font-bold text-amber-300">{item.winRate}%</span>
                             </div>
@@ -905,8 +957,83 @@ function LeaderboardPageContent() {
             )}
           </>
         )}
-
       </main>
+
+      {/* Sticky Bottom "Your Rank" Bar */}
+      {userProfile && myRankEntry && (
+        <aside
+          aria-label={locale === 'vi' ? 'Vị trí xếp hạng của bạn' : 'Your leaderboard ranking'}
+          onClick={() => {
+            setSelectedProfileUserId(myRankEntry.userId || 'me');
+            setShowProfileModal(true);
+          }}
+          className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d1017] border-t border-amber-500/30 px-3 py-2 sm:px-6 sm:py-2.5 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] cursor-pointer hover:bg-[#121622] transition"
+          title={locale === 'vi' ? 'Bấm để xem hồ sơ của bạn' : 'Click to view your profile'}
+        >
+          <div className="max-w-[1700px] w-full mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+              <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 font-mono font-black text-xs sm:text-sm shrink-0">
+                #{myRankEntry.rank}
+              </div>
+              <div className="relative shrink-0">
+                {myRankEntry.avatar ? (
+                  <img src={myRankEntry.avatar} alt={myRankEntry.username} className="w-8 h-8 rounded-full border border-amber-500/40 object-cover" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center font-bold text-xs text-slate-950">
+                    {myRankEntry.username.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="font-extrabold text-xs sm:text-sm text-white truncate">{myRankEntry.username}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                    {locale === 'vi' ? 'Bạn' : 'You'}
+                  </span>
+                </div>
+                <div className="hidden xs:flex items-center gap-1.5 mt-0.5">
+                  <RankBadge tier={getRankByRating(myRankEntry.rating)} locale={locale} size="sm" />
+                  {myRankEntry.equippedTitle && (
+                    <EquippedTitleBadge title={myRankEntry.equippedTitle} locale={locale} size="xs" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 sm:space-x-6 shrink-0">
+              <div className="text-right">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block sm:hidden">Rating</span>
+                <div className="text-xs sm:text-sm font-black font-mono text-amber-400">{myRankEntry.rating} Rating</div>
+                <span className="text-[10px] text-slate-500 font-mono hidden sm:block">Peak {myRankEntry.highestRating || myRankEntry.rating}</span>
+              </div>
+
+              <div className="hidden md:flex flex-col items-end">
+                <span className="text-[9px] uppercase font-bold text-slate-400">{locale === 'vi' ? 'Tỷ lệ thắng' : 'Win Rate'}</span>
+                <span className="text-xs sm:text-sm font-black font-mono text-emerald-400">{myRankEntry.winRate}%</span>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-1 font-mono font-bold text-xs">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                  {myRankEntry.wins}W
+                </span>
+                <span className="text-slate-600">-</span>
+                <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/25">
+                  {myRankEntry.losses}L
+                </span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      )}
+
+      <PlayerProfileModal
+        isOpen={showProfileModal}
+        userId={selectedProfileUserId}
+        locale={locale}
+        onClose={() => setShowProfileModal(false)}
+        onOpenAchievements={() => router.push(`/achievements?locale=${locale}`)}
+        onOpenHistory={() => router.push(`/history?locale=${locale}`)}
+      />
     </div>
   );
 }
@@ -914,7 +1041,7 @@ function LeaderboardPageContent() {
 export default function LeaderboardPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+      <div className="min-h-screen bg-[#090a0f] flex items-center justify-center text-white">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
