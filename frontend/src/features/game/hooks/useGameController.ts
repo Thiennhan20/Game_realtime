@@ -363,6 +363,12 @@ export function useGameController() {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         token = urlParams.get('token');
+        if (token && window.location.search.includes('token=')) {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('token');
+          const cleanPath = cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : '') + (cleanUrl.hash ? cleanUrl.hash : '');
+          window.history.replaceState({}, document.title, cleanPath);
+        }
       } catch {
         // Ignore URL parse error
       }
