@@ -77,12 +77,12 @@ export default function GameClient() {
   const isInIframe = searchParams.get('embedded') === '1' || isIframeClient;
 
   useEffect(() => {
-    if (game.mounted && (game.authError || (!game.loadingUser && game.user))) {
+    if (game.mounted && !game.loadingUser) {
       if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'GAME_READY' }, '*');
       }
     }
-  }, [game.mounted, game.loadingUser, game.user, game.authError]);
+  }, [game.mounted, game.loadingUser]);
 
   if (!game.mounted) {
     return isInIframe ? <div className="min-h-screen bg-[#090a0f]" /> : <LoadingScreen />;

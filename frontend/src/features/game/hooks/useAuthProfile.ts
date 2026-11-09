@@ -8,7 +8,7 @@ import { getAuthApiBaseUrl } from '../utils';
 
 /**
  * Decode JWT payload locally (base64 only, no signature verification).
- * Used to extract user info instantly before the auth server on Render responds.
+ * Used to extract user info instantly before the auth server responds.
  * Returns null for expired or malformed tokens.
  */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -62,38 +62,44 @@ function getTokenFromLocationOrStorage(searchParams: ReturnType<typeof useSearch
   return null;
 }
 
-function getInitialUser(searchParams: ReturnType<typeof useSearchParams>): AuthUser | null {
-  const token = getTokenFromLocationOrStorage(searchParams);
-  const payload = token ? decodeJwtPayload(token) : null;
-  const jwtUserId = payload && typeof payload.userId === 'string' ? payload.userId : null;
-
-  // 1. Check URL parameters passed from parent window or URL navigation
-  let pName = searchParams.get('userName') || searchParams.get('name');
-  let pId = searchParams.get('userId') || searchParams.get('id');
-  let pAvatar = searchParams.get('userAvatar') || searchParams.get('avatar');
-
-  if (typeof window !== 'undefined' && !pName) {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      pName = urlParams.get('userName') || urlParams.get('name');
-      pId = urlParams.get('userId') || urlParams.get('id');
-      pAvatar = urlParams.get('userAvatar') || urlParams.get('avatar');
-    } catch {
-      // Ignore URL parse error
+function getInitialUser(searchParams: ReturnType<typeof useSearchParams>, isEmbedded: boolean): AuthUser | null {
+  // If embedded in movie site iframe, do NOT preload unverified user before parent handshake
+  if (isEmbedded) {
+    // Only preload if explicitly in custom account mode
+    if (typeof window !== 'undefined' && localStorage.getItem('game_account_mode') === 'custom') {
+      const customToken = localStorage.getItem('token');
+      if (customToken) {
+        const payload = decodeJwtPayload(customToken);
+        if (payload && payload.userId) {
+          try {
+            const cached = localStorage.getItem('auth_user_cache');
+            if (cached) return JSON.parse(cached);
+          } catch {}
+        }
+      }
     }
+    return null;
   }
 
-  const resolvedId = pId || jwtUserId;
+  const token = getTokenFromLocationOrStorage(searchParams);
+  if (!token) return null;
 
-  if (pName && pName.toLowerCase() !== 'player' && resolvedId) {
+  const payload = decodeJwtPayload(token);
+  const jwtUserId = payload && typeof payload.userId === 'string' ? payload.userId : null;
+  if (!jwtUserId) return null;
+
+  // 1. Check URL parameters
+  let pName = searchParams.get('userName') || searchParams.get('name');
+  let pAvatar = searchParams.get('userAvatar') || searchParams.get('avatar');
+  if (pName && pName.toLowerCase() !== 'player') {
     return {
-      id: resolvedId,
+      id: jwtUserId,
       name: pName,
       avatar: pAvatar || '',
     };
   }
 
-  // 2. Fast path: decode JWT locally if token has user name
+  // 2. JWT payload name
   if (payload && jwtUserId) {
     const jwtName =
       (typeof payload.name === 'string' ? payload.name : null) ??
@@ -108,7 +114,7 @@ function getInitialUser(searchParams: ReturnType<typeof useSearchParams>): AuthU
     }
   }
 
-  // 3. Check localStorage cache
+  // 3. LocalStorage cache
   if (typeof window !== 'undefined') {
     try {
       const cached = localStorage.getItem('auth_user_cache');
@@ -120,17 +126,12 @@ function getInitialUser(searchParams: ReturnType<typeof useSearchParams>): AuthU
           typeof parsed.name === 'string' &&
           parsed.name &&
           parsed.name.toLowerCase() !== 'player' &&
-          (!jwtUserId || String(parsed.id) === String(jwtUserId))
+          String(parsed.id) === String(jwtUserId)
         ) {
-          return {
-            ...(parsed as AuthUser),
-            id: jwtUserId || (parsed as AuthUser).id,
-          };
+          return parsed as AuthUser;
         }
       }
-    } catch {
-      // Ignore parse error
-    }
+    } catch {}
   }
 
   return null;
@@ -138,46 +139,67 @@ function getInitialUser(searchParams: ReturnType<typeof useSearchParams>): AuthU
 
 export function useAuthProfile() {
   const searchParams = useSearchParams();
-  const [user, setUser] = useState<AuthUser | null>(() => getInitialUser(searchParams));
+  const isEmbedded =
+    typeof window !== 'undefined' &&
+    (window.parent !== window || searchParams.get('embedded') === '1');
+
+  const [token, setToken] = useState<string | null>(() => {
+    if (isEmbedded) {
+      if (typeof window !== 'undefined' && localStorage.getItem('game_account_mode') === 'custom') {
+        return localStorage.getItem('token');
+      }
+      return null;
+    }
+    return getTokenFromLocationOrStorage(searchParams);
+  });
+
+  const [user, setUser] = useState<AuthUser | null>(() => getInitialUser(searchParams, isEmbedded));
   const [loadingUser, setLoadingUser] = useState(() => {
-    const initial = getInitialUser(searchParams);
+    if (isEmbedded) return true;
+    const initial = getInitialUser(searchParams, false);
     return !initial;
   });
+
   const [authError, setAuthError] = useState<string | null>(null);
   const [parentMovieUser, setParentMovieUser] = useState<AuthUser | null>(null);
   const [parentMovieToken, setParentMovieToken] = useState<string | null>(null);
+  const [isDifferentAccount, setIsDifferentAccount] = useState(false);
 
   useEffect(() => {
     let active = true;
     let gracePeriodTimer: NodeJS.Timeout | null = null;
-    const isEmbedded =
-      typeof window !== 'undefined' &&
-      (window.parent !== window || searchParams.get('embedded') === '1');
 
     const validateToken = async (tokenToVerify?: string) => {
-      const token = tokenToVerify || getTokenFromLocationOrStorage(searchParams);
-      if (!token) {
+      const activeToken = tokenToVerify || token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+
+      if (!activeToken) {
         if (isEmbedded) {
-          // Inside iframe: wait for postMessage AUTH_TOKEN from parent
+          // Inside iframe: wait for postMessage AUTH_TOKEN from parent window
           if (!gracePeriodTimer) {
             gracePeriodTimer = setTimeout(() => {
               if (active) {
                 const checkToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
                 if (!checkToken) {
                   setUser(null);
+                  setToken(null);
                   setAuthError('NO_TOKEN');
                   setLoadingUser(false);
                 }
               }
-            }, 3500);
+            }, 3000);
           }
           return;
         }
-        if (active) {
-          setUser(null);
-          setAuthError('NO_TOKEN');
-          setLoadingUser(false);
-        }
+
+        // Standalone mode with no token: provide a brief smooth loading step before showing login
+        setTimeout(() => {
+          if (active) {
+            setUser(null);
+            setToken(null);
+            setAuthError('NO_TOKEN');
+            setLoadingUser(false);
+          }
+        }, 400);
         return;
       }
 
@@ -186,16 +208,15 @@ export function useAuthProfile() {
         gracePeriodTimer = null;
       }
 
-      // Fast path check
-      const initialUser = getInitialUser(searchParams);
-      if (initialUser && active) {
-        setUser(initialUser);
-        setLoadingUser(false);
-        try {
-          localStorage.setItem('token', token);
-          localStorage.setItem('auth_user_cache', JSON.stringify(initialUser));
-        } catch {
-          // Ignore
+      // Fast path: decode payload immediately
+      const payload = decodeJwtPayload(activeToken);
+      if (payload && payload.userId && active) {
+        setToken(activeToken);
+        const cachedUser = getInitialUser(searchParams, false);
+        if (cachedUser) {
+          setUser(cachedUser);
+          setAuthError(null);
+          setLoadingUser(false);
         }
       }
 
@@ -203,7 +224,7 @@ export function useAuthProfile() {
       try {
         const response = await fetch(`${getAuthApiBaseUrl()}/auth/profile`, {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${activeToken}`,
           },
         });
         if (!response.ok) {
@@ -218,27 +239,25 @@ export function useAuthProfile() {
         };
         if (active) {
           setUser(fetchedUser);
+          setToken(activeToken);
           setAuthError(null);
           setLoadingUser(false);
         }
         try {
           localStorage.setItem('auth_user_cache', JSON.stringify(fetchedUser));
-          localStorage.setItem('token', token);
-        } catch {
-          // Ignore storage quota error
-        }
+          localStorage.setItem('token', activeToken);
+        } catch {}
       } catch (error) {
-        console.error('Token validation failed:', error);
+        console.warn('Token validation failed:', error);
         if (active) {
           setAuthError('INVALID_TOKEN');
           setUser(null);
+          setToken(null);
           setLoadingUser(false);
           try {
             localStorage.removeItem('token');
             localStorage.removeItem('auth_user_cache');
-          } catch {
-            // Ignore storage error
-          }
+          } catch {}
         }
       }
     };
@@ -261,29 +280,66 @@ export function useAuthProfile() {
           setParentMovieUser(pUser);
         }
 
-        // If user explicitly chose a separate game account, do NOT override with movie site account
         const accountMode = typeof window !== 'undefined' ? localStorage.getItem('game_account_mode') : null;
-        if (accountMode === 'custom') {
+        const existingCustomToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+        // Custom account mode: user explicitly signed into a separate account in Game
+        if (accountMode === 'custom' && existingCustomToken) {
+          const customPayload = decodeJwtPayload(existingCustomToken);
+          const customUserId = customPayload && typeof customPayload.userId === 'string' ? customPayload.userId : null;
+          let customUser: AuthUser | null = null;
+          try {
+            const cached = localStorage.getItem('auth_user_cache');
+            if (cached) customUser = JSON.parse(cached);
+          } catch {}
+
+          if (pUser && customUserId && String(pUser.id) !== String(customUserId)) {
+            if (active) setIsDifferentAccount(true);
+          }
+          if (active) {
+            setToken(existingCustomToken);
+            if (customUser) setUser(customUser);
+            setAuthError(null);
+            setLoadingUser(false);
+          }
+          void validateToken(existingCustomToken);
           return;
         }
 
+        // Default / Sync mode: smoothly synchronize with parent movie session
         if (receivedToken) {
           try {
             localStorage.setItem('token', receivedToken);
+            localStorage.setItem('game_account_mode', 'sync');
+            if (pUser) localStorage.setItem('auth_user_cache', JSON.stringify(pUser));
           } catch {}
+
           if (gracePeriodTimer) {
             clearTimeout(gracePeriodTimer);
             gracePeriodTimer = null;
           }
-          if (pUser && active) {
-            setUser(pUser);
-            setLoadingUser(false);
+
+          if (active) {
+            setToken(receivedToken);
+            if (pUser) setUser(pUser);
             setAuthError(null);
-            try {
-              localStorage.setItem('auth_user_cache', JSON.stringify(pUser));
-            } catch {}
+            setIsDifferentAccount(false);
+            setLoadingUser(false);
           }
           void validateToken(receivedToken);
+        } else {
+          // Parent movie session is unauthenticated (guest)
+          if (gracePeriodTimer) {
+            clearTimeout(gracePeriodTimer);
+            gracePeriodTimer = null;
+          }
+          if (active) {
+            setToken(null);
+            setUser(null);
+            setAuthError('NO_TOKEN');
+            setIsDifferentAccount(false);
+            setLoadingUser(false);
+          }
         }
       }
     };
@@ -307,7 +363,7 @@ export function useAuthProfile() {
         window.removeEventListener('message', handleMessage);
       }
     };
-  }, [searchParams]);
+  }, [searchParams, isEmbedded]);
 
   const loginWithCredentials = async (email: string, password: string) => {
     try {
@@ -339,6 +395,7 @@ export function useAuthProfile() {
         localStorage.setItem('auth_user_cache', JSON.stringify(fetchedUser));
       } catch {}
 
+      setToken(data.token);
       setUser(fetchedUser);
       setAuthError(null);
       setLoadingUser(false);
@@ -346,6 +403,11 @@ export function useAuthProfile() {
       const isDifferentFromMovie = Boolean(
         parentMovieUser && String(parentMovieUser.id) !== String(fetchedUser.id)
       );
+      if (isDifferentFromMovie) {
+        setIsDifferentAccount(true);
+      } else {
+        setIsDifferentAccount(false);
+      }
 
       return {
         success: true,
@@ -371,7 +433,9 @@ export function useAuthProfile() {
         setUser(parentMovieUser);
       }
     } catch {}
+    setToken(parentMovieToken);
     setAuthError(null);
+    setIsDifferentAccount(false);
     setLoadingUser(false);
   };
 
@@ -381,18 +445,23 @@ export function useAuthProfile() {
       localStorage.removeItem('auth_user_cache');
       localStorage.removeItem('game_account_mode');
     } catch {}
+    setToken(null);
     setUser(null);
     setAuthError('NO_TOKEN');
+    setIsDifferentAccount(false);
     setLoadingUser(false);
   };
 
   return {
     user,
+    token,
     loadingUser,
     authError,
     setAuthError,
     parentMovieUser,
     parentMovieToken,
+    isDifferentAccount,
+    setIsDifferentAccount,
     loginWithCredentials,
     useParentMovieAccount,
     logout,

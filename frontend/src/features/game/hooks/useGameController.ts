@@ -94,11 +94,13 @@ export function useGameController() {
   const { locale, mounted, t, toggleLocale } = useGameLocale();
   const {
     user,
+    token,
     loadingUser,
     authError,
     setAuthError,
     parentMovieUser,
     parentMovieToken,
+    isDifferentAccount,
     loginWithCredentials,
     useParentMovieAccount,
     logout,
@@ -115,6 +117,16 @@ export function useGameController() {
     movieUser: '',
     gameUser: '',
   });
+
+  useEffect(() => {
+    if (isDifferentAccount && parentMovieUser && user && String(parentMovieUser.id) !== String(user.id)) {
+      setDualAccountNotice({
+        isOpen: true,
+        movieUser: parentMovieUser.name,
+        gameUser: user.name,
+      });
+    }
+  }, [isDifferentAccount, parentMovieUser, user]);
 
   const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>(() => {
     if (typeof window !== 'undefined') {
@@ -377,45 +389,18 @@ export function useGameController() {
     return () => window.clearInterval(timer);
   }, [isReconnecting]);
 
-  const userId = user?.id;
-
   useEffect(() => {
-    let token: string | null = null;
-    if (typeof window !== 'undefined') {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        token = urlParams.get('token');
-        if (token && window.location.search.includes('token=')) {
-          const cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('token');
-          const cleanPath = cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : '') + (cleanUrl.hash ? cleanUrl.hash : '');
-          window.history.replaceState({}, document.title, cleanPath);
-        }
-      } catch {
-        // Ignore URL parse error
-      }
-    }
     if (!token) {
-      try {
-        token = localStorage.getItem('token');
-      } catch {
-        // Ignore storage error
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
-    }
-
-    if (!token && !userId) return;
-
-    if (token) {
-      try {
-        localStorage.setItem('token', token);
-      } catch {
-        // Ignore storage quota error
-      }
+      return;
     }
 
     const socket = io(getSocketUrl(), {
       auth: {
-        token: token || '',
+        token,
         username: userRef.current?.name || '',
         avatar: userRef.current?.avatar || '',
       },
@@ -502,7 +487,6 @@ export function useGameController() {
       clearTimeout(connectionTimer);
       if (error.message?.includes('AUTH_ERROR')) {
         setAuthError('INVALID_TOKEN');
-        setErrorMsg(translate()('authRequired'));
       } else {
         setIsReconnecting(true);
       }
@@ -1135,7 +1119,7 @@ export function useGameController() {
         socketRef.current = null;
       }
     };
-  }, [loadGameProfile, setAuthError, userId]);
+  }, [loadGameProfile, setAuthError, token]);
 
   // Unified single-source lobby sync (Socket primary with 3s silent polling, REST fallback)
   useEffect(() => {
