@@ -44,6 +44,11 @@ const DualAccountNoticeModal = dynamic(
   { ssr: false }
 );
 
+const LogoutConfirmModal = dynamic(
+  () => import('./components/modals/LogoutConfirmModal').then((mod) => mod.LogoutConfirmModal),
+  { ssr: false }
+);
+
 export default function GameClient() {
   const router = useRouter();
   const game = useGameController();
@@ -104,8 +109,6 @@ export default function GameClient() {
         <QuickLoginModal
           isOpen={game.isLoginModalOpen}
           onClose={() => game.setIsLoginModalOpen(false)}
-          parentMovieUser={game.parentMovieUser}
-          onUseParentMovieAccount={game.useParentMovieAccount}
           onSubmitLogin={async (email, pass) => {
             const res = await game.loginWithCredentials(email, pass);
             if (res.success && res.isDifferentFromMovie && game.parentMovieUser) {
@@ -153,14 +156,7 @@ export default function GameClient() {
           onOpenLeaderboard={() => router.push(`/leaderboard?locale=${game.locale}`)}
           onOpenAchievements={() => router.push(`/achievements?locale=${game.locale}`)}
           onSwitchAccount={() => game.setIsLoginModalOpen(true)}
-          onLogout={() => {
-            if (window.confirm(game.t('confirmLogout'))) {
-              if (game.room) {
-                game.handleLeaveRoom();
-              }
-              game.logout();
-            }
-          }}
+          onLogout={() => game.setIsLogoutModalOpen(true)}
         />
       )}
 
@@ -343,8 +339,6 @@ export default function GameClient() {
       <QuickLoginModal
         isOpen={game.isLoginModalOpen}
         onClose={() => game.setIsLoginModalOpen(false)}
-        parentMovieUser={game.parentMovieUser}
-        onUseParentMovieAccount={game.useParentMovieAccount}
         onSubmitLogin={async (email, pass) => {
           const res = await game.loginWithCredentials(email, pass);
           if (res.success && res.isDifferentFromMovie && game.parentMovieUser) {
@@ -365,6 +359,19 @@ export default function GameClient() {
         onClose={() => game.setDualAccountNotice({ isOpen: false, movieUser: '', gameUser: '' })}
         movieUser={game.dualAccountNotice.movieUser}
         gameUser={game.dualAccountNotice.gameUser}
+        locale={game.locale}
+        t={game.t}
+      />
+
+      <LogoutConfirmModal
+        isOpen={game.isLogoutModalOpen}
+        onClose={() => game.setIsLogoutModalOpen(false)}
+        onConfirm={() => {
+          if (game.room) {
+            game.handleLeaveRoom();
+          }
+          game.logout();
+        }}
         locale={game.locale}
         t={game.t}
       />

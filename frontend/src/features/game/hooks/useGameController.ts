@@ -105,6 +105,7 @@ export function useGameController() {
   } = useAuthProfile();
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [dualAccountNotice, setDualAccountNotice] = useState<{
     isOpen: boolean;
     movieUser: string;
@@ -1665,6 +1666,8 @@ export function useGameController() {
     logout,
     isLoginModalOpen,
     setIsLoginModalOpen,
+    isLogoutModalOpen,
+    setIsLogoutModalOpen,
     dualAccountNotice,
     setDualAccountNotice,
   };

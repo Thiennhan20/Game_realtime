@@ -22,12 +22,9 @@ export function AuthRequiredScreen({ t, onLogin, onRegister }: AuthRequiredScree
         <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
           <LogOut size={30} />
         </div>
-        <h2 className="text-xl sm:text-2xl font-mono font-bold uppercase tracking-wider text-white mb-3">
+        <h2 className="text-xl sm:text-2xl font-mono font-bold uppercase tracking-wider text-white mb-6">
           {t('authRequired')}
         </h2>
-        <p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed font-mono">
-          {t('authDesc')}
-        </p>
         <button
           type="button"
           onClick={onLogin}

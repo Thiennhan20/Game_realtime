@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Eye, EyeOff, Film, KeyRound, Loader2, LogIn, Sparkles, User, X } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Loader2, LogIn, User, X } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { AuthUser, Locale } from '../../types';
@@ -11,8 +11,6 @@ import { getMainSiteUrl, navigateTopWindow } from '../../utils';
 interface QuickLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  parentMovieUser: AuthUser | null;
-  onUseParentMovieAccount: () => void;
   onSubmitLogin: (email: string, pass: string) => Promise<{
     success: boolean;
     error?: string;
@@ -26,8 +24,6 @@ interface QuickLoginModalProps {
 export function QuickLoginModal({
   isOpen,
   onClose,
-  parentMovieUser,
-  onUseParentMovieAccount,
   onSubmitLogin,
   locale,
   t,
@@ -109,60 +105,7 @@ export function QuickLoginModal({
             </div>
 
             <div className="p-5 sm:p-6 space-y-5">
-              {/* Option 1: 1-Click Login with MovieSaw Account (Rendered ONLY if parent site is authenticated) */}
-              {parentMovieUser && (
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-violet-950/40 via-[#121622] to-indigo-950/30 border border-violet-500/30 space-y-3 shadow-md">
-                    <div className="flex items-center gap-3">
-                      {parentMovieUser.avatar ? (
-                        <img
-                          src={parentMovieUser.avatar}
-                          alt={parentMovieUser.name}
-                          className="w-10 h-10 rounded-full border border-violet-400/50 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-violet-600 flex items-center justify-center font-mono font-bold text-sm text-white shrink-0">
-                          {parentMovieUser.name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <Film size={12} className="text-violet-400" />
-                          <span className="text-[10px] font-mono font-bold text-violet-300 uppercase tracking-wider">
-                            {t('parentMovieAccountActive')}
-                          </span>
-                        </div>
-                        <h4 className="font-mono font-bold text-sm text-white truncate">
-                          {parentMovieUser.name}
-                        </h4>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onUseParentMovieAccount();
-                        onClose();
-                      }}
-                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-mono font-bold text-xs shadow-lg shadow-violet-600/30 transition cursor-pointer flex items-center justify-center gap-2 active:scale-98"
-                    >
-                      <Sparkles size={14} className="text-amber-300 animate-pulse" />
-                      <span>{t('continueWithMovieAccount').replace('{name}', parentMovieUser.name)}</span>
-                    </button>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="relative flex items-center justify-center py-1">
-                    <div className="border-t border-white/[0.08] w-full" />
-                    <span className="bg-[#0c1017] px-3 text-[10px] font-mono text-slate-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                      {t('orUseDifferentAccount')}
-                    </span>
-                    <div className="border-t border-white/[0.08] w-full" />
-                  </div>
-                </div>
-              )}
-
-              {/* Option 2: Form Login for Custom Game Account */}
+              {/* Form Login */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {errorMessage && (
                   <motion.div
@@ -254,4 +197,3 @@ export function QuickLoginModal({
     </AnimatePresence>
   );
 }
-
