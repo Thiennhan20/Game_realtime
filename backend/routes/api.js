@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const GameHistory = require('../models/GameHistory');
 const GameProfile = require('../models/GameProfile');
 const User = require('../models/User');
+const DailyChallenge = require('../models/DailyChallenge');
+const DailySubmission = require('../models/DailySubmission');
 const { getGameProfileSummary } = require('../services/matchSettlement');
 const { calculateUserAchievements, resolveEquippedTitle, ACHIEVEMENTS_DEFINITIONS } = require('../services/achievements');
 const { getRank } = require('../services/rating');
@@ -580,6 +582,242 @@ function createApiRouter(roomManager, healthHandler) {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.json({ rooms: roomManager.getJoinableRooms() });
+  });
+
+  // --- DAILY CHALLENGE ROUTES ---
+  function getTodayVnDateString() {
+    const d = new Date();
+    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+    const vnTime = new Date(utc + (3600000 * 7));
+    const year = vnTime.getFullYear();
+    const month = String(vnTime.getMonth() + 1).padStart(2, '0');
+    const day = String(vnTime.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function generateDailySecret(dateStr) {
+    let seed = 0;
+    const fullKey = `${dateStr}_entn_daily_challenge`;
+    for (let i = 0; i < fullKey.length; i++) {
+      seed = (seed * 31 + fullKey.charCodeAt(i)) >>> 0;
+    }
+    const digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const result = [];
+    while (result.length < 4) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      const idx = seed % digits.length;
+      result.push(digits.splice(idx, 1)[0]);
+    }
+    return result.join('');
+  }
+
+  async function getTodayChallenge() {
+    const date = getTodayVnDateString();
+    let challenge = await DailyChallenge.findOne({ date });
+    if (!challenge) {
+      const secret = generateDailySecret(date);
+      try {
+        challenge = await DailyChallenge.create({ date, secret });
+      } catch {
+        challenge = await DailyChallenge.findOne({ date });
+      }
+    }
+    return { date, secret: challenge?.secret || generateDailySecret(date), challenge };
+  }
+
+  // GET /api/daily-challenge
+  router.get('/daily-challenge', async (req, res) => {
+    try {
+      const { date, secret, challenge } = await getTodayChallenge();
+
+      let userId = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          userId = decoded.id || decoded.userId || decoded._id;
+        } catch {}
+      }
+
+      let submission = null;
+      if (userId) {
+        submission = await DailySubmission.findOne({ userId, date });
+      }
+
+      const totalParticipants = challenge?.totalParticipants || (await DailySubmission.countDocuments({ date }));
+      const totalSolved = challenge?.totalSolved || (await DailySubmission.countDocuments({ date, isSolved: true }));
+
+      return res.json({
+        date,
+        maxGuesses: 8,
+        totalParticipants,
+        totalSolved,
+        isPlayed: Boolean(submission && submission.guessCount > 0),
+        isFinished: Boolean(submission?.isFinished),
+        isSolved: Boolean(submission?.isSolved),
+        guessCount: submission?.guessCount || 0,
+        guesses: submission?.guesses || [],
+        durationSeconds: submission?.durationSeconds || 0,
+        xpAwarded: submission?.xpAwarded || 0,
+        revealedSecret: submission?.isFinished ? secret : null
+      });
+    } catch (err) {
+      console.error('[DailyChallenge] Failed to fetch:', err.message);
+      res.status(500).json({ error: 'Failed to fetch daily challenge' });
+    }
+  });
+
+  // POST /api/daily-challenge/guess
+  router.post('/daily-challenge/guess', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Vui lòng đăng nhập để tham gia Thử Thách Hàng Ngày.' });
+      }
+      const token = authHeader.split(' ')[1];
+      let decoded;
+      try {
+        decoded = jwt.verify(token, JWT_SECRET);
+      } catch {
+        return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' });
+      }
+      const userId = decoded.id || decoded.userId || decoded._id;
+
+      const { guess, durationSeconds = 0 } = req.body || {};
+      const cleanGuess = String(guess || '').trim();
+
+      // Validate 4 unique digits
+      if (!/^\d{4}$/.test(cleanGuess) || new Set(cleanGuess).size !== 4) {
+        return res.status(400).json({ error: 'Lượt đoán phải gồm đúng 4 chữ số khác nhau.' });
+      }
+
+      const { date, secret } = await getTodayChallenge();
+
+      let userDoc = await User.findById(userId);
+      const username = userDoc?.name || decoded.name || decoded.username || 'Player';
+      const avatar = userDoc?.avatar || '';
+
+      let submission = await DailySubmission.findOne({ userId, date });
+      if (!submission) {
+        submission = new DailySubmission({
+          userId,
+          username,
+          avatar,
+          date,
+          guesses: [],
+          guessCount: 0,
+          maxGuesses: 8,
+          isSolved: false,
+          isFinished: false,
+          durationSeconds: 0
+        });
+        await DailyChallenge.updateOne({ date }, { $inc: { totalParticipants: 1 } });
+      }
+
+      if (submission.isFinished) {
+        return res.status(400).json({
+          error: 'Bạn đã hoàn thành thử thách hôm nay rồi.',
+          isFinished: true,
+          revealedSecret: secret
+        });
+      }
+
+      // Check duplicate guess in this session
+      if (submission.guesses.some(g => g.guess === cleanGuess)) {
+        return res.status(400).json({ error: 'Bạn đã thử mã số này trong hôm nay rồi.' });
+      }
+
+      // Calculate Bulls & Cows
+      let correctPosition = 0;
+      let correctNumbers = 0;
+      for (let i = 0; i < 4; i++) {
+        if (cleanGuess[i] === secret[i]) {
+          correctPosition++;
+        } else if (secret.includes(cleanGuess[i])) {
+          correctNumbers++;
+        }
+      }
+
+      submission.guesses.push({
+        guess: cleanGuess,
+        correctNumbers,
+        correctPosition,
+        createdAt: new Date()
+      });
+      submission.guessCount = submission.guesses.length;
+      submission.durationSeconds = Math.max(submission.durationSeconds, Math.floor(durationSeconds));
+
+      let xpAwarded = 0;
+      if (correctPosition === 4) {
+        submission.isSolved = true;
+        submission.isFinished = true;
+        submission.completedAt = new Date();
+        xpAwarded = 50; // Award 50 XP for daily solve
+        submission.xpAwarded = xpAwarded;
+
+        await DailyChallenge.updateOne({ date }, { $inc: { totalSolved: 1 } });
+
+        // Reward player profile with XP
+        await GameProfile.findOneAndUpdate(
+          { userId },
+          { $inc: { totalXp: xpAwarded } },
+          { upsert: true, returnDocument: 'after' }
+        );
+      } else if (submission.guessCount >= 8) {
+        submission.isSolved = false;
+        submission.isFinished = true;
+        submission.completedAt = new Date();
+      }
+
+      await submission.save();
+
+      return res.json({
+        date,
+        guessResult: {
+          guess: cleanGuess,
+          correctPosition,
+          correctNumbers
+        },
+        guessCount: submission.guessCount,
+        maxGuesses: 8,
+        isSolved: submission.isSolved,
+        isFinished: submission.isFinished,
+        xpAwarded,
+        durationSeconds: submission.durationSeconds,
+        revealedSecret: submission.isFinished ? secret : null,
+        guesses: submission.guesses
+      });
+    } catch (err) {
+      console.error('[DailyChallenge] Guess failed:', err.message);
+      res.status(500).json({ error: 'Failed to process guess' });
+    }
+  });
+
+  // GET /api/daily-challenge/leaderboard
+  router.get('/daily-challenge/leaderboard', async (req, res) => {
+    try {
+      const { date } = await getTodayChallenge();
+      const topSolvers = await DailySubmission.find({ date, isSolved: true })
+        .sort({ guessCount: 1, durationSeconds: 1, completedAt: 1 })
+        .limit(20)
+        .lean();
+
+      const leaderboard = topSolvers.map((item, index) => ({
+        rank: index + 1,
+        userId: item.userId,
+        username: item.username,
+        avatar: item.avatar,
+        guessCount: item.guessCount,
+        durationSeconds: item.durationSeconds,
+        completedAt: item.completedAt
+      }));
+
+      return res.json({ date, leaderboard });
+    } catch (err) {
+      console.error('[DailyChallenge] Leaderboard failed:', err.message);
+      res.status(500).json({ error: 'Failed to fetch daily leaderboard' });
+    }
   });
 
   return router;

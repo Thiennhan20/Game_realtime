@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Keyboard } from 'lucide-react';
+import { Keyboard, NotebookPen } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { Locale } from '../../types';
@@ -13,6 +13,9 @@ interface GuessTurnBarProps {
   lastOpponentActivityAt?: number;
   opponentIsVisible?: boolean;
   turnStartTime?: number;
+  isDeductionOpen?: boolean;
+  hasDeductionMarked?: boolean;
+  onToggleDeduction?: () => void;
   locale: Locale;
   t: Translator;
   onOpenNumberPad: () => void;
@@ -28,6 +31,9 @@ export function GuessTurnBar({
   lastOpponentActivityAt = Date.now(),
   opponentIsVisible = true,
   turnStartTime = Date.now(),
+  isDeductionOpen = false,
+  hasDeductionMarked = false,
+  onToggleDeduction,
   locale,
   t,
   onOpenNumberPad,
@@ -149,17 +155,62 @@ export function GuessTurnBar({
                   <span>{locale === 'vi' ? 'Đoán số' : 'Guess'}</span>
                 </button>
               </div>
+
+              {/* Deduction Notepad Button (right next to Guess button) */}
+              {onToggleDeduction && (
+                <button
+                  type="button"
+                  onClick={onToggleDeduction}
+                  title={locale === 'vi' ? 'Sổ tay gạch số suy luận' : 'Deduction notepad'}
+                  className={`relative px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-lg border font-mono font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isDeductionOpen
+                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/60 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/40'
+                      : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.1] hover:border-amber-400/40 text-slate-200 hover:text-white shadow-sm'
+                  }`}
+                >
+                  <NotebookPen size={15} className={isDeductionOpen ? 'text-amber-300' : 'text-amber-400'} />
+                  <span className="hidden sm:inline">
+                    {locale === 'vi' ? 'Ghi chú' : 'Notes'}
+                  </span>
+                  {hasDeductionMarked && !isDeductionOpen && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 absolute -top-1 -right-1 shadow-sm ring-2 ring-[#0d1017]" />
+                  )}
+                </button>
+              )}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-[10px] sm:text-xs text-violet-300 font-mono font-semibold shrink-0">
-              <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse" />
-              <span>{locale === 'vi' ? 'Đang mở' : 'Active'}</span>
-              <button
-                onClick={onCloseNumberPad}
-                className="underline text-slate-400 hover:text-white transition ml-1 cursor-pointer"
-              >
-                {locale === 'vi' ? 'Đóng' : 'Close'}
-              </button>
+            <div className="flex items-center gap-2.5 text-[10px] sm:text-xs text-violet-300 font-mono font-semibold shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse" />
+                <span>{locale === 'vi' ? 'Đang mở' : 'Active'}</span>
+                <button
+                  onClick={onCloseNumberPad}
+                  className="underline text-slate-400 hover:text-white transition ml-1 cursor-pointer"
+                >
+                  {locale === 'vi' ? 'Đóng' : 'Close'}
+                </button>
+              </div>
+
+              {onToggleDeduction && (
+                <button
+                  type="button"
+                  onClick={onToggleDeduction}
+                  title={locale === 'vi' ? 'Sổ tay gạch số suy luận' : 'Deduction notepad'}
+                  className={`relative p-2 sm:px-3 sm:py-1.5 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                    isDeductionOpen
+                      ? 'bg-amber-500/20 border-amber-400/60 text-amber-200 shadow-sm'
+                      : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.1] text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <NotebookPen size={14} className="text-amber-400" />
+                  <span className="hidden sm:inline">
+                    {locale === 'vi' ? 'Ghi chú' : 'Notes'}
+                  </span>
+                  {hasDeductionMarked && !isDeductionOpen && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 absolute -top-1 -right-1 shadow-sm ring-2 ring-[#0d1017]" />
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -202,30 +253,54 @@ export function GuessTurnBar({
             </div>
           </div>
 
-          {/* Right: Secret 4-digit slots if typing, or active spinner */}
-          {isTyping ? (
-            <div className="flex items-center gap-1 shrink-0" title={locale === 'vi' ? 'Đối thủ đang chọn số' : 'Opponent is entering digits'}>
-              {[0, 1, 2, 3].map((idx) => {
-                const isFilled = idx < opponentTypingCount;
-                return (
-                  <div
-                    key={idx}
-                    className={`w-5 h-6 sm:w-6 sm:h-7 rounded flex items-center justify-center font-mono text-[11px] sm:text-xs font-bold transition-all duration-200 border ${
-                      isFilled
-                        ? 'bg-violet-600/30 border-violet-400 text-violet-200 shadow-[0_0_10px_rgba(139,92,246,0.5)] scale-105'
-                        : 'bg-[#090a0f] border-white/[0.08] text-slate-600'
-                    }`}
-                  >
-                    {isFilled ? '✦' : '·'}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-3.5 h-3.5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
+          {/* Right: Secret 4-digit slots if typing, or active spinner + Deduction Toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isTyping ? (
+              <div className="flex items-center gap-1" title={locale === 'vi' ? 'Đối thủ đang chọn số' : 'Opponent is entering digits'}>
+                {[0, 1, 2, 3].map((idx) => {
+                  const isFilled = idx < opponentTypingCount;
+                  return (
+                    <div
+                      key={idx}
+                      className={`w-5 h-6 sm:w-6 sm:h-7 rounded flex items-center justify-center font-mono text-[11px] sm:text-xs font-bold transition-all duration-200 border ${
+                        isFilled
+                          ? 'bg-violet-600/30 border-violet-400 text-violet-200 shadow-[0_0_10px_rgba(139,92,246,0.5)] scale-105'
+                          : 'bg-[#090a0f] border-white/[0.08] text-slate-600'
+                      }`}
+                    >
+                      {isFilled ? '✦' : '·'}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-3.5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {/* Deduction Notepad Toggle in Opponent Turn */}
+            {onToggleDeduction && (
+              <button
+                type="button"
+                onClick={onToggleDeduction}
+                title={locale === 'vi' ? 'Mở sổ tay suy luận' : 'Open deduction notepad'}
+                className={`relative px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ml-1 ${
+                  isDeductionOpen
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/60 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/40'
+                    : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.1] hover:border-amber-400/40 text-slate-300 hover:text-white'
+                }`}
+              >
+                <NotebookPen size={14} className={isDeductionOpen ? 'text-amber-300' : 'text-amber-400'} />
+                <span className="hidden sm:inline">
+                  {locale === 'vi' ? 'Ghi chú' : 'Notes'}
+                </span>
+                {hasDeductionMarked && !isDeductionOpen && (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 absolute -top-1 -right-1 shadow-sm ring-2 ring-[#0d1017]" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -653,7 +653,7 @@ function prepareRestoredRoomForReconnect(room, io) {
       });
       io.to('lobby').emit('LOBBY_ROOMS', getJoinableRooms());
     }
-  }, 60 * 1000);
+  }, 120 * 1000);
 
   restoredRoomTimers.set(room.roomId, timer);
 }
@@ -664,7 +664,7 @@ function getJoinableRooms() {
   rooms.forEach((room) => {
     const hostPlayer = room.players?.[0];
     const hasActiveHost = hostPlayer && !hostPlayer.hasLeft;
-    const isHostDisconnectedStale = Boolean(hostPlayer?.disconnectedAt && (now - hostPlayer.disconnectedAt > 60000));
+    const isHostDisconnectedStale = Boolean(hostPlayer?.disconnectedAt && (now - hostPlayer.disconnectedAt > 120000));
     const hostActiveRef = room.hostLastActiveAt || room.lastActivityAt || room.createdAt;
     const isWaitingRoomStale = room.state === 'WAITING_FOR_PLAYERS' && hostActiveRef && (now - hostActiveRef > 5 * 60 * 1000);
 

@@ -9,6 +9,8 @@ import { createTranslator, translateBackendError } from '../i18n';
 import type {
   AiDifficulty,
   ChatMessage,
+  DeductionMap,
+  DigitDeductionState,
   EquippedTitle,
   FloatingEmote,
   GameProfile,
@@ -90,6 +92,19 @@ function isSameLobbyRooms(a: LobbyRoom[], b: LobbyRoom[]) {
   return true;
 }
 
+const INITIAL_DEDUCTION_MAP: DeductionMap = {
+  0: 'neutral',
+  1: 'neutral',
+  2: 'neutral',
+  3: 'neutral',
+  4: 'neutral',
+  5: 'neutral',
+  6: 'neutral',
+  7: 'neutral',
+  8: 'neutral',
+  9: 'neutral',
+};
+
 export function useGameController() {
   const { locale, mounted, t, toggleLocale } = useGameLocale();
   const {
@@ -167,7 +182,7 @@ export function useGameController() {
   const [isLoadingGameProfile, setIsLoadingGameProfile] = useState(true);
   const [gameProfileError, setGameProfileError] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
-  const [reconnectCountdown, setReconnectCountdown] = useState(60);
+  const [reconnectCountdown, setReconnectCountdown] = useState(120);
   const [opponentTempDisconnected, setOpponentTempDisconnected] = useState<string | null>(
     null,
   );
@@ -196,6 +211,28 @@ export function useGameController() {
   const [lastOpponentActivityAt, setLastOpponentActivityAt] = useState(() => Date.now());
   const [opponentIsVisible, setOpponentIsVisible] = useState(true);
   const [turnStartTime, setTurnStartTime] = useState(() => Date.now());
+
+  const [deductionMap, setDeductionMap] = useState<DeductionMap>(INITIAL_DEDUCTION_MAP);
+  const [isAutoEliminate, setIsAutoEliminate] = useState(true);
+
+  const handleToggleDeductionDigit = useCallback((digit: number) => {
+    setDeductionMap((prev) => {
+      const current = prev[digit] || 'neutral';
+      let next: DigitDeductionState = 'neutral';
+      if (current === 'neutral') next = 'eliminated';
+      else if (current === 'eliminated') next = 'confirmed';
+      else next = 'neutral';
+      return { ...prev, [digit]: next };
+    });
+  }, []);
+
+  const handleResetDeductions = useCallback(() => {
+    setDeductionMap(INITIAL_DEDUCTION_MAP);
+  }, []);
+
+  const handleToggleAutoEliminate = useCallback(() => {
+    setIsAutoEliminate((prev) => !prev);
+  }, []);
 
   const socketRef = useRef<Socket | null>(null);
   const lastGuessSubmitTimeRef = useRef(0);
@@ -418,6 +455,35 @@ export function useGameController() {
     stopTitleFlash,
   ]);
 
+  // Auto-eliminate digits that produced 0 Bulls & 0 Cows in player's guesses
+  useEffect(() => {
+    if (!room || room.state !== 'PLAYING' || !isAutoEliminate) return;
+    const myPlayerIndex = room.players.findIndex(
+      (p) => String(p.userId) === String(user?.id)
+    );
+    if (myPlayerIndex === -1) return;
+
+    const zeroZeroGuesses = room.guesses.filter(
+      (g) => g.playerIndex === myPlayerIndex && g.correctNumbers === 0 && g.correctPosition === 0
+    );
+    if (zeroZeroGuesses.length === 0) return;
+
+    setDeductionMap((prev) => {
+      let hasChange = false;
+      const next = { ...prev };
+      zeroZeroGuesses.forEach((g) => {
+        for (const ch of g.guess) {
+          const d = Number(ch);
+          if (!Number.isNaN(d) && next[d] !== 'eliminated') {
+            next[d] = 'eliminated';
+            hasChange = true;
+          }
+        }
+      });
+      return hasChange ? next : prev;
+    });
+  }, [room?.guesses, room?.state, room?.players, user?.id, isAutoEliminate]);
+
   // --- Fast REST Pre-fetch for Instant Room List Display ---
   useEffect(() => {
     let active = true;
@@ -443,10 +509,10 @@ export function useGameController() {
     };
   }, []);
 
-  // 60-second reconnect grace period countdown
+  // 120-second reconnect grace period countdown
   useEffect(() => {
     if (!isReconnecting) {
-      setReconnectCountdown(60);
+      setReconnectCountdown(120);
       return;
     }
 
@@ -458,8 +524,8 @@ export function useGameController() {
           setRoom(null);
           setErrorMsg(
             localeRef.current === 'vi'
-              ? 'Mất kết nối quá 60 giây, đã trở về sảnh chính.'
-              : 'Connection lost for more than 60s, returned to lobby.'
+              ? 'Mất kết nối quá 120 giây, đã trở về sảnh chính.'
+              : 'Connection lost for more than 120s, returned to lobby.'
           );
           return 0;
         }
@@ -534,13 +600,13 @@ export function useGameController() {
         setRoom(null);
       }
       setIsReconnecting(false);
-      setReconnectCountdown(60);
+      setReconnectCountdown(120);
     });
 
     socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
       setIsReconnecting(true);
-      setReconnectCountdown(60);
+      setReconnectCountdown(120);
     });
 
     socket.io.on('reconnect_attempt', () => {
@@ -552,7 +618,7 @@ export function useGameController() {
       clearTimeout(connectionTimer);
       setErrorMsg(null);
       setIsReconnecting(false);
-      setReconnectCountdown(60);
+      setReconnectCountdown(120);
       socket.emit('GET_LOBBY_ROOMS');
       socket.emit('CHECK_ACTIVE_ROOM');
     });
@@ -578,7 +644,7 @@ export function useGameController() {
       clearTimeout(connectionTimer);
       setErrorMsg(translate()('cannotConnect'));
       setIsReconnecting(false);
-      setReconnectCountdown(60);
+      setReconnectCountdown(120);
     });
 
     socket.on('ROOM_CREATED', (createdRoom: Room) => {
@@ -637,7 +703,6 @@ export function useGameController() {
       setRoom(startRoom);
       setIsSpectator(false);
       setSpectatorCount(0);
-      setErrorMsg(null);
       setOpponentSecretSet(false);
       setOpponentRpsSubmitted(false);
       setOpponentWantsPlayAgain(false);
@@ -650,11 +715,37 @@ export function useGameController() {
       setShowMatchModal(false);
       setShowGuessHistoryModal(false);
       setOpponentTempDisconnected(null);
+      setDeductionMap(INITIAL_DEDUCTION_MAP);
       sound.playOpponentJoined();
       triggerHaptic([50]);
       if (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())) {
         startTitleFlashRef.current(createTranslator(localeRef.current)('tabOpponentJoined'));
       }
+
+      if (startRoom.isAiRoom) {
+        const diff = startRoom.aiDifficulty || 'Medium';
+        const notice = translate()('aiRoomWelcome').replace('{difficulty}', diff);
+        setErrorMsg(notice);
+        setTimeout(() => {
+          setErrorMsg((prev) => (prev === notice ? null : prev));
+        }, 5000);
+      }
+    });
+
+    socket.on('PLAYER_JOINED', (data: { username: string; hostUsername: string; roomState: Room }) => {
+      setRoom(data.roomState);
+      const isMe = userRef.current?.name === data.username;
+      const hostName = data.hostUsername || 'Host';
+      const notice = isMe
+        ? translate()('youJoinedRoom').replace('{username}', hostName)
+        : translate()('playerJoinedRoom').replace('{username}', data.username);
+
+      setErrorMsg(notice);
+      sound.playOpponentJoined();
+      triggerHaptic([50, 30]);
+      setTimeout(() => {
+        setErrorMsg((prev) => (prev === notice ? null : prev));
+      }, 5000);
     });
 
     socket.on('SPECTATOR_JOINED', (data: { room: Room; spectatorCount: number }) => {
@@ -664,7 +755,24 @@ export function useGameController() {
       setChatMessages([]);
       setMatchStats(null);
       setMatchXpResult(null);
-      setErrorMsg(null);
+      const p1 = data.room.players[0]?.username || 'Player 1';
+      const p2 = data.room.players[1]?.username || 'Player 2';
+      const notice = translate()('spectatingMatchNotice')
+        .replace('{p1}', p1)
+        .replace('{p2}', p2);
+      setErrorMsg(notice);
+      setTimeout(() => {
+        setErrorMsg((prev) => (prev === notice ? null : prev));
+      }, 5000);
+    });
+
+    socket.on('SPECTATOR_JOINED_NOTICE', (data: { username: string; spectatorCount: number }) => {
+      setSpectatorCount(data.spectatorCount || 0);
+      const notice = translate()('spectatorJoinedNotice').replace('{username}', data.username);
+      setErrorMsg(notice);
+      setTimeout(() => {
+        setErrorMsg((prev) => (prev === notice ? null : prev));
+      }, 4000);
     });
 
     socket.on('SPECTATOR_COUNT_CHANGED', (data: { count: number }) => {
@@ -1158,7 +1266,7 @@ export function useGameController() {
 
     socket.on('OPPONENT_AFK_KICKED', (data: { username?: string; message?: string }) => {
       sound.playClick();
-      const rawMsg = data?.message || 'Opponent did not set their secret within 60s and was returned to the lobby.';
+      const rawMsg = data?.message || 'Opponent did not set their secret within 120s and was returned to the lobby.';
       const localizedMsg = translateBackendError(rawMsg, localeRef.current);
       setErrorMsg(localizedMsg);
       setTimeout(() => setErrorMsg(null), 6000);
@@ -1740,6 +1848,7 @@ export function useGameController() {
 
   const handleLeaveSpectator = () => {
     stopTitleFlash();
+    setDeductionMap(INITIAL_DEDUCTION_MAP);
     if (room) {
       socketRef.current?.emit('LEAVE_SPECTATOR', room.roomId);
     }
@@ -1751,6 +1860,7 @@ export function useGameController() {
 
   const handleLeaveRoom = () => {
     stopTitleFlash();
+    setDeductionMap(INITIAL_DEDUCTION_MAP);
     if (isSpectator) {
       handleLeaveSpectator();
       return;
@@ -1816,6 +1926,7 @@ export function useGameController() {
     t,
     toggleLocale,
     user,
+    token,
     loadingUser,
     authError,
     lobbyRooms,
@@ -1869,6 +1980,11 @@ export function useGameController() {
     lastOpponentActivityAt,
     opponentIsVisible,
     turnStartTime,
+    deductionMap,
+    isAutoEliminate,
+    handleToggleDeductionDigit,
+    handleResetDeductions,
+    handleToggleAutoEliminate,
     newlyUnlockedAchievements,
     toastAchievements,
     setToastAchievements,

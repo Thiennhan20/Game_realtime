@@ -26,6 +26,7 @@ interface LobbyScreenProps {
   onCancelQuickMatch?: () => void;
   onCreateRoom: () => void;
   onCreateAiRoom: () => void;
+  onOpenDailyChallenge?: () => void;
   onJoinRoom: (roomId: string) => void;
   onRoomIdChange: (roomId: string) => void;
   onRefresh: () => void;
@@ -52,6 +53,7 @@ export const LobbyScreen = memo(function LobbyScreen({
   onCancelQuickMatch,
   onCreateRoom,
   onCreateAiRoom,
+  onOpenDailyChallenge,
   onJoinRoom,
   onRoomIdChange,
   onRefresh,
@@ -114,6 +116,7 @@ export const LobbyScreen = memo(function LobbyScreen({
             onCancelQuickMatch={onCancelQuickMatch}
             onCreateRoom={onCreateRoom}
             onCreateAiRoom={onCreateAiRoom}
+            onOpenDailyChallenge={onOpenDailyChallenge}
             onJoinRoom={onJoinRoom}
             onRoomIdChange={onRoomIdChange}
           />

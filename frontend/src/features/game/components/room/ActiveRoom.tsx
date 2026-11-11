@@ -1,11 +1,12 @@
 'use client';
 
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Eye } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type {
   AuthUser,
+  DeductionMap,
   FloatingEmote,
   Locale,
   MatchStats,
@@ -21,6 +22,7 @@ import { NumberPadModal } from '../modals/NumberPadModal';
 import { StartCountdownOverlay } from '../modals/StartCountdownOverlay';
 import { ConfettiCanvas } from '../common/ConfettiCanvas';
 import { ActiveRoomHeader } from './ActiveRoomHeader';
+import { DeductionModal } from '../modals/DeductionModal';
 import { FinishedPanel } from './FinishedPanel';
 import { GuessTurnBar } from './GuessTurnBar';
 import { PlayingArena } from './PlayingArena';
@@ -68,6 +70,11 @@ interface ActiveRoomProps {
   lastOpponentActivityAt?: number;
   opponentIsVisible?: boolean;
   turnStartTime?: number;
+  deductionMap?: DeductionMap;
+  isAutoEliminate?: boolean;
+  onToggleDeductionDigit?: (digit: number) => void;
+  onResetDeductions?: () => void;
+  onToggleAutoEliminate?: () => void;
   locale: Locale;
   t: Translator;
   isSpectator?: boolean;
@@ -121,6 +128,11 @@ export function ActiveRoom({
   lastOpponentActivityAt = Date.now(),
   opponentIsVisible = true,
   turnStartTime = Date.now(),
+  deductionMap,
+  isAutoEliminate = true,
+  onToggleDeductionDigit,
+  onResetDeductions,
+  onToggleAutoEliminate,
   locale,
   t,
   isSpectator = false,
@@ -148,6 +160,10 @@ export function ActiveRoom({
     room.state === 'WAITING_FOR_PLAYERS' ? null : (opponent || room.players[1] || null);
   const isMyTurn = !isSpectator && room.activeTurnIndex === myPlayerIndex;
   const isWinner = !isSpectator && room.winnerIndex === myPlayerIndex;
+  const [isDeductionOpen, setIsDeductionOpen] = useState(false);
+  const hasDeductionMarked = deductionMap
+    ? Object.values(deductionMap).some((s) => s !== 'neutral')
+    : false;
   const isRankUp = Boolean(
     (matchXpResult?.rankKeyAfter &&
       matchXpResult?.rankKeyBefore &&
@@ -269,7 +285,7 @@ export function ActiveRoom({
         )}
 
         {room.state === 'PLAYING' && (
-          <div className="flex-1 flex flex-col gap-4 min-h-0">
+          <div className="flex-1 flex flex-col gap-2.5 sm:gap-3.5 min-h-0">
             {effectiveOpponent && (
               <PlayingArena
                 room={room}
@@ -281,6 +297,23 @@ export function ActiveRoom({
                 t={t}
               />
             )}
+            {!isSpectator &&
+              deductionMap &&
+              onToggleDeductionDigit &&
+              onResetDeductions &&
+              onToggleAutoEliminate && (
+                <DeductionModal
+                  isOpen={isDeductionOpen}
+                  onClose={() => setIsDeductionOpen(false)}
+                  deductionMap={deductionMap}
+                  onToggleDigit={onToggleDeductionDigit}
+                  onReset={onResetDeductions}
+                  isAutoEliminate={isAutoEliminate}
+                  onToggleAutoEliminate={onToggleAutoEliminate}
+                  locale={locale}
+                  t={t}
+                />
+              )}
             <GuessTurnBar
               isMyTurn={isMyTurn}
               isNumberPadOpen={showNumberPad}
@@ -294,6 +327,9 @@ export function ActiveRoom({
               lastOpponentActivityAt={lastOpponentActivityAt}
               opponentIsVisible={opponentIsVisible}
               turnStartTime={turnStartTime}
+              isDeductionOpen={isDeductionOpen}
+              hasDeductionMarked={hasDeductionMarked}
+              onToggleDeduction={() => setIsDeductionOpen((prev) => !prev)}
               locale={locale}
               t={t}
               onOpenNumberPad={() => onShowNumberPadChange(true)}
@@ -382,6 +418,7 @@ export function ActiveRoom({
         value={guessInput}
         locale={locale}
         pastGuesses={myPastGuesses}
+        deductionMap={deductionMap}
         onChange={onGuessInputChange}
         onSubmit={(guess) => onSendGuess(guess)}
         onClose={() => onShowNumberPadChange(false)}

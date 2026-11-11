@@ -20,6 +20,7 @@ interface ModeSelectorProps {
   onCancelQuickMatch?: () => void;
   onCreateRoom: () => void;
   onCreateAiRoom: () => void;
+  onOpenDailyChallenge?: () => void;
   onJoinRoom: (roomId: string) => void;
   onRoomIdChange: (roomId: string) => void;
 }
@@ -35,6 +36,7 @@ export const ModeSelector = memo(function ModeSelector({
   onCancelQuickMatch,
   onCreateRoom,
   onCreateAiRoom,
+  onOpenDailyChallenge,
   onJoinRoom,
   onRoomIdChange,
 }: ModeSelectorProps) {

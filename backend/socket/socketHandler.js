@@ -130,7 +130,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     }
 
     const remainingPlayer = room.players[0];
-    if (remainingPlayer?.disconnectedAt && Date.now() - remainingPlayer.disconnectedAt > 60000) {
+    if (remainingPlayer?.disconnectedAt && Date.now() - remainingPlayer.disconnectedAt > 120000) {
       rooms.delete(room.roomId);
       deleteRoomFromRedis(room.roomId);
       return null;
@@ -437,6 +437,11 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         room: targetRoom
       });
       socket.to(roomId).emit('GAME_START', targetRoom);
+      io.to(roomId).emit('PLAYER_JOINED', {
+        username: socket.username,
+        hostUsername: targetRoom.players[0]?.username || 'Player',
+        roomState: targetRoom
+      });
       broadcastLobbyRooms();
       console.log(`[QuickMatch] ${socket.username} matched into room ${roomId}. Moving to SETTING_SECRET.`);
     });
@@ -592,6 +597,11 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       syncRoomToRedis(roomId, room);
 
       io.to(roomId).emit('GAME_START', room);
+      io.to(roomId).emit('PLAYER_JOINED', {
+        username: socket.username,
+        hostUsername: room.players[0]?.username || 'Host',
+        roomState: room
+      });
       broadcastLobbyRooms();
       console.log(`[Game] ${socket.username} joined room ${roomId} (Win streak: ${currentWinStreak}). Game moves to SETTING_SECRET.`);
     });
@@ -647,6 +657,10 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
 
       io.to(roomId).emit('SPECTATOR_COUNT_CHANGED', {
         count: room.spectators.length
+      });
+      socket.to(roomId).emit('SPECTATOR_JOINED_NOTICE', {
+        username: socket.username,
+        spectatorCount: room.spectators.length
       });
       broadcastLobbyRooms();
 
@@ -1403,7 +1417,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             username: socket.username,
             roomState: room
           });
-          console.log(`[Game] User ${socket.username} temporarily disconnected from room ${roomId}. 60s grace period started.`);
+          console.log(`[Game] User ${socket.username} temporarily disconnected from room ${roomId}. 120s grace period started.`);
 
           const timerKey = `${roomId}:${socket.userId}`;
           const previousTimer = disconnectTimers.get(timerKey);
@@ -1438,7 +1452,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             ) {
               const opponentGraceRemaining = Math.max(
                 0,
-                (60 * 1000) - (Date.now() - disconnectedOpponent.disconnectedAt)
+                (120 * 1000) - (Date.now() - disconnectedOpponent.disconnectedAt)
               );
               if (opponentGraceRemaining > 0) {
                 const retryTimer = setTimeout(
@@ -1539,7 +1553,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
               return;
             }
 
-            console.log(`[Game] User ${socket.username} did not reconnect within 60s. Removing from room ${roomId}.`);
+            console.log(`[Game] User ${socket.username} did not reconnect within 120s. Removing from room ${roomId}.`);
 
             const idx = currentRoom.players.findIndex(p => p.userId === socket.userId);
             if (idx !== -1) currentRoom.players.splice(idx, 1);
@@ -1577,17 +1591,17 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             broadcastLobbyRooms();
           };
 
-          const timerId = setTimeout(handleDisconnectTimeout, 60 * 1000);
+          const timerId = setTimeout(handleDisconnectTimeout, 120 * 1000);
           disconnectTimers.set(timerKey, timerId);
         }
       });
     });
   });
 
-  // --- INACTIVITY WATCHDOG (5m waiting room idle, 60s host/guest AFK in SETTING_SECRET, 20s RPS auto-pick) ---
+  // --- INACTIVITY WATCHDOG (5m waiting room idle, 120s host/guest AFK in SETTING_SECRET, 20s RPS auto-pick) ---
   const INACTIVITY_CHECK_INTERVAL = 3 * 1000;
   const WAITING_ROOM_MAX_IDLE = 5 * 60 * 1000;
-  const SETTING_SECRET_MAX_TIME = 60 * 1000;
+  const SETTING_SECRET_MAX_TIME = 120 * 1000;
   const RPS_MAX_TIME = 20 * 1000;
   const IN_GAME_MAX_IDLE = 5 * 60 * 1000;
 
@@ -1628,7 +1642,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         }
       }
 
-      // 2. SETTING_SECRET phase: 60s timer for both players to set secret
+      // 2. SETTING_SECRET phase: 120s timer for both players to set secret
       if (room.state === 'SETTING_SECRET' && room.players?.length === 2) {
         const phaseStarted = room.settingSecretStartedAt || room.createdAt || now;
         if (now - phaseStarted > SETTING_SECRET_MAX_TIME) {
@@ -1639,7 +1653,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
 
           // If Host did NOT set secret -> Host is AFK! Disband room.
           if (!hostReady) {
-            console.log(`[Game] Room ${roomId} disbanded: Host did not set secret in 60s (Host AFK).`);
+            console.log(`[Game] Room ${roomId} disbanded: Host did not set secret in 120s (Host AFK).`);
 
             io.to(roomId).emit('ROOM_CLOSED_INACTIVITY', {
               roomId,
@@ -1658,14 +1672,14 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
 
           // If Host is ready, but Guest did NOT set secret -> Guest is AFK!
           if (hostReady && !guestReady) {
-            console.log(`[Game] Room ${roomId}: Guest ${guest.username} did not set secret in 60s. Kicking guest.`);
+            console.log(`[Game] Room ${roomId}: Guest ${guest.username} did not set secret in 120s. Kicking guest.`);
 
             const guestSock = io.sockets.sockets.get(guest.socketId);
             if (guestSock) {
               guestSock.emit('ROOM_CLOSED_INACTIVITY', {
                 roomId,
                 reason: 'guest_afk',
-                message: 'You were returned to the lobby for not setting your secret within 60 seconds.'
+                message: 'You were returned to the lobby for not setting your secret within 120 seconds.'
               });
               guestSock.leave(roomId);
               guestSock.join('lobby');
@@ -1676,7 +1690,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
             io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
             io.to(roomId).emit('OPPONENT_AFK_KICKED', {
               username: guest.username,
-              message: 'Opponent did not set their secret within 60s and was returned to the lobby.'
+              message: 'Opponent did not set their secret within 120s and was returned to the lobby.'
             });
             syncRoomToRedis(roomId, room);
             broadcastLobbyRooms(true);

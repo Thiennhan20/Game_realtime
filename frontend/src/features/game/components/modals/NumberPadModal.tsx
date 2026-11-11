@@ -3,13 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
 
 import { sound, triggerHaptic } from '../../sound';
-import type { Locale } from '../../types';
+import type { DeductionMap, Locale } from '../../types';
 
 interface NumberPadModalProps {
   isOpen: boolean;
   value?: string;
   locale: Locale;
   pastGuesses?: string[];
+  deductionMap?: DeductionMap;
   onChange?: (value: string) => void;
   onSubmit: (guess: string) => void;
   onClose: () => void;
@@ -20,6 +21,7 @@ export function NumberPadModal({
   value: initialValue = '',
   locale,
   pastGuesses = [],
+  deductionMap,
   onChange,
   onSubmit,
   onClose,
@@ -197,6 +199,7 @@ export function NumberPadModal({
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => {
                 const digit = String(number);
                 const isUsed = value.includes(digit);
+                const deduction = deductionMap?.[number];
                 return (
                   <button
                     key={number}
@@ -204,13 +207,25 @@ export function NumberPadModal({
                     disabled={isUsed || value.length >= 4}
                     onClick={() => appendDigit(digit)}
                     aria-label={`Digit ${number}${isUsed ? ' (already used)' : ''}`}
-                    className={`py-3 rounded-xl font-mono text-xl sm:text-2xl font-bold flex items-center justify-center border transition-all duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+                    className={`relative py-3 rounded-xl font-mono text-xl sm:text-2xl font-bold flex items-center justify-center border transition-all duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
                       isUsed
                         ? 'bg-white/[0.02] border-white/[0.03] text-slate-600 opacity-30 cursor-not-allowed'
-                        : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-100 shadow-sm'
+                        : deduction === 'eliminated'
+                          ? 'bg-rose-950/25 hover:bg-rose-900/35 border-rose-500/30 text-rose-300/70 shadow-sm'
+                          : deduction === 'confirmed'
+                            ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-400/50 text-emerald-300 font-black shadow-sm ring-1 ring-emerald-400/30'
+                            : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-100 shadow-sm'
                     }`}
                   >
-                    {number}
+                    <span className={deduction === 'eliminated' && !isUsed ? 'line-through decoration-rose-400/80' : ''}>
+                      {number}
+                    </span>
+                    {!isUsed && deduction === 'eliminated' && (
+                      <span className="absolute top-1 right-1.5 text-[9px] text-rose-400 leading-none">✕</span>
+                    )}
+                    {!isUsed && deduction === 'confirmed' && (
+                      <span className="absolute top-1 right-1.5 text-[9px] text-emerald-400 leading-none">✓</span>
+                    )}
                   </button>
                 );
               })}
@@ -235,13 +250,25 @@ export function NumberPadModal({
                 disabled={value.includes('0') || value.length >= 4}
                 onClick={() => appendDigit('0')}
                 aria-label={`Digit 0${value.includes('0') ? ' (already used)' : ''}`}
-                className={`py-3 rounded-xl font-mono text-xl sm:text-2xl font-bold flex items-center justify-center border transition-all duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+                className={`relative py-3 rounded-xl font-mono text-xl sm:text-2xl font-bold flex items-center justify-center border transition-all duration-100 active:scale-95 active:translate-y-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
                   value.includes('0')
                     ? 'bg-white/[0.02] border-white/[0.03] text-slate-600 opacity-30 cursor-not-allowed'
-                    : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-100 shadow-sm'
+                    : deductionMap?.[0] === 'eliminated'
+                      ? 'bg-rose-950/25 hover:bg-rose-900/35 border-rose-500/30 text-rose-300/70 shadow-sm'
+                      : deductionMap?.[0] === 'confirmed'
+                        ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-400/50 text-emerald-300 font-black shadow-sm ring-1 ring-emerald-400/30'
+                        : 'bg-[#121622] hover:bg-[#181d2c] border-white/[0.08] hover:border-violet-500/40 text-slate-100 shadow-sm'
                 }`}
               >
-                0
+                <span className={deductionMap?.[0] === 'eliminated' && !value.includes('0') ? 'line-through decoration-rose-400/80' : ''}>
+                  0
+                </span>
+                {!value.includes('0') && deductionMap?.[0] === 'eliminated' && (
+                  <span className="absolute top-1 right-1.5 text-[9px] text-rose-400 leading-none">✕</span>
+                )}
+                {!value.includes('0') && deductionMap?.[0] === 'confirmed' && (
+                  <span className="absolute top-1 right-1.5 text-[9px] text-emerald-400 leading-none">✓</span>
+                )}
               </button>
 
               <button

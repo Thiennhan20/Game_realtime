@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Award, Trophy, WifiOff, X } from 'lucide-react';
+import { Award, X } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { Locale, UnlockedAchievementNotice } from '../../types';
@@ -20,7 +20,7 @@ interface NotificationStackProps {
 export function NotificationStack({
   error,
   isReconnecting,
-  reconnectCountdown = 60,
+  reconnectCountdown = 120,
   disconnectedOpponent,
   unlockedAchievements = [],
   locale,
@@ -46,13 +46,10 @@ export function NotificationStack({
               {unlockedAchievements[0]?.icon || <Award size={18} className="text-amber-400" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                <Award size={12} className="text-amber-400" />
-                <span>
-                  {locale === 'vi'
-                    ? `Mở khóa ${unlockedAchievements.length} thành tích mới!`
-                    : `Unlocked ${unlockedAchievements.length} new achievement${unlockedAchievements.length > 1 ? 's' : ''}!`}
-                </span>
+              <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
+                {locale === 'vi'
+                  ? `Mở khóa ${unlockedAchievements.length} thành tích mới!`
+                  : `Unlocked ${unlockedAchievements.length} new achievement${unlockedAchievements.length > 1 ? 's' : ''}!`}
               </p>
               <p className="font-mono font-bold text-white truncate mt-0.5">
                 {locale === 'vi'
@@ -84,33 +81,46 @@ export function NotificationStack({
 
       <AnimatePresence>
         {error && (() => {
-          const isPositiveNotice = error.includes('chiến thắng') || error.includes('won');
+          const isVictoryNotice = error.includes('chiến thắng') || error.includes('won');
+          const isJoinNotice =
+            error.includes('vào phòng') ||
+            error.includes('joined') ||
+            error.includes('luyện tập với AI') ||
+            error.includes('training room');
+          const isSpectateNotice =
+            error.includes('xem trận') ||
+            error.includes('spectating');
+
+          let accentBar = 'bg-rose-500';
+          let borderStyle = 'border-rose-500/30 text-rose-200';
+
+          if (isVictoryNotice) {
+            accentBar = 'bg-emerald-400';
+            borderStyle = 'border-emerald-500/30 text-emerald-100';
+          } else if (isJoinNotice) {
+            accentBar = 'bg-violet-400';
+            borderStyle = 'border-violet-500/30 text-violet-100';
+          } else if (isSpectateNotice) {
+            accentBar = 'bg-cyan-400';
+            borderStyle = 'border-cyan-500/30 text-cyan-100';
+          }
+
           return (
             <motion.div
-              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              initial={{ opacity: 0, x: 30, scale: 0.96 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className={`${
-                isPositiveNotice
-                  ? 'bg-[#0c1017] border-emerald-500/50 text-emerald-100 shadow-[0_8px_30px_rgba(16,185,129,0.25)]'
-                  : 'bg-[#0c1017] border-rose-500/50 text-rose-200 shadow-[0_8px_30px_rgba(244,63,94,0.25)]'
-              } border p-3.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-3 pointer-events-auto`}
+              exit={{ opacity: 0, x: 30, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+              className={`relative overflow-hidden bg-[#0c1017]/95 backdrop-blur-md border ${borderStyle} py-3 px-4 pl-4.5 rounded-xl text-xs sm:text-sm font-sans font-medium shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex items-center justify-between gap-3 pointer-events-auto`}
             >
-              <span className="shrink-0">
-                {isPositiveNotice ? (
-                  <Trophy size={16} className="text-emerald-400" />
-                ) : (
-                  <AlertTriangle size={16} className="text-rose-400" />
-                )}
-              </span>
+              <span className={`absolute left-0 top-0 bottom-0 w-1 ${accentBar}`} />
               <span className="flex-1 leading-snug">{error}</span>
               <button
                 onClick={onDismissError}
-                className="p-1 text-slate-400 hover:text-white bg-[#121622] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
+                className="p-1 text-slate-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
                 title={locale === 'vi' ? 'Đóng' : 'Close'}
               >
-                <X size={13} />
+                <X size={14} />
               </button>
             </motion.div>
           );
@@ -120,13 +130,13 @@ export function NotificationStack({
       <AnimatePresence>
         {isReconnecting && (
           <motion.div
-            initial={{ opacity: 0, x: 50, scale: 0.95 }}
+            initial={{ opacity: 0, x: 30, scale: 0.96 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 50, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="bg-[#0c1017] border border-amber-500/50 p-3 rounded-xl text-xs sm:text-sm font-mono font-semibold text-amber-200 shadow-2xl flex items-center gap-2.5 pointer-events-auto"
+            exit={{ opacity: 0, x: 30, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+            className="relative overflow-hidden bg-[#0c1017]/95 backdrop-blur-md border border-amber-500/30 px-4 py-3 pl-4.5 rounded-xl text-xs sm:text-sm font-sans font-medium text-amber-200 shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex items-center gap-2.5 pointer-events-auto"
           >
-            <WifiOff size={15} className="animate-pulse shrink-0 text-amber-400" />
+            <span className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400" />
             <span className="flex-1 leading-snug">
               {locale === 'vi'
                 ? `Mất kết nối. Đang tự động kết nối lại... (${reconnectCountdown}s)`
@@ -139,22 +149,22 @@ export function NotificationStack({
       <AnimatePresence>
         {disconnectedOpponent && (
           <motion.div
-            initial={{ opacity: 0, x: 50, scale: 0.95 }}
+            initial={{ opacity: 0, x: 30, scale: 0.96 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 50, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="bg-[#0c1017] border border-orange-500/50 p-3 rounded-xl text-xs sm:text-sm font-mono font-semibold text-orange-200 shadow-2xl flex items-center gap-3 pointer-events-auto"
+            exit={{ opacity: 0, x: 30, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+            className="relative overflow-hidden bg-[#0c1017]/95 backdrop-blur-md border border-orange-500/30 px-4 py-3 pl-4.5 rounded-xl text-xs sm:text-sm font-sans font-medium text-orange-200 shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex items-center gap-3 pointer-events-auto"
           >
-            <WifiOff size={15} className="animate-pulse shrink-0 text-orange-400" />
+            <span className="absolute left-0 top-0 bottom-0 w-1 bg-orange-400" />
             <span className="flex-1 leading-snug">
               {t('opponentReconnecting').replace('{username}', disconnectedOpponent)}
             </span>
             <button
               onClick={onDismissOpponent}
-              className="p-1 text-slate-400 hover:text-white bg-[#121622] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
+              className="p-1 text-slate-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition duration-150 cursor-pointer shrink-0 flex items-center justify-center"
               title={locale === 'vi' ? 'Đóng' : 'Close'}
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           </motion.div>
         )}

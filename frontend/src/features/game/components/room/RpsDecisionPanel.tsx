@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock, Dices } from 'lucide-react';
+import { Dices } from 'lucide-react';
 
 import type { Translator } from '../../i18n';
 import type { Locale, RpsChoice, RpsClashInfo } from '../../types';
@@ -77,29 +77,6 @@ export function RpsDecisionPanel({
             {t('rpsInitiative')}
           </h3>
           <p className="text-xs text-slate-400">{t('rpsDesc')}</p>
-
-          {/* 20s Countdown & Progress Bar */}
-          {!clashResult && (
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08]">
-                <Clock size={13} className={timeLeft <= 5 ? 'text-rose-400 animate-pulse' : 'text-violet-400'} />
-                <span className={`font-mono text-xs font-bold ${timeLeft <= 5 ? 'text-rose-400' : 'text-slate-200'}`}>
-                  00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
-                </span>
-                <span className="text-[10px] text-slate-500 font-sans border-l border-white/[0.1] pl-2">
-                  {locale === 'vi' ? 'Tự chọn khi hết giờ' : 'Auto-pick on timeout'}
-                </span>
-              </div>
-              <div className="w-full bg-white/[0.06] h-1.5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-1000 ease-linear rounded-full ${
-                    timeLeft <= 5 ? 'bg-rose-500 animate-pulse' : 'bg-gradient-to-r from-violet-500 to-fuchsia-500'
-                  }`}
-                  style={{ width: `${Math.max(0, Math.min(100, (timeLeft / 20) * 100))}%` }}
-                />
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="grid grid-cols-3 gap-3">

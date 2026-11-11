@@ -14,7 +14,7 @@ export function BattleGuide({ locale }: { locale: Locale }) {
           ],
           [
             'Kết thúc & Lưu lịch sử',
-            'Ai đạt 4 🎯 trước sẽ thắng. Rời phòng hoặc offline quá 60s sẽ kết thúc ván; người rời nhận +0 XP. XP chỉ được xét khi mỗi người có ít nhất 3 lượt đoán.',
+            'Ai đạt 4 🎯 trước sẽ thắng. Rời phòng hoặc offline quá 120s sẽ kết thúc ván; người rời nhận +0 XP. XP chỉ được xét khi mỗi người có ít nhất 3 lượt đoán.',
           ],
         ]
       : [
@@ -28,7 +28,7 @@ export function BattleGuide({ locale }: { locale: Locale }) {
           ],
           [
             'Finish & Save History',
-            'First to 4 🎯 wins. Leaving or staying offline for over 60s ends the match; the leaver gets +0 XP. XP requires at least 3 guesses from each player.',
+            'First to 4 🎯 wins. Leaving or staying offline for over 120s ends the match; the leaver gets +0 XP. XP requires at least 3 guesses from each player.',
           ],
         ];
 

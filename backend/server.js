@@ -8,6 +8,8 @@ require('dotenv').config();
 const GameHistory = require('./models/GameHistory');
 const GameProfile = require('./models/GameProfile');
 const User = require('./models/User');
+const DailyChallenge = require('./models/DailyChallenge');
+const DailySubmission = require('./models/DailySubmission');
 const roomManager = require('./services/roomManager');
 const { setupSocket } = require('./socket/socketHandler');
 const { createHealthRouter } = require('./routes/health');
@@ -61,7 +63,13 @@ async function startServer() {
       await mongoose.connect(process.env.MONGODB_URI, {
         serverSelectionTimeoutMS: 10000
       });
-      await Promise.all([GameHistory.init(), GameProfile.init(), User.init()]);
+      await Promise.all([
+        GameHistory.init(),
+        GameProfile.init(),
+        User.init(),
+        DailyChallenge.init(),
+        DailySubmission.init()
+      ]);
       progressionReady = true;
       console.log('[MongoDB] XP/history indexes are ready.');
       console.log('[MongoDB] Connected to MongoDB Atlas successfully.');

@@ -50,6 +50,19 @@ const LogoutConfirmModal = dynamic(
   { ssr: false }
 );
 
+const DailyChallengeModal = dynamic(
+  () => import('./components/modals/DailyChallengeModal').then((mod) => mod.DailyChallengeModal),
+  { ssr: false }
+);
+
+const DailyChallengeFloatingBubble = dynamic(
+  () =>
+    import('./components/lobby/DailyChallengeFloatingBubble').then(
+      (mod) => mod.DailyChallengeFloatingBubble,
+    ),
+  { ssr: false },
+);
+
 export default function GameClient() {
   const router = useRouter();
   const game = useGameController();
@@ -57,6 +70,7 @@ export default function GameClient() {
   const [showAllRoomsModal, setShowAllRoomsModal] = useState(false);
   const [showAiDifficultyModal, setShowAiDifficultyModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showDailyChallengeModal, setShowDailyChallengeModal] = useState(false);
   const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState('');
 
@@ -221,33 +235,41 @@ export default function GameClient() {
           }`}
         >
           {!game.room ? (
-            <LobbyScreen
-              rooms={game.lobbyRooms}
-              isRefreshing={game.isRefreshingLobby}
-              locale={game.locale}
-              t={game.t}
-              roomId={roomId}
-              gameProfile={game.gameProfile}
-              isLoadingGameProfile={game.isLoadingGameProfile}
-              gameProfileError={game.gameProfileError}
-              isQuickMatching={game.isQuickMatching}
-              quickMatchElapsedSeconds={game.quickMatchElapsedSeconds}
-              quickMatchFoundRoom={game.quickMatchFoundRoom}
-              onQuickMatch={game.handleQuickMatch}
-              onCancelQuickMatch={game.handleCancelQuickMatch}
-              onCreateRoom={game.handleCreateRoom}
-              onCreateAiRoom={() => setShowAiDifficultyModal(true)}
-              onJoinRoom={game.handleJoinRoom}
-              onSpectateRoom={game.handleJoinSpectator}
-              onRoomIdChange={setRoomId}
-              onRefresh={game.handleRefreshLobby}
-              onRefreshGameProfile={game.loadGameProfile}
-              onViewAllRooms={() => setShowAllRoomsModal(true)}
-              onViewLeaderboard={() =>
-                router.push(`/leaderboard?locale=${game.locale}`)
-              }
-              onOpenProfile={handleOpenProfile}
-            />
+            <>
+              <LobbyScreen
+                rooms={game.lobbyRooms}
+                isRefreshing={game.isRefreshingLobby}
+                locale={game.locale}
+                t={game.t}
+                roomId={roomId}
+                gameProfile={game.gameProfile}
+                isLoadingGameProfile={game.isLoadingGameProfile}
+                gameProfileError={game.gameProfileError}
+                isQuickMatching={game.isQuickMatching}
+                quickMatchElapsedSeconds={game.quickMatchElapsedSeconds}
+                quickMatchFoundRoom={game.quickMatchFoundRoom}
+                onQuickMatch={game.handleQuickMatch}
+                onCancelQuickMatch={game.handleCancelQuickMatch}
+                onCreateRoom={game.handleCreateRoom}
+                onCreateAiRoom={() => setShowAiDifficultyModal(true)}
+                onOpenDailyChallenge={() => setShowDailyChallengeModal(true)}
+                onJoinRoom={game.handleJoinRoom}
+                onSpectateRoom={game.handleJoinSpectator}
+                onRoomIdChange={setRoomId}
+                onRefresh={game.handleRefreshLobby}
+                onRefreshGameProfile={game.loadGameProfile}
+                onViewAllRooms={() => setShowAllRoomsModal(true)}
+                onViewLeaderboard={() =>
+                  router.push(`/leaderboard?locale=${game.locale}`)
+                }
+                onOpenProfile={handleOpenProfile}
+              />
+              <DailyChallengeFloatingBubble
+                onOpen={() => setShowDailyChallengeModal(true)}
+                locale={game.locale}
+                t={game.t}
+              />
+            </>
           ) : (
             <ActiveRoom
               room={game.room}
@@ -283,6 +305,11 @@ export default function GameClient() {
               lastOpponentActivityAt={game.lastOpponentActivityAt}
               opponentIsVisible={game.opponentIsVisible}
               turnStartTime={game.turnStartTime}
+              deductionMap={game.deductionMap}
+              isAutoEliminate={game.isAutoEliminate}
+              onToggleDeductionDigit={game.handleToggleDeductionDigit}
+              onResetDeductions={game.handleResetDeductions}
+              onToggleAutoEliminate={game.handleToggleAutoEliminate}
               locale={game.locale}
               t={game.t}
               onSecretInputChange={game.setSecretInput}
@@ -402,6 +429,16 @@ export default function GameClient() {
         }}
         locale={game.locale}
         t={game.t}
+      />
+
+      <DailyChallengeModal
+        isOpen={showDailyChallengeModal}
+        onClose={() => setShowDailyChallengeModal(false)}
+        token={game.token}
+        locale={game.locale}
+        t={game.t}
+        onRefreshGameProfile={game.loadGameProfile}
+        onRequireLogin={() => game.setIsLoginModalOpen(true)}
       />
 
       <MatchFoundOverlay

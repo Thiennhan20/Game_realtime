@@ -246,3 +246,40 @@ export interface RpsClashInfo {
   p2Choice: string;
 }
 
+export type DigitDeductionState = 'neutral' | 'eliminated' | 'confirmed';
+export type DeductionMap = Record<number, DigitDeductionState>;
+
+export interface DailyGuess {
+  guess: string;
+  correctNumbers: number;
+  correctPosition: number;
+  createdAt?: string;
+}
+
+export interface DailyChallengeData {
+  date: string;
+  maxGuesses: number;
+  totalParticipants: number;
+  totalSolved: number;
+  isPlayed: boolean;
+  isFinished: boolean;
+  isSolved: boolean;
+  guessCount: number;
+  guesses: DailyGuess[];
+  durationSeconds: number;
+  xpAwarded: number;
+  revealedSecret: string | null;
+}
+
+export interface DailyLeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  avatar: string;
+  guessCount: number;
+  durationSeconds: number;
+  completedAt: string;
+}
+
+
+
