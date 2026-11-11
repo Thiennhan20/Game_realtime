@@ -90,6 +90,29 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     });
   }
 
+  function recordRoomActivity(room, socket = null) {
+    if (!room) return;
+    const now = Date.now();
+    room.lastActivityAt = now;
+    if (socket && room.players?.[0] && String(room.players[0].userId) === String(socket.userId)) {
+      room.hostLastActiveAt = now;
+    }
+  }
+
+  function returnRoomSocketsToLobby(roomId) {
+    const roomSocketSet = io.sockets.adapter.rooms.get(roomId);
+    if (!roomSocketSet) return;
+    const socketIds = Array.from(roomSocketSet);
+    for (const socketId of socketIds) {
+      const sock = io.sockets.sockets.get(socketId);
+      if (sock) {
+        sock.leave(roomId);
+        sock.join('lobby');
+        sock.currentRoomId = null;
+      }
+    }
+  }
+
   function convertRoomToWaiting(room, leavingUserId = null) {
     if (!room) return null;
     if (leavingUserId) {
@@ -129,6 +152,9 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     room.resultFinalized = false;
     room.roundNumber = 1;
     room.createdAt = Date.now();
+    room.lastActivityAt = Date.now();
+    room.hostLastActiveAt = Date.now();
+    room.settingSecretStartedAt = null;
 
     (room.players || []).forEach(p => {
       p.secretNumber = null;
@@ -306,6 +332,9 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         resultFinalized: false,
         roundNumber: 0,
         createdAt: Date.now(),
+        lastActivityAt: Date.now(),
+        hostLastActiveAt: Date.now(),
+        settingSecretStartedAt: null,
         saved: false
       };
 
@@ -481,6 +510,9 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         resultFinalized: false,
         roundNumber: 0,
         createdAt: Date.now(),
+        lastActivityAt: Date.now(),
+        hostLastActiveAt: Date.now(),
+        settingSecretStartedAt: null,
         saved: false
       };
 
@@ -544,6 +576,8 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       socket.join(roomId);
       socket.currentRoomId = roomId;
       room.state = 'SETTING_SECRET';
+      room.settingSecretStartedAt = Date.now();
+      room.lastActivityAt = Date.now();
       room.roundNumber = 1;
       room.createdAt = Date.now();
       room.startedAt = null;
@@ -642,6 +676,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     socket.on('SET_SECRET', ({ roomId, secret }) => {
       const room = rooms.get(roomId);
       if (!room) return;
+      recordRoomActivity(room, socket);
       if (room.state !== 'SETTING_SECRET') return;
 
       if (!isValidSecret(secret)) {
@@ -659,6 +694,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       const allSet = room.players.every(p => p.ready);
       if (allSet) {
         room.state = 'RPS_DECISION';
+        room.rpsStartedAt = Date.now();
         room.players.forEach(p => {
           if (!room.isAiRoom || p.userId !== room.players[1].userId) {
             p.ready = false;
@@ -678,10 +714,74 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       }
     });
 
+    // Helper: Resolve RPS result for 2 players
+    function resolveRpsMatch(targetRoom, socketIo) {
+      if (!targetRoom || !targetRoom.players || targetRoom.players.length < 2) return;
+      const p1 = targetRoom.players[0];
+      const p2 = targetRoom.players[1];
+      let winnerIdx = -1;
+
+      if (p1.rpsChoice === p2.rpsChoice) {
+        winnerIdx = -1; // Tie
+      } else if (
+        (p1.rpsChoice === 'rock' && p2.rpsChoice === 'scissors') ||
+        (p1.rpsChoice === 'paper' && p2.rpsChoice === 'rock') ||
+        (p1.rpsChoice === 'scissors' && p2.rpsChoice === 'paper')
+      ) {
+        winnerIdx = 0;
+      } else {
+        winnerIdx = 1;
+      }
+
+      if (winnerIdx === -1) {
+        targetRoom.players.forEach(p => {
+          p.rpsChoice = null;
+          p.ready = false;
+          delete p.isAutoPick;
+        });
+        if (targetRoom.isAiRoom) {
+          targetRoom.players[1].rpsChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+          targetRoom.players[1].ready = true;
+        }
+        targetRoom.rpsStartedAt = Date.now();
+        syncRoomToRedis(targetRoom.roomId, targetRoom);
+        socketIo.to(targetRoom.roomId).emit('RPS_TIE', {
+          p1Choice: p1.rpsChoice,
+          p2Choice: p2.rpsChoice,
+          players: targetRoom.players,
+          rpsStartedAt: targetRoom.rpsStartedAt
+        });
+        console.log(`[Game] RPS tie in ${targetRoom.roomId}. Resetting choice.`);
+      } else {
+        targetRoom.rpsWinnerIndex = winnerIdx;
+        targetRoom.activeTurnIndex = winnerIdx;
+        targetRoom.state = 'PLAYING';
+        targetRoom.startedAt = targetRoom.startedAt || new Date().toISOString();
+        targetRoom.players.forEach(p => {
+          p.ready = false;
+          delete p.isAutoPick;
+        });
+        syncRoomToRedis(targetRoom.roomId, targetRoom);
+
+        socketIo.to(targetRoom.roomId).emit('RPS_RESULT', {
+          winnerIndex: winnerIdx,
+          p1Choice: p1.rpsChoice,
+          p2Choice: p2.rpsChoice,
+          roomState: targetRoom
+        });
+        console.log(`[Game] RPS winner in ${targetRoom.roomId}: Player ${winnerIdx} (${targetRoom.players[winnerIdx].username}).`);
+
+        if (targetRoom.isAiRoom && winnerIdx === 1) {
+          handleAiTurn(targetRoom, socketIo);
+        }
+      }
+    }
+
     // --- SUBMIT RPS ---
     socket.on('SUBMIT_RPS', ({ roomId, choice }) => {
       const room = rooms.get(roomId);
       if (!room) return;
+      recordRoomActivity(room, socket);
       if (room.state !== 'RPS_DECISION') return;
 
       const validChoices = ['rock', 'paper', 'scissors'];
@@ -704,65 +804,14 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         return;
       }
 
-      // Determine RPS Winner
-      const p1 = room.players[0];
-      const p2 = room.players[1];
-      let winnerIdx = -1;
-
-      if (p1.rpsChoice === p2.rpsChoice) {
-        winnerIdx = -1; // Tie
-      } else if (
-        (p1.rpsChoice === 'rock' && p2.rpsChoice === 'scissors') ||
-        (p1.rpsChoice === 'paper' && p2.rpsChoice === 'rock') ||
-        (p1.rpsChoice === 'scissors' && p2.rpsChoice === 'paper')
-      ) {
-        winnerIdx = 0;
-      } else {
-        winnerIdx = 1;
-      }
-
-      if (winnerIdx === -1) {
-        room.players.forEach(p => {
-          p.rpsChoice = null;
-          p.ready = false;
-        });
-        if (room.isAiRoom) {
-          room.players[1].rpsChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
-          room.players[1].ready = true;
-        }
-        syncRoomToRedis(roomId, room);
-        io.to(roomId).emit('RPS_TIE', {
-          p1Choice: p1.rpsChoice,
-          p2Choice: p2.rpsChoice,
-          players: room.players
-        });
-        console.log(`[Game] RPS tie in ${roomId}. Resetting choice.`);
-      } else {
-        room.rpsWinnerIndex = winnerIdx;
-        room.activeTurnIndex = winnerIdx;
-        room.state = 'PLAYING';
-        room.startedAt = room.startedAt || new Date().toISOString();
-        room.players.forEach(p => p.ready = false);
-        syncRoomToRedis(roomId, room);
-
-        io.to(roomId).emit('RPS_RESULT', {
-          winnerIndex: winnerIdx,
-          p1Choice: p1.rpsChoice,
-          p2Choice: p2.rpsChoice,
-          roomState: room
-        });
-        console.log(`[Game] RPS winner in ${roomId}: Player ${winnerIdx} (${room.players[winnerIdx].username}).`);
-
-        if (room.isAiRoom && winnerIdx === 1) {
-          handleAiTurn(room, io);
-        }
-      }
+      resolveRpsMatch(room, io);
     });
 
     // --- SUBMIT GUESS ---
     socket.on('SUBMIT_GUESS', async ({ roomId, guess }) => {
       const room = rooms.get(roomId);
       if (!room) return;
+      recordRoomActivity(room, socket);
       if (room.state !== 'PLAYING') return;
 
       const playerIdx = room.players.findIndex(p => String(p.userId) === String(socket.userId));
@@ -933,6 +982,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     socket.on('PLAY_AGAIN', async (roomId) => {
       const room = rooms.get(roomId);
       if (!room) return;
+      recordRoomActivity(room, socket);
       if (room.state !== 'FINISHED') return;
 
       const player = room.players.find(p => String(p.userId) === String(socket.userId));
@@ -1033,6 +1083,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       if (!message || typeof message !== 'string' || message.trim().length === 0) return;
       const room = rooms.get(roomId);
       if (!room) return;
+      recordRoomActivity(room, socket);
 
       const isPlayer = room.players?.some(p => p.userId === socket.userId && !p.hasLeft);
       const isSpectator = room.spectators?.some(s => s.userId === socket.userId);
@@ -1068,6 +1119,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       if (!roomId || !emoji || !VALID_EMOTES.includes(emoji)) return;
       const room = rooms.get(roomId);
       if (!room) return;
+      recordRoomActivity(room, socket);
 
       const isPlayer = room.players?.some(p => p.userId === socket.userId && !p.hasLeft);
       const isSpectator = room.spectators?.some(s => s.userId === socket.userId);
@@ -1137,6 +1189,7 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       if (!roomId) return;
       const room = rooms.get(roomId);
       if (!room || room.state !== 'PLAYING') return;
+      recordRoomActivity(room, socket);
       const count = Math.min(4, Math.max(0, Number(digitsCount) || 0));
       socket.to(roomId).emit('OPPONENT_GUESS_TYPING', {
         userId: socket.userId,
@@ -1148,10 +1201,13 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     socket.on('PLAYER_ACTIVITY', ({ roomId }) => {
       if (!roomId) return;
       const room = rooms.get(roomId);
-      if (!room || room.state !== 'PLAYING') return;
-      socket.to(roomId).emit('OPPONENT_ACTIVITY', {
-        userId: socket.userId
-      });
+      if (!room) return;
+      recordRoomActivity(room, socket);
+      if (room.state === 'PLAYING') {
+        socket.to(roomId).emit('OPPONENT_ACTIVITY', {
+          userId: socket.userId
+        });
+      }
     });
 
     // --- VISIBILITY CHANGE (Tab switch notice) ---
@@ -1527,6 +1583,157 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
       });
     });
   });
+
+  // --- INACTIVITY WATCHDOG (5m waiting room idle, 60s host/guest AFK in SETTING_SECRET, 20s RPS auto-pick) ---
+  const INACTIVITY_CHECK_INTERVAL = 3 * 1000;
+  const WAITING_ROOM_MAX_IDLE = 5 * 60 * 1000;
+  const SETTING_SECRET_MAX_TIME = 60 * 1000;
+  const RPS_MAX_TIME = 20 * 1000;
+  const IN_GAME_MAX_IDLE = 5 * 60 * 1000;
+
+  function sweepInactiveRooms() {
+    const now = Date.now();
+
+    rooms.forEach((room, roomId) => {
+      if (room.isAiRoom) return;
+
+      // 1. Solo waiting room idle for > 5m without host activity
+      if (room.state === 'WAITING_FOR_PLAYERS' && (room.players?.length || 0) <= 1) {
+        const lastActive = room.hostLastActiveAt || room.lastActivityAt || room.createdAt || now;
+        if (now - lastActive > WAITING_ROOM_MAX_IDLE) {
+          console.log(`[Game] Room ${roomId} closed: Host inactive for > 5m.`);
+
+          io.to(roomId).emit('ROOM_CLOSED_INACTIVITY', {
+            roomId,
+            reason: 'waiting_room_timeout',
+            message: 'Room closed due to 5 minutes of inactivity.'
+          });
+
+          returnRoomSocketsToLobby(roomId);
+
+          rooms.delete(roomId);
+          deleteRoomFromRedis(roomId);
+
+          (room.players || []).forEach(player => {
+            const timerKey = `${roomId}:${player.userId}`;
+            const timer = disconnectTimers.get(timerKey);
+            if (timer) {
+              clearTimeout(timer);
+              disconnectTimers.delete(timerKey);
+            }
+          });
+
+          broadcastLobbyRooms(true);
+          return;
+        }
+      }
+
+      // 2. SETTING_SECRET phase: 60s timer for both players to set secret
+      if (room.state === 'SETTING_SECRET' && room.players?.length === 2) {
+        const phaseStarted = room.settingSecretStartedAt || room.createdAt || now;
+        if (now - phaseStarted > SETTING_SECRET_MAX_TIME) {
+          const host = room.players[0];
+          const guest = room.players[1];
+          const hostReady = Boolean(host?.secretNumber);
+          const guestReady = Boolean(guest?.secretNumber);
+
+          // If Host did NOT set secret -> Host is AFK! Disband room.
+          if (!hostReady) {
+            console.log(`[Game] Room ${roomId} disbanded: Host did not set secret in 60s (Host AFK).`);
+
+            io.to(roomId).emit('ROOM_CLOSED_INACTIVITY', {
+              roomId,
+              reason: 'host_afk',
+              message: 'Room disbanded because the host did not respond (AFK).'
+            });
+
+            returnRoomSocketsToLobby(roomId);
+
+            rooms.delete(roomId);
+            deleteRoomFromRedis(roomId);
+
+            broadcastLobbyRooms(true);
+            return;
+          }
+
+          // If Host is ready, but Guest did NOT set secret -> Guest is AFK!
+          if (hostReady && !guestReady) {
+            console.log(`[Game] Room ${roomId}: Guest ${guest.username} did not set secret in 60s. Kicking guest.`);
+
+            const guestSock = io.sockets.sockets.get(guest.socketId);
+            if (guestSock) {
+              guestSock.emit('ROOM_CLOSED_INACTIVITY', {
+                roomId,
+                reason: 'guest_afk',
+                message: 'You were returned to the lobby for not setting your secret within 60 seconds.'
+              });
+              guestSock.leave(roomId);
+              guestSock.join('lobby');
+              guestSock.currentRoomId = null;
+            }
+
+            convertRoomToWaiting(room, guest.userId);
+            io.to(roomId).emit('ROOM_RESET_TO_WAITING', room);
+            io.to(roomId).emit('OPPONENT_AFK_KICKED', {
+              username: guest.username,
+              message: 'Opponent did not set their secret within 60s and was returned to the lobby.'
+            });
+            syncRoomToRedis(roomId, room);
+            broadcastLobbyRooms(true);
+            return;
+          }
+        }
+      }
+
+      // 2.5. RPS_DECISION phase: 20s auto-pick timeout
+      if (room.state === 'RPS_DECISION' && room.players?.length === 2) {
+        const rpsStarted = room.rpsStartedAt || room.createdAt || now;
+        if (now - rpsStarted >= RPS_MAX_TIME) {
+          const validChoices = ['rock', 'paper', 'scissors'];
+          let hadAutoPick = false;
+          room.players.forEach(p => {
+            if (!p.rpsChoice) {
+              p.rpsChoice = validChoices[Math.floor(Math.random() * validChoices.length)];
+              p.ready = true;
+              p.isAutoPick = true;
+              hadAutoPick = true;
+              console.log(`[Game] Auto-picked RPS (${p.rpsChoice}) for ${p.username} in room ${roomId} due to 20s timeout.`);
+            }
+          });
+          if (hadAutoPick || room.players.every(p => p.ready)) {
+            resolveRpsMatch(room, io);
+            return;
+          }
+        }
+      }
+
+      // 3. Stale abandoned match in PLAYING, RPS_DECISION or FINISHED (> 5 minutes complete inactivity)
+      if (room.state === 'PLAYING' || room.state === 'RPS_DECISION' || room.state === 'FINISHED') {
+        const lastActive = room.lastActivityAt || room.createdAt || now;
+        if (now - lastActive > IN_GAME_MAX_IDLE) {
+          console.log(`[Game] Room ${roomId} closed after 5m inactivity in state ${room.state}.`);
+
+          io.to(roomId).emit('ROOM_CLOSED_INACTIVITY', {
+            roomId,
+            reason: 'match_inactivity_timeout',
+            message: 'Room closed due to 5 minutes of inactivity.'
+          });
+
+          returnRoomSocketsToLobby(roomId);
+
+          rooms.delete(roomId);
+          deleteRoomFromRedis(roomId);
+          broadcastLobbyRooms(true);
+          return;
+        }
+      }
+    });
+  }
+
+  const inactivityInterval = setInterval(sweepInactiveRooms, INACTIVITY_CHECK_INTERVAL);
+  if (typeof inactivityInterval.unref === 'function') {
+    inactivityInterval.unref();
+  }
 }
 
 module.exports = {

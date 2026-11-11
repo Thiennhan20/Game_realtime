@@ -78,6 +78,8 @@ export const translations = {
     opponentForfeitedNotice: 'Opponent {username} forfeited! You won. Room is now open for a new opponent.',
     activeTabGame: 'Arena',
     activeTabChat: 'Chat Room',
+    tabOpponentJoined: '⚔️ [Opponent Joined!] - ENTN',
+    tabYourTurn: '🔔 [Your Turn to Guess!] - ENTN',
     rock: 'Rock',
     paper: 'Paper',
     scissors: 'Scissors',
@@ -219,6 +221,8 @@ export const translations = {
     opponentForfeitedNotice: 'Đối thủ {username} đã đầu hàng! Bạn giành chiến thắng. Phòng đang mở chờ đối thủ mới.',
     activeTabGame: 'Trận đấu',
     activeTabChat: 'Trò chuyện',
+    tabOpponentJoined: '⚔️ [Có đối thủ vào phòng!] - ENTN',
+    tabYourTurn: '🔔 [Tới lượt bạn đoán!] - ENTN',
     rock: 'Búa',
     paper: 'Bao',
     scissors: 'Kéo',
@@ -309,22 +313,38 @@ export function translateBackendError(message: string, locale: Locale) {
         'The match result is still being recorded. Please wait a moment.',
       'Rematch is unavailable after a player forfeits.':
         'A rematch is unavailable because a player left the match.',
+      'Room closed due to 5 minutes of inactivity.':
+        'Room closed due to 5 minutes of inactivity.',
+      'Room disbanded because the host did not respond (AFK).':
+        'Room disbanded because the host did not respond (AFK).',
+      'You were returned to the lobby for not setting your secret within 60 seconds.':
+        'You were returned to the lobby for not setting your secret within 60 seconds.',
+      'Opponent did not set their secret within 60s and was returned to the lobby.':
+        'Opponent did not set their secret within 60s and was returned to the lobby.',
     },
     vi: {
       'PvP progression is temporarily unavailable.':
-        'H\u1ec7 th\u1ed1ng XP PvP \u0111ang t\u1ea1m th\u1eddi gi\u00e1n \u0111o\u1ea1n. Vui l\u00f2ng th\u1eed l\u1ea1i sau \u00edt ph\u00fat.',
+        'Hệ thống XP PvP đang tạm thời gián đoạn. Vui lòng thử lại sau ít phút.',
       'You are already in an active room.':
-        'B\u1ea1n \u0111ang \u1edf trong m\u1ed9t ph\u00f2ng kh\u00e1c.',
+        'Bạn đang ở trong một phòng khác.',
       'Room host is reconnecting. Please try again shortly.':
-        'Ch\u1ee7 ph\u00f2ng \u0111ang k\u1ebft n\u1ed1i l\u1ea1i. Vui l\u00f2ng th\u1eed l\u1ea1i sau gi\u00e2y l\u00e1t.',
+        'Chủ phòng đang kết nối lại. Vui lòng thử lại sau giây lát.',
       'Match settlement is still pending. Please try again shortly.':
-        'K\u1ebft qu\u1ea3 tr\u1eadn \u0111\u1ea5u \u0111ang \u0111\u01b0\u1ee3c ghi nh\u1eadn. Vui l\u00f2ng th\u1eed l\u1ea1i sau gi\u00e2y l\u00e1t.',
+        'Kết quả trận đấu đang được ghi nhận. Vui lòng thử lại sau giây lát.',
       'Match result could not be recorded yet. Please reconnect shortly.':
-        'Ch\u01b0a th\u1ec3 ghi nh\u1eadn k\u1ebft qu\u1ea3 tr\u1eadn \u0111\u1ea5u. Vui l\u00f2ng k\u1ebft n\u1ed1i l\u1ea1i sau gi\u00e2y l\u00e1t.',
+        'Chưa thể ghi nhận kết quả trận đấu. Vui lòng kết nối lại sau giây lát.',
       'Match settlement is still pending.':
-        'K\u1ebft qu\u1ea3 tr\u1eadn \u0111\u1ea5u \u0111ang \u0111\u01b0\u1ee3c ghi nh\u1eadn. Vui l\u00f2ng ch\u1edd m\u1ed9t ch\u00fat.',
+        'Kết quả trận đấu đang được ghi nhận. Vui lòng chờ một chút.',
       'Rematch is unavailable after a player forfeits.':
-        'Kh\u00f4ng th\u1ec3 t\u00e1i \u0111\u1ea5u v\u00ec m\u1ed9t ng\u01b0\u1eddi ch\u01a1i \u0111\u00e3 r\u1eddi tr\u1eadn.',
+        'Không thể tái đấu vì một người chơi đã rời trận.',
+      'Room closed due to 5 minutes of inactivity.':
+        'Phòng đã tự động đóng do không có hoạt động trong 5 phút.',
+      'Room disbanded because the host did not respond (AFK).':
+        'Chủ phòng không phản hồi (AFK), phòng đã tự động giải tán.',
+      'You were returned to the lobby for not setting your secret within 60 seconds.':
+        'Bạn đã không đặt số bí mật trong 60 giây và bị đưa về sảnh.',
+      'Opponent did not set their secret within 60s and was returned to the lobby.':
+        'Đối thủ không đặt số sau 60 giây và đã bị đưa về sảnh.',
     },
   };
 

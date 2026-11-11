@@ -206,6 +206,68 @@ export function useGameController() {
   const gameProfileRef = useRef<GameProfile | null>(null);
   const quickMatchEnteringRef = useRef(false);
 
+  const originalDocumentTitleRef = useRef<string>('');
+  const titleFlashIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const activeAlertTitleRef = useRef<string | null>(null);
+
+  const stopTitleFlash = useCallback(() => {
+    if (titleFlashIntervalRef.current) {
+      clearInterval(titleFlashIntervalRef.current);
+      titleFlashIntervalRef.current = null;
+    }
+    activeAlertTitleRef.current = null;
+    if (typeof document !== 'undefined' && originalDocumentTitleRef.current) {
+      document.title = originalDocumentTitleRef.current;
+    }
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'GAME_TAB_FLASH', isAlert: false }, '*');
+      } catch {}
+    }
+  }, []);
+
+  const startTitleFlash = useCallback((alertTitle: string) => {
+    if (typeof document === 'undefined') return;
+
+    if (!originalDocumentTitleRef.current) {
+      originalDocumentTitleRef.current =
+        document.title || 'Đoán Mật Mã Số 1v1 - Đấu Trường Trực Tuyến Realtime';
+    }
+
+    if (activeAlertTitleRef.current === alertTitle && titleFlashIntervalRef.current) {
+      return;
+    }
+
+    if (titleFlashIntervalRef.current) {
+      clearInterval(titleFlashIntervalRef.current);
+      titleFlashIntervalRef.current = null;
+    }
+
+    activeAlertTitleRef.current = alertTitle;
+
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'GAME_TAB_FLASH', isAlert: true, alertTitle }, '*');
+      } catch {}
+    }
+
+    let showFlash = true;
+    document.title = alertTitle;
+
+    titleFlashIntervalRef.current = setInterval(() => {
+      showFlash = !showFlash;
+      document.title = showFlash
+        ? alertTitle
+        : (originalDocumentTitleRef.current || 'Đoán Mật Mã Số 1v1 - Đấu Trường Trực Tuyến Realtime');
+    }, 1000);
+  }, []);
+
+  const startTitleFlashRef = useRef(startTitleFlash);
+  startTitleFlashRef.current = startTitleFlash;
+
+  const stopTitleFlashRef = useRef(stopTitleFlash);
+  stopTitleFlashRef.current = stopTitleFlash;
+
   const loadGameProfile = useCallback(async () => {
     const requestId = ++gameProfileRequestIdRef.current;
 
@@ -328,13 +390,22 @@ export function useGameController() {
       if (!wasMyTurnRef.current && isMyTurnNow) {
         sound.playAlertTing();
         triggerHaptic(25); // Gentle haptic tap
+        if (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())) {
+          startTitleFlash(createTranslator(localeRef.current)('tabYourTurn'));
+        }
       } else if (wasMyTurnRef.current && !isMyTurnNow) {
         sound.playOpponentTurn();
+        if (activeAlertTitleRef.current === createTranslator(localeRef.current)('tabYourTurn')) {
+          stopTitleFlash();
+        }
       }
       wasMyTurnRef.current = isMyTurnNow;
     } else {
       wasMyTurnRef.current = false;
       setShowNumPad(false);
+      if (activeAlertTitleRef.current === createTranslator(localeRef.current)('tabYourTurn')) {
+        stopTitleFlash();
+      }
     }
   }, [
     room?.state,
@@ -343,6 +414,8 @@ export function useGameController() {
     user,
     isSpectator,
     showStartCountdown,
+    startTitleFlash,
+    stopTitleFlash,
   ]);
 
   // --- Fast REST Pre-fetch for Instant Room List Display ---
@@ -579,6 +652,9 @@ export function useGameController() {
       setOpponentTempDisconnected(null);
       sound.playOpponentJoined();
       triggerHaptic([50]);
+      if (typeof document !== 'undefined' && (document.hidden || !document.hasFocus())) {
+        startTitleFlashRef.current(createTranslator(localeRef.current)('tabOpponentJoined'));
+      }
     });
 
     socket.on('SPECTATOR_JOINED', (data: { room: Room; spectatorCount: number }) => {
@@ -1048,6 +1124,7 @@ export function useGameController() {
     });
 
     socket.on('ROOM_LEFT', () => {
+      stopTitleFlashRef.current();
       setRoom(null);
       setChatMessages([]);
       setMatchStats(null);
@@ -1056,6 +1133,35 @@ export function useGameController() {
       setShowGuessHistoryModal(false);
       setOpponentTempDisconnected(null);
       setIsRequestingPlayAgain(false);
+      socket.emit('GET_LOBBY_ROOMS');
+    });
+
+    socket.on('ROOM_CLOSED_INACTIVITY', (data: { roomId?: string; reason?: string; message?: string }) => {
+      stopTitleFlashRef.current();
+      setRoom(null);
+      setChatMessages([]);
+      setMatchStats(null);
+      setMatchXpResult(null);
+      setShowMatchModal(false);
+      setShowGuessHistoryModal(false);
+      setOpponentTempDisconnected(null);
+      setIsRequestingPlayAgain(false);
+      setFloatingEmotes([]);
+      sound.playLeaveRoom();
+      triggerHaptic([30, 40, 30]);
+      const rawMsg = data?.message || 'Room closed due to 5 minutes of inactivity.';
+      const localizedMsg = translateBackendError(rawMsg, localeRef.current);
+      setErrorMsg(localizedMsg);
+      setTimeout(() => setErrorMsg(null), 6000);
+      socket.emit('GET_LOBBY_ROOMS');
+    });
+
+    socket.on('OPPONENT_AFK_KICKED', (data: { username?: string; message?: string }) => {
+      sound.playClick();
+      const rawMsg = data?.message || 'Opponent did not set their secret within 60s and was returned to the lobby.';
+      const localizedMsg = translateBackendError(rawMsg, localeRef.current);
+      setErrorMsg(localizedMsg);
+      setTimeout(() => setErrorMsg(null), 6000);
       socket.emit('GET_LOBBY_ROOMS');
     });
 
@@ -1303,13 +1409,37 @@ export function useGameController() {
         roomId: room.roomId,
         isVisible,
       });
+      if (!isVisible && isMyTurn) {
+        startTitleFlash(createTranslator(localeRef.current)('tabYourTurn'));
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [room?.state, room?.roomId]);
+  }, [isMyTurn, room?.state, room?.roomId, startTitleFlash]);
+
+  // Tab Title Flashing: automatically restore title when user returns to tab / focuses window
+  useEffect(() => {
+    const handleReturnToTab = () => {
+      if (document.visibilityState === 'visible') {
+        stopTitleFlash();
+      }
+    };
+    const handleWindowFocus = () => {
+      stopTitleFlash();
+    };
+
+    document.addEventListener('visibilitychange', handleReturnToTab);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleReturnToTab);
+      window.removeEventListener('focus', handleWindowFocus);
+      stopTitleFlash();
+    };
+  }, [stopTitleFlash]);
 
   const handleCreateRoom = () => {
     if (isReconnecting || !socketRef.current?.connected) {
@@ -1609,6 +1739,7 @@ export function useGameController() {
   };
 
   const handleLeaveSpectator = () => {
+    stopTitleFlash();
     if (room) {
       socketRef.current?.emit('LEAVE_SPECTATOR', room.roomId);
     }
@@ -1619,6 +1750,7 @@ export function useGameController() {
   };
 
   const handleLeaveRoom = () => {
+    stopTitleFlash();
     if (isSpectator) {
       handleLeaveSpectator();
       return;
