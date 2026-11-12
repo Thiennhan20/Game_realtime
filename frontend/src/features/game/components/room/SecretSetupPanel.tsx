@@ -126,11 +126,11 @@ export function SecretSetupPanel({
                           digit
                             ? 'bg-violet-950/40 border-violet-500/70 text-violet-200'
                             : isActive
-                            ? 'bg-[#121622] border-violet-400 text-violet-300 ring-2 ring-violet-500/25 animate-pulse'
+                            ? 'bg-[#121622] border-violet-400/80 text-slate-500 ring-2 ring-violet-500/30'
                             : 'bg-[#121622] border-white/[0.08] text-slate-600'
                         }`}
                       >
-                        <span>{digit || (isActive ? '|' : '·')}</span>
+                        <span>{digit || '·'}</span>
                         <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mt-1">
                           {`0${index + 1}`}
                         </span>

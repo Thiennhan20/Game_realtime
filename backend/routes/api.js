@@ -8,6 +8,7 @@ const DailySubmission = require('../models/DailySubmission');
 const { getGameProfileSummary } = require('../services/matchSettlement');
 const { calculateUserAchievements, resolveEquippedTitle, ACHIEVEMENTS_DEFINITIONS } = require('../services/achievements');
 const { getRank } = require('../services/rating');
+const { checkGuess } = require('../utils/gameLogic');
 const {
   getCachedJson,
   setCachedJson,
@@ -728,16 +729,8 @@ function createApiRouter(roomManager, healthHandler) {
         return res.status(400).json({ error: 'Bạn đã thử mã số này trong hôm nay rồi.' });
       }
 
-      // Calculate Bulls & Cows
-      let correctPosition = 0;
-      let correctNumbers = 0;
-      for (let i = 0; i < 4; i++) {
-        if (cleanGuess[i] === secret[i]) {
-          correctPosition++;
-        } else if (secret.includes(cleanGuess[i])) {
-          correctNumbers++;
-        }
-      }
+      // Calculate Bulls & Cows using standardized checkGuess
+      const { correctNumbers, correctPosition } = checkGuess(secret, cleanGuess);
 
       submission.guesses.push({
         guess: cleanGuess,

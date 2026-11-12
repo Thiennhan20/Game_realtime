@@ -506,10 +506,10 @@ export function DailyChallengeModal({
 
                         {/* Clues: Matched with PvP & Bot Arena */}
                         <div className="flex items-center gap-2 sm:gap-3 shrink-0 text-xs font-mono font-bold">
-                          {/* Số đúng (Cows) */}
+                          {/* Số đúng (Total matching digits in secret) */}
                           <div
                             className="flex items-center gap-1"
-                            title={locale === 'vi' ? 'Số đúng (nhưng sai vị trí)' : 'Correct digits'}
+                            title={locale === 'vi' ? 'Tổng số chữ số có trong mật mã' : 'Total correct digits'}
                           >
                             <span className="text-xs">🟢</span>
                             <span
@@ -526,10 +526,10 @@ export function DailyChallengeModal({
                             </span>
                           </div>
 
-                          {/* Vị trí đúng (Bulls) */}
+                          {/* Vị trí đúng (Bulls - exact position) */}
                           <div
                             className="flex items-center gap-1"
-                            title={locale === 'vi' ? 'Vị trí đúng (cả số và vị trí)' : 'Correct position'}
+                            title={locale === 'vi' ? 'Chữ số đúng vị trí' : 'Correct position'}
                           >
                             <span className="text-xs">🎯</span>
                             <span
@@ -618,11 +618,11 @@ export function DailyChallengeModal({
                                 digit
                                   ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-sm'
                                   : isCurrent
-                                    ? 'bg-white/[0.04] border-amber-400/60 text-amber-300 ring-2 ring-amber-400/25 animate-pulse'
+                                    ? 'bg-white/[0.04] border-amber-400/80 text-slate-500 ring-2 ring-amber-400/30'
                                     : 'bg-[#080a11] border-white/[0.1] text-slate-600'
                               }`}
                             >
-                              {digit || (isCurrent ? '|' : '·')}
+                              {digit || '·'}
                             </div>
                           );
                         })}

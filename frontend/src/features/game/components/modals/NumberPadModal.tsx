@@ -185,11 +185,11 @@ export function NumberPadModal({
                       digit
                         ? 'bg-violet-500/15 border-violet-400/60 text-white shadow-sm'
                         : isActive
-                          ? 'bg-[#121622] border-violet-400 text-violet-300 ring-2 ring-violet-500/25 animate-pulse'
+                          ? 'bg-[#121622] border-violet-400/80 text-slate-500 ring-2 ring-violet-500/30'
                           : 'bg-[#090a0f] border-white/[0.06] text-slate-700'
                     }`}
                   >
-                    {digit || (isActive ? '|' : '·')}
+                    {digit || '·'}
                   </div>
                 );
               })}
