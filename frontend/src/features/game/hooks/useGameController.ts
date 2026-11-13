@@ -599,6 +599,9 @@ export function useGameController() {
       } else {
         setRoom(null);
       }
+      setIsQuickMatching(false);
+      setQuickMatchElapsedSeconds(0);
+      setQuickMatchFoundRoom(null);
       setIsReconnecting(false);
       setReconnectCountdown(120);
     });

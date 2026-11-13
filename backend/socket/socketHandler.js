@@ -205,6 +205,69 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
     return true;
   }
 
+  // Helper: Resolve RPS result for 2 players
+  function resolveRpsMatch(targetRoom, socketIo) {
+    if (!targetRoom || !targetRoom.players || targetRoom.players.length < 2) return;
+    const p1 = targetRoom.players[0];
+    const p2 = targetRoom.players[1];
+    let winnerIdx = -1;
+
+    if (p1.rpsChoice === p2.rpsChoice) {
+      winnerIdx = -1; // Tie
+    } else if (
+      (p1.rpsChoice === 'rock' && p2.rpsChoice === 'scissors') ||
+      (p1.rpsChoice === 'paper' && p2.rpsChoice === 'rock') ||
+      (p1.rpsChoice === 'scissors' && p2.rpsChoice === 'paper')
+    ) {
+      winnerIdx = 0;
+    } else {
+      winnerIdx = 1;
+    }
+
+    if (winnerIdx === -1) {
+      targetRoom.players.forEach(p => {
+        p.rpsChoice = null;
+        p.ready = false;
+        delete p.isAutoPick;
+      });
+      if (targetRoom.isAiRoom) {
+        targetRoom.players[1].rpsChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+        targetRoom.players[1].ready = true;
+      }
+      targetRoom.rpsStartedAt = Date.now();
+      syncRoomToRedis(targetRoom.roomId, targetRoom);
+      socketIo.to(targetRoom.roomId).emit('RPS_TIE', {
+        p1Choice: p1.rpsChoice,
+        p2Choice: p2.rpsChoice,
+        players: targetRoom.players,
+        rpsStartedAt: targetRoom.rpsStartedAt
+      });
+      console.log(`[Game] RPS tie in ${targetRoom.roomId}. Resetting choice.`);
+    } else {
+      targetRoom.rpsWinnerIndex = winnerIdx;
+      targetRoom.activeTurnIndex = winnerIdx;
+      targetRoom.state = 'PLAYING';
+      targetRoom.startedAt = targetRoom.startedAt || new Date().toISOString();
+      targetRoom.players.forEach(p => {
+        p.ready = false;
+        delete p.isAutoPick;
+      });
+      syncRoomToRedis(targetRoom.roomId, targetRoom);
+
+      socketIo.to(targetRoom.roomId).emit('RPS_RESULT', {
+        winnerIndex: winnerIdx,
+        p1Choice: p1.rpsChoice,
+        p2Choice: p2.rpsChoice,
+        roomState: targetRoom
+      });
+      console.log(`[Game] RPS winner in ${targetRoom.roomId}: Player ${winnerIdx} (${targetRoom.players[winnerIdx].username}).`);
+
+      if (targetRoom.isAiRoom && winnerIdx === 1) {
+        handleAiTurn(targetRoom, socketIo);
+      }
+    }
+  }
+
   io.on('connection', (socket) => {
     console.log(`[Game] User connected: ${socket.username} (${socket.userId})`);
 
@@ -727,69 +790,6 @@ function setupSocket(io, roomManager, getIsProgressionReady) {
         });
       }
     });
-
-    // Helper: Resolve RPS result for 2 players
-    function resolveRpsMatch(targetRoom, socketIo) {
-      if (!targetRoom || !targetRoom.players || targetRoom.players.length < 2) return;
-      const p1 = targetRoom.players[0];
-      const p2 = targetRoom.players[1];
-      let winnerIdx = -1;
-
-      if (p1.rpsChoice === p2.rpsChoice) {
-        winnerIdx = -1; // Tie
-      } else if (
-        (p1.rpsChoice === 'rock' && p2.rpsChoice === 'scissors') ||
-        (p1.rpsChoice === 'paper' && p2.rpsChoice === 'rock') ||
-        (p1.rpsChoice === 'scissors' && p2.rpsChoice === 'paper')
-      ) {
-        winnerIdx = 0;
-      } else {
-        winnerIdx = 1;
-      }
-
-      if (winnerIdx === -1) {
-        targetRoom.players.forEach(p => {
-          p.rpsChoice = null;
-          p.ready = false;
-          delete p.isAutoPick;
-        });
-        if (targetRoom.isAiRoom) {
-          targetRoom.players[1].rpsChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
-          targetRoom.players[1].ready = true;
-        }
-        targetRoom.rpsStartedAt = Date.now();
-        syncRoomToRedis(targetRoom.roomId, targetRoom);
-        socketIo.to(targetRoom.roomId).emit('RPS_TIE', {
-          p1Choice: p1.rpsChoice,
-          p2Choice: p2.rpsChoice,
-          players: targetRoom.players,
-          rpsStartedAt: targetRoom.rpsStartedAt
-        });
-        console.log(`[Game] RPS tie in ${targetRoom.roomId}. Resetting choice.`);
-      } else {
-        targetRoom.rpsWinnerIndex = winnerIdx;
-        targetRoom.activeTurnIndex = winnerIdx;
-        targetRoom.state = 'PLAYING';
-        targetRoom.startedAt = targetRoom.startedAt || new Date().toISOString();
-        targetRoom.players.forEach(p => {
-          p.ready = false;
-          delete p.isAutoPick;
-        });
-        syncRoomToRedis(targetRoom.roomId, targetRoom);
-
-        socketIo.to(targetRoom.roomId).emit('RPS_RESULT', {
-          winnerIndex: winnerIdx,
-          p1Choice: p1.rpsChoice,
-          p2Choice: p2.rpsChoice,
-          roomState: targetRoom
-        });
-        console.log(`[Game] RPS winner in ${targetRoom.roomId}: Player ${winnerIdx} (${targetRoom.players[winnerIdx].username}).`);
-
-        if (targetRoom.isAiRoom && winnerIdx === 1) {
-          handleAiTurn(targetRoom, socketIo);
-        }
-      }
-    }
 
     // --- SUBMIT RPS ---
     socket.on('SUBMIT_RPS', ({ roomId, choice }) => {
